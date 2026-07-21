@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CodexUsageTray;
+namespace QuotaScope;
 
 internal sealed class CodexAppServerClient : IDisposable
 {
@@ -95,7 +95,7 @@ internal sealed class CodexAppServerClient : IDisposable
 
         var initializeParams = new
         {
-            clientInfo = new { name = "codex-usage-tray", title = "Codex Usage Tray", version = "0.1.0" },
+            clientInfo = new { name = "quota-scope", title = "QuotaScope", version = "0.1.0" },
             capabilities = new
             {
                 experimentalApi = true,

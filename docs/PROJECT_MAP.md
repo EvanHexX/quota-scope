@@ -8,7 +8,7 @@
 - tray lifecycle/menu/hotkey wiring -> `app/TrayApplicationContext.cs`
 - popup UI -> `app/UsagePopupForm.cs`
 - tray icon rendering -> `app/TrayIconRenderer.cs`
-- executable icon asset -> `app/Assets/CodexUsageTray.ico`
+- executable icon asset -> `app/Assets/QuotaScope.ico`
 - global hotkey native window -> `app/HotkeyWindow.cs`
 
 ## Codex Rate Limits

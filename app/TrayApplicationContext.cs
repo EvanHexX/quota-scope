@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
-namespace CodexUsageTray;
+namespace QuotaScope;
 
 internal sealed class TrayApplicationContext : ApplicationContext
 {

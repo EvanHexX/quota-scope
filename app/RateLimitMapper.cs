@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Text.Json;
 
-namespace CodexUsageTray;
+namespace QuotaScope;
 
 internal static class RateLimitMapper
 {

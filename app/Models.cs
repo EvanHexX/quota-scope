@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace CodexUsageTray;
+namespace QuotaScope;
 
 internal sealed record RateLimitWindow(int UsedPercent, DateTimeOffset? ResetsAt, long? WindowDurationMins)
 {

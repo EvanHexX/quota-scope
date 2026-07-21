@@ -5,8 +5,8 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>CodexUsageTray</AssemblyName>
-    <RootNamespace>CodexUsageTray</RootNamespace>
-    <ApplicationIcon>Assets\CodexUsageTray.ico</ApplicationIcon>
+    <AssemblyName>QuotaScope</AssemblyName>
+    <RootNamespace>QuotaScope</RootNamespace>
+    <ApplicationIcon>Assets\QuotaScope.ico</ApplicationIcon>
   </PropertyGroup>
 </Project>

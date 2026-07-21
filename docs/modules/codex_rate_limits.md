@@ -2,7 +2,7 @@
 
 ## Purpose
 
-CodexUsageTray는 Codex app-server JSON-RPC를 사용해 현재 계정의 rate limit snapshot을 읽는다.
+QuotaScope는 Codex app-server JSON-RPC를 사용해 현재 계정의 rate limit snapshot을 읽는다.
 
 ## Confirmed Schema
 

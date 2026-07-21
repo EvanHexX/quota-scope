@@ -1,6 +1,6 @@
 <p align="right"><a href="README.ko.md">🇰🇷 한국어 README</a></p>
 
-# Codex Usage Tray
+# QuotaScope
 
 ![Platform](https://img.shields.io/badge/platform-Windows-0078D4?logo=windows&logoColor=white)
 ![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)
@@ -9,7 +9,7 @@
 ![Privacy](https://img.shields.io/badge/privacy-local--only-10B981)
 ![Status](https://img.shields.io/badge/status-unofficial-6B7280)
 
-Codex Usage Tray is a small Windows tray utility for checking Codex usage limits without keeping the Codex app, CLI, or dashboard view open.
+QuotaScope is a small Windows tray utility for checking Codex usage limits without keeping the Codex app, CLI, or dashboard view open.
 
 It runs locally, starts `codex app-server`, reads Codex rate limit data through stdio JSON-RPC, and shows the result in a compact tray popup.
 
@@ -17,7 +17,7 @@ It runs locally, starts `codex app-server`, reads Codex rate limit data through 
 
 | Codex + Spark usage | Codex usage only |
 |---|---|
-| <img src="docs/images/usage-with-spark.svg" alt="Codex Usage Tray showing Codex and Spark usage windows" width="347"> | <img src="docs/images/usage-codex-only.svg" alt="Codex Usage Tray showing only Codex usage windows" width="350"> |
+| <img src="docs/images/usage-with-spark.svg" alt="QuotaScope showing Codex and Spark usage windows" width="347"> | <img src="docs/images/usage-codex-only.svg" alt="QuotaScope showing only Codex usage windows" width="350"> |
 
 ## Features
 
@@ -60,7 +60,7 @@ Windows Forms
 From the repository root:
 
 ```powershell
-dotnet run --project app/CodexUsageTray.csproj
+dotnet run --project app/QuotaScope.csproj
 ```
 
 Or from the app directory:
@@ -73,7 +73,7 @@ dotnet run
 Run the built-in mapper self-test:
 
 ```powershell
-dotnet run --project app/CodexUsageTray.csproj -- --self-test
+dotnet run --project app/QuotaScope.csproj -- --self-test
 ```
 
 ## Usage
@@ -115,7 +115,7 @@ Notes:
 
 ## Privacy
 
-Codex Usage Tray is designed as a local utility.
+QuotaScope is designed as a local utility.
 
 - It launches the local `codex app-server` process.
 - It communicates with that process over stdio JSON-RPC.
@@ -146,11 +146,16 @@ Next major UI direction:
 3. Rebuild the UI with a more modern native Windows app structure.
 4. Re-evaluate packaging and distribution after the UI direction is settled.
 
-Possible future rename:
+Provider scope:
 
-- `QuotaScope`
+- The approved provider scope is Codex (OpenAI) and Claude (Anthropic).
+- The current implementation supports Codex only; Claude support is planned.
 
-For now, the repository remains `Codex Usage Tray` because the current implementation is Codex-first.
+> This project was previously named `Codex Usage Tray` and was renamed to `QuotaScope` on 2026-07-22.
+
+## Disclaimer
+
+> This project is not affiliated with, endorsed by, or sponsored by OpenAI or Anthropic. Codex is a product/service of OpenAI. Claude is a product/service of Anthropic.
 
 ## Documentation
 

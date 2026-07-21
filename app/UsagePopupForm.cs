@@ -4,7 +4,7 @@ using System.Drawing;
 using System.Drawing.Text;
 using System.Windows.Forms;
 
-namespace CodexUsageTray;
+namespace QuotaScope;
 
 internal sealed class UsagePopupForm : Form
 {
