@@ -2,7 +2,7 @@
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
-namespace CodexUsageTray;
+namespace QuotaScope;
 
 internal sealed class HotkeyWindow : NativeWindow, IDisposable
 {

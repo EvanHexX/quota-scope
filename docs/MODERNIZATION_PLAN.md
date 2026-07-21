@@ -1,18 +1,18 @@
 # Modernization Plan
 
-Last updated: 2026-06-21
+Last updated: 2026-07-22
 
 ## Current repository state
 
-Codex Usage Tray is currently a small Windows tray utility. The implementation is Codex-first and uses `codex app-server` over stdio JSON-RPC to read rate limit data.
+QuotaScope (formerly Codex Usage Tray) is currently a small Windows tray utility. The current implementation uses `codex app-server` over stdio JSON-RPC to read rate limit data.
 
 Current technical baseline:
 
-- App project: `app/CodexUsageTray.csproj`
+- App project: `app/QuotaScope.csproj`
 - Current target: `net10.0-windows`
 - Current UI stack: Windows Forms
 - Current entry point: `app/Program.cs`
-- Current self-test path: `dotnet run --project app/CodexUsageTray.csproj -- --self-test`
+- Current self-test path: `dotnet run --project app/QuotaScope.csproj -- --self-test`
 - Current documentation map: `docs/PROJECT_MAP.md`
 
 ## Modernization decision
@@ -99,10 +99,10 @@ Checklist:
 
 - [x] Check installed SDKs with `dotnet --list-sdks`.
 - [x] Confirm the selected modern .NET SDK is available locally.
-- [x] Change `app/CodexUsageTray.csproj` from `net6.0-windows` to the selected modern target, preferably `net10.0-windows`.
+- [x] Change the app project (now `app/QuotaScope.csproj`) from `net6.0-windows` to the selected modern target, preferably `net10.0-windows`.
 - [x] Keep `<UseWindowsForms>true</UseWindowsForms>`.
-- [x] Run `dotnet build app/CodexUsageTray.csproj`.
-- [x] Run `dotnet run --project app/CodexUsageTray.csproj -- --self-test`.
+- [x] Run `dotnet build` on the app project.
+- [x] Run the app project with `-- --self-test`.
 - [ ] Run the Windows tray smoke test:
   - [ ] tray icon appears
   - [ ] popup opens from tray click
@@ -186,7 +186,7 @@ Goal:
 
 Evaluate whether WinUI 3 improves the app enough to justify a rewrite.
 
-Status: TODO. Do not migrate the main Windows Forms app to WinUI 3 as part of pre-release polish.
+Status: superseded by Phase 5. The prototype-only constraint of this phase was lifted by explicit maintainer approval on 2026-07-22; WinUI 3 may now be applied to the main app under the Phase 5 plan below. The parity checklist in this phase still applies before the main app is replaced.
 
 Branch recommendation:
 
@@ -206,6 +206,22 @@ Checklist:
 - [ ] Document the result before replacing the main app.
 
 WinUI 3 migration can replace the main app only if all parity items pass and the maintenance/deployment cost is acceptable.
+
+## Phase 5 — Multi-provider & WinUI (approved 2026-07-22)
+
+The maintainer explicitly approved the following scope changes on 2026-07-22:
+
+1. Expand the product scope from Codex-first to multi-provider, limited to an approved whitelist: Codex (OpenAI) and Claude (Anthropic). No other providers without new explicit approval.
+2. Rename the repository / product / namespace / executable to QuotaScope.
+3. Apply WinUI 3 to the main app. The Phase 4 prototype-only constraint is lifted, but the Phase 4 parity checklist must still pass before the WinForms app is replaced.
+4. Add a dedicated settings window and user-configurable hotkeys.
+
+Planned sub-phases (each is a separate task and a separate commit):
+
+- Phase 5.0: rename the project to QuotaScope and update rule documents. (This phase.)
+- Phase 5.1: introduce an `IUsageProvider` abstraction while keeping Codex as the only provider. No behavior or UI change.
+- Phase 5.2: add a Claude usage provider.
+- Phase 5.3: port the UI to WinUI 3, split settings into a dedicated window, and support custom hotkeys.
 
 ## Suggested task order for Codex
 

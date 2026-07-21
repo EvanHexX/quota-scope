@@ -1,6 +1,6 @@
-# Codex Usage Tray Notes
+# QuotaScope Notes
 
-Codex Usage Tray is a small Windows tray utility that shows Codex app-server rate limit information in a local popup.
+QuotaScope is a small Windows tray utility that shows Codex app-server rate limit information in a local popup.
 
 ## Purpose
 
@@ -18,13 +18,13 @@ dotnet run
 Or from the repository root:
 
 ```powershell
-dotnet run --project app/CodexUsageTray.csproj
+dotnet run --project app/QuotaScope.csproj
 ```
 
 For the built-in mapper self-test:
 
 ```powershell
-dotnet run --project app/CodexUsageTray.csproj -- --self-test
+dotnet run --project app/QuotaScope.csproj -- --self-test
 ```
 
 In PowerShell environments where the `codex.ps1` shim is blocked by execution policy, the app resolves the Codex command through `cmd.exe /c codex app-server`.

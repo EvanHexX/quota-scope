@@ -1,7 +1,7 @@
 using System;
 using System.Windows.Forms;
 
-namespace CodexUsageTray;
+namespace QuotaScope;
 
 internal static class Program
 {

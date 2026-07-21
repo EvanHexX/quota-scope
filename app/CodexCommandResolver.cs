@@ -2,7 +2,7 @@
 using System.IO;
 using System.Linq;
 
-namespace CodexUsageTray;
+namespace QuotaScope;
 
 internal sealed record CodexCommandSpec(string FileName, string Arguments, string DisplayText);
 

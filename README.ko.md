@@ -1,6 +1,6 @@
-# Codex Usage Tray
+# QuotaScope
 
-Codex Usage Tray는 Codex 앱, CLI, 대시보드를 계속 열어두지 않아도 Codex app-server의 rate limit 상태를 빠르게 확인할 수 있는 작은 Windows 트레이 유틸리티입니다.
+QuotaScope는 Codex 앱, CLI, 대시보드를 계속 열어두지 않아도 Codex app-server의 rate limit 상태를 빠르게 확인할 수 있는 작은 Windows 트레이 유틸리티입니다.
 
 현재 릴리즈 목표는 가벼운 Windows Forms 버전입니다. WinForms 버전을 안정화해 릴리즈한 뒤, 이후 WinUI 3 구현으로 포팅할 계획입니다.
 
@@ -8,7 +8,7 @@ Codex Usage Tray는 Codex 앱, CLI, 대시보드를 계속 열어두지 않아�
 
 ## 무엇을 하는 앱인가
 
-Codex Usage Tray는 로컬에서 `codex app-server`를 실행하고, stdio JSON-RPC를 통해 현재 Codex rate limit 데이터를 읽은 뒤, 그 결과를 작은 트레이 팝업에 표시합니다.
+QuotaScope는 로컬에서 `codex app-server`를 실행하고, stdio JSON-RPC를 통해 현재 Codex rate limit 데이터를 읽은 뒤, 그 결과를 작은 트레이 팝업에 표시합니다.
 
 Codex를 자주 사용하는 사용자가 작업 중 남은 사용량과 reset 상태를 빠르게 확인하기 위한 도구입니다.
 
@@ -74,7 +74,7 @@ Windows Forms
 Repository root에서 실행:
 
 ```powershell
-dotnet run --project app/CodexUsageTray.csproj
+dotnet run --project app/QuotaScope.csproj
 ```
 
 또는 app directory에서 실행:
@@ -87,7 +87,7 @@ dotnet run
 내장 mapper self-test 실행:
 
 ```powershell
-dotnet run --project app/CodexUsageTray.csproj -- --self-test
+dotnet run --project app/QuotaScope.csproj -- --self-test
 ```
 
 ## 설정
@@ -146,11 +146,16 @@ settings.json
 3. 유지보수하기 좋은 native Windows app 구조로 UI 재구성
 4. WinUI 3 포팅 후 packaging/distribution 방식 재검토
 
-향후 rename 후보:
+Provider 범위:
 
-- `QuotaScope`
+- 승인된 provider 범위는 Codex(OpenAI)와 Claude(Anthropic)입니다.
+- 현재 구현은 Codex만 지원하며, Claude 지원은 예정되어 있습니다.
 
-현재는 Codex-first 구현이므로 repository와 제품명은 `Codex Usage Tray`를 유지합니다.
+> 이 프로젝트의 이전 이름은 `Codex Usage Tray`이며, 2026-07-22에 `QuotaScope`로 이름을 변경했습니다.
+
+## Disclaimer
+
+> This project is not affiliated with, endorsed by, or sponsored by OpenAI or Anthropic. Codex is a product/service of OpenAI. Claude is a product/service of Anthropic.
 
 ## 문서
 

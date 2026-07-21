@@ -2,7 +2,7 @@ using System;
 using System.Drawing;
 using System.Runtime.InteropServices;
 
-namespace CodexUsageTray;
+namespace QuotaScope;
 
 internal static class TrayIconRenderer
 {

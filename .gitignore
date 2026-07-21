@@ -42,6 +42,9 @@ Thumbs.db
 # Codex/local agent logs
 .codex-log/
 
+# Local handoff/task documents (working notes, deleted after completion)
+docs/HANDOFF_QUOTASCOPE.md
+
 # Local app settings
 # Keep sample settings files explicit, for example `settings.example.json`.
 settings.json

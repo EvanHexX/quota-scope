@@ -2,7 +2,7 @@
 using System.IO;
 using System.Text.Json;
 
-namespace CodexUsageTray;
+namespace QuotaScope;
 
 internal sealed class AppSettings
 {
