@@ -489,7 +489,10 @@ internal sealed class UsagePopupWindow
         foreach (var usage in _usages)
         {
             var provider = _settings.GetProvider(usage.ProviderId);
-            sections.Add((usage, usage.Rows.Where(row => IsRowVisible(row, provider)).ToList()));
+            var visible = usage.Rows.Where(row => IsRowVisible(row, provider));
+            // User-defined order decides which gauges end up adjacent, and
+            // therefore which ones pair into a two-column line.
+            sections.Add((usage, RowShapes.Order(_settings, usage.ProviderId, visible, row => row.Label)));
         }
         return sections;
     }

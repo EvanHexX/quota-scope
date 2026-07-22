@@ -28,6 +28,9 @@ internal sealed class AppSettings
     public Dictionary<string, string> RowShapes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     // "Auto" | "OneColumn" | "TwoColumns".
     public string LayoutColumns { get; set; } = "Auto";
+    // Display order overrides, same key as RowShapes; unlisted rows keep the
+    // order the provider reported them in.
+    public Dictionary<string, int> RowOrder { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public string TrayIconStyle { get; set; } = "UsageArc";
     public string GaugeMetric { get; set; } = "Used";
     public string Language { get; set; } = "System";
