@@ -733,7 +733,8 @@ internal sealed class UsagePopupWindow
     private const int DwmwaWindowCornerPreference = 33;
     private const int DwmwcpRound = 2;
     private const int DwmwaBorderColor = 34;
-    private const uint DwmwaColorNone = 0xFFFFFFFE;
+    private const int DwmwaNcRenderingPolicy = 2;
+    private const int DwmncrpDisabled = 2;
 
     private bool _chromeFailureLogged;
     private Color _chromeBorderColor = Color.FromArgb(255, 24, 26, 46);
@@ -772,11 +773,17 @@ internal sealed class UsagePopupWindow
         // border is painted in the card color: even when drawn, it is invisible.
         var colorRef = _chromeBorderColor.R | (_chromeBorderColor.G << 8) | (_chromeBorderColor.B << 16);
         var borderResult = DwmSetWindowAttribute(_hwnd, DwmwaBorderColor, ref colorRef, sizeof(int));
-        if ((cornerResult != 0 || borderResult != 0) && !_chromeFailureLogged)
+        // The white hairline survived a successfully-applied border color, so it
+        // comes from another part of DWM's non-client rendering (shadow edge).
+        // Disable non-client rendering entirely; the popup loses the drop
+        // shadow, which is acceptable.
+        var ncPolicy = DwmncrpDisabled;
+        var ncResult = DwmSetWindowAttribute(_hwnd, DwmwaNcRenderingPolicy, ref ncPolicy, sizeof(int));
+        if ((cornerResult != 0 || borderResult != 0 || ncResult != 0) && !_chromeFailureLogged)
         {
             _chromeFailureLogged = true;
             CrashLog.Write("window-chrome", new InvalidOperationException(
-                $"DwmSetWindowAttribute results: corner=0x{cornerResult:X8}, border=0x{borderResult:X8}"));
+                $"DwmSetWindowAttribute results: corner=0x{cornerResult:X8}, border=0x{borderResult:X8}, ncPolicy=0x{ncResult:X8}"));
         }
     }
 
