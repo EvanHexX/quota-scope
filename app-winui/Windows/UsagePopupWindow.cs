@@ -142,8 +142,12 @@ internal sealed class UsagePopupWindow
         {
         }
         _presenter = OverlappedPresenter.Create();
-        _presenter.SetBorderAndTitleBar(false, false);
-        _presenter.IsResizable = false;
+        // Keep the border (WS_THICKFRAME): DWM rounding and the drop shadow
+        // require it. The WM_NCCALCSIZE subclass claims the full rect anyway,
+        // so no frame is visible and mouse-resize has no grip area. IsResizable
+        // must stay true - false strips the frame styles again (#7629).
+        _presenter.SetBorderAndTitleBar(true, false);
+        _presenter.IsResizable = true;
         _presenter.IsMaximizable = false;
         _presenter.IsMinimizable = false;
         _presenter.IsAlwaysOnTop = _settings.IsPinned;
@@ -748,32 +752,13 @@ internal sealed class UsagePopupWindow
     private bool _chromeFailureLogged;
     private Color _chromeBorderColor = Color.FromArgb(255, 24, 26, 46);
 
-    private const int GwlStyle = -16;
-    private const int GwlExStyle = -20;
-    private const long WsBorder = 0x00800000;
-    private const long WsDlgFrame = 0x00400000;
-    private const long WsThickFrame = 0x00040000;
-    private const long WsExDlgModalFrame = 0x00000001;
-    private const long WsExWindowEdge = 0x00000100;
-    private const long WsExClientEdge = 0x00000200;
-    private const long WsExStaticEdge = 0x00020000;
     private const uint SwpFlags = 0x0001 /*NOSIZE*/ | 0x0002 /*NOMOVE*/ | 0x0004 /*NOZORDER*/ | 0x0010 /*NOACTIVATE*/ | 0x0020 /*FRAMECHANGED*/;
 
     private void ApplyWindowChrome()
     {
-        // The borderless presenter leaves classic frame styles behind, and the
-        // resulting 1px non-client edge is drawn regardless of DWM border
-        // color. Strip every frame style directly.
-        var style = GetWindowLongPtr(_hwnd, GwlStyle).ToInt64();
-        var strippedStyle = style & ~(WsBorder | WsDlgFrame | WsThickFrame);
-        var exStyle = GetWindowLongPtr(_hwnd, GwlExStyle).ToInt64();
-        var strippedExStyle = exStyle & ~(WsExDlgModalFrame | WsExWindowEdge | WsExClientEdge | WsExStaticEdge);
-        if (strippedStyle != style || strippedExStyle != exStyle)
-        {
-            SetWindowLongPtr(_hwnd, GwlStyle, new IntPtr(strippedStyle));
-            SetWindowLongPtr(_hwnd, GwlExStyle, new IntPtr(strippedExStyle));
-            SetWindowPos(_hwnd, IntPtr.Zero, 0, 0, 0, 0, SwpFlags);
-        }
+        // Frame styles are deliberately KEPT (WS_THICKFRAME is what makes DWM
+        // round the corners and draw the shadow); the WM_NCCALCSIZE subclass
+        // removes every visible frame pixel instead.
 
         // Windows 11 only; on Windows 10 these fail harmlessly.
         var preference = DwmwcpRound;
@@ -836,12 +821,6 @@ internal sealed class UsagePopupWindow
 
     [DllImport("comctl32.dll")]
     private static extern IntPtr DefSubclassProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
-    private static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
-
-    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
-    private static extern IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr value);
 
     [DllImport("user32.dll")]
     private static extern bool SetWindowPos(IntPtr hwnd, IntPtr hwndInsertAfter, int x, int y, int width, int height, uint flags);
