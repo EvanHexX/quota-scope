@@ -613,24 +613,30 @@ internal sealed class UsagePopupWindow
         if (!_settings.Glassmorphism) return Brush(palette.Row);
 
         var strength = GlassStrength.Parse(_settings.GlassStrength);
-        var isDark = !string.Equals(ResolveTheme(), "Light", StringComparison.OrdinalIgnoreCase);
-        var sheen = isDark ? (byte)255 : (byte)255;
-        var topAlpha = (byte)Math.Min(255, palette.Row.A + strength.EdgeAlpha / 2);
+        // Only the top sliver is lightened, and only slightly: a 15% pull toward
+        // white with a small alpha bump. Anything stronger looks like a painted
+        // gradient on a flat surface.
+        const double sheenMix = 0.15;
+        var top = Color.FromArgb(
+            (byte)Math.Min(255, palette.Row.A + strength.SheenAlpha),
+            Lighten(palette.Row.R, sheenMix),
+            Lighten(palette.Row.G, sheenMix),
+            Lighten(palette.Row.B, sheenMix));
+
         var gradient = new LinearGradientBrush
         {
             StartPoint = new global::Windows.Foundation.Point(0, 0),
-            EndPoint = new global::Windows.Foundation.Point(0.35, 1)
+            EndPoint = new global::Windows.Foundation.Point(0, 1)
         };
-        gradient.GradientStops.Add(new GradientStop
-        {
-            Offset = 0,
-            Color = Color.FromArgb(topAlpha,
-                (byte)((palette.Row.R + sheen) / 2),
-                (byte)((palette.Row.G + sheen) / 2),
-                (byte)((palette.Row.B + sheen) / 2))
-        });
+        gradient.GradientStops.Add(new GradientStop { Offset = 0, Color = top });
+        gradient.GradientStops.Add(new GradientStop { Offset = 0.45, Color = palette.Row });
         gradient.GradientStops.Add(new GradientStop { Offset = 1, Color = palette.Row });
         return gradient;
+    }
+
+    private static byte Lighten(byte channel, double amount)
+    {
+        return (byte)Math.Clamp(channel + (255 - channel) * amount, 0, 255);
     }
 
     private Brush CardStroke(PopupPalette palette)

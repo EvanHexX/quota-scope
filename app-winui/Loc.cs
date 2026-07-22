@@ -54,6 +54,7 @@ internal static partial class Loc
             "NearCursor" => "Near cursor",
             "OneColumn" => "One column",
             "TwoColumns" => "Two columns",
+            "VeryStrong" => "Very strong",
             _ => value
         };
 
@@ -86,6 +87,7 @@ internal static partial class Loc
             "Subtle" => "은은하게",
             "Medium" => "보통",
             "Strong" => "강하게",
+            "VeryStrong" => "매우 강하게",
             _ => value
         };
     }

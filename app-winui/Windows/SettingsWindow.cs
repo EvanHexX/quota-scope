@@ -375,7 +375,7 @@ internal sealed class SettingsWindow
         };
 
         var glassStrength = MakeCombo(
-            new[] { "Subtle", "Medium", "Strong" },
+            new[] { "Subtle", "Medium", "Strong", "VeryStrong" },
             _settings.GlassStrength,
             value => { _settings.GlassStrength = value; Save(SettingsChange.Appearance); });
 
