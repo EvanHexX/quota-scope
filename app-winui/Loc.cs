@@ -65,7 +65,7 @@ internal static partial class Loc
     }
 
     // Reset clock time: same-day windows show only the time, longer windows
-    // (weekly) also need the date to be meaningful.
+    // (weekly) also need the date. Both spell out that it is a reset moment.
     public static string ResetClock(DateTimeOffset localReset)
     {
         var korean = new CultureInfo("ko-KR");
@@ -73,12 +73,12 @@ internal static partial class Loc
         if (IsKorean)
         {
             return isToday
-                ? localReset.ToString("tt h:mm", korean)
-                : localReset.ToString("M월 d일 HH:mm", korean);
+                ? localReset.ToString("tt h:mm", korean) + " 초기화"
+                : localReset.ToString("M월 d일 tt h:mm", korean) + " 초기화";
         }
         return isToday
-            ? localReset.ToString("h:mm tt", CultureInfo.InvariantCulture)
-            : localReset.ToString("MMM d, h:mm tt", CultureInfo.InvariantCulture);
+            ? "resets at " + localReset.ToString("h:mm tt", CultureInfo.InvariantCulture)
+            : "resets " + localReset.ToString("MMM d, h:mm tt", CultureInfo.InvariantCulture);
     }
 
     public static string ResetIn(TimeSpan remaining)
