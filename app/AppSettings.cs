@@ -38,6 +38,9 @@ internal sealed class AppSettings
     public string GlassStrength { get; set; } = "Medium";
     public string PopupGraph { get; set; } = "half-circle";
     public string PopupPosition { get; set; } = "BottomRight";
+    // Used by PopupPosition "LastPosition"; int.MinValue means "not recorded yet".
+    public int LastPopupX { get; set; } = int.MinValue;
+    public int LastPopupY { get; set; } = int.MinValue;
     public string ShapeTheme { get; set; } = "Bars";
     public string ColorTheme { get; set; } = "DarkBluePurple";
     public string TimeDisplayMode { get; set; } = "ClockTime";
