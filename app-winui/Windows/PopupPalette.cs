@@ -16,16 +16,34 @@ internal sealed record PopupPalette(
     Color AccentBlue,
     Color AccentPurple)
 {
-    public static PopupPalette FromTheme(string? theme)
+    // App theme model: Dark / Light / Midnight, with glassmorphism as an
+    // orthogonal material switch (translucent cards + acrylic backdrop).
+    public static PopupPalette FromSettings(string? theme, bool glassmorphism)
     {
-        return theme?.ToUpperInvariant() switch
+        var palette = theme?.ToUpperInvariant() switch
         {
-            "MIDNIGHTBLACK" => MidnightBlack,
-            "NEBULA" => Nebula,
-            "GLASSMORPHISM" => Glassmorphism,
+            "LIGHT" => Light,
+            "MIDNIGHT" => MidnightBlack,
             _ => DarkBluePurple
         };
+        return glassmorphism ? palette.WithGlass() : palette;
     }
+
+    private PopupPalette WithGlass() => this with
+    {
+        Card = Color.FromArgb(0xCC, Card.R, Card.G, Card.B),
+        Row = Color.FromArgb(0xD9, Row.R, Row.G, Row.B)
+    };
+
+    public static PopupPalette Light => new(
+        Color.FromArgb(242, 245, 247, 251),
+        Color.FromArgb(255, 255, 255, 255),
+        Color.FromArgb(255, 201, 210, 228),
+        Color.FromArgb(255, 225, 230, 240),
+        Color.FromArgb(255, 27, 36, 48),
+        Color.FromArgb(255, 90, 100, 120),
+        Color.FromArgb(255, 46, 124, 214),
+        Color.FromArgb(255, 122, 92, 224));
 
     public static PopupPalette DarkBluePurple => new(
         Color.FromArgb(242, 24, 26, 46),
@@ -46,27 +64,6 @@ internal sealed record PopupPalette(
         Color.FromArgb(255, 178, 180, 188),
         Color.FromArgb(255, 75, 180, 255),
         Color.FromArgb(255, 134, 116, 255));
-
-    public static PopupPalette Nebula => new(
-        Color.FromArgb(242, 34, 38, 66),
-        Color.FromArgb(255, 42, 48, 82),
-        Color.FromArgb(255, 112, 128, 194),
-        Color.FromArgb(255, 52, 61, 96),
-        Color.FromArgb(255, 248, 250, 255),
-        Color.FromArgb(255, 188, 199, 229),
-        Color.FromArgb(255, 74, 166, 255),
-        Color.FromArgb(255, 182, 118, 255));
-
-    // Glassmorphism pairs with a DesktopAcrylic backdrop, so its card is more translucent.
-    public static PopupPalette Glassmorphism => new(
-        Color.FromArgb(204, 30, 46, 66),
-        Color.FromArgb(230, 39, 58, 80),
-        Color.FromArgb(255, 146, 179, 214),
-        Color.FromArgb(255, 62, 82, 108),
-        Color.FromArgb(255, 252, 254, 255),
-        Color.FromArgb(255, 206, 222, 238),
-        Color.FromArgb(255, 92, 196, 255),
-        Color.FromArgb(255, 176, 146, 255));
 
     public Color AccentFor(int usedPercent)
     {

@@ -25,6 +25,9 @@ internal sealed class AppSettings
     public bool Autostart { get; set; } = false;
     public string TrayIconStyle { get; set; } = "UsageArc";
     public string GaugeMetric { get; set; } = "Used";
+    public string Language { get; set; } = "System";
+    public double UiScale { get; set; } = 1.0;
+    public bool Glassmorphism { get; set; } = false;
     public string PopupGraph { get; set; } = "half-circle";
     public string PopupPosition { get; set; } = "BottomRight";
     public string ShapeTheme { get; set; } = "Bars";

@@ -52,6 +52,7 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
 
     public TrayController()
     {
+        Loc.SetLanguage(_settings.Language);
         BuildProviders();
 
         _trayIcon = new TrayIconHost();
@@ -122,13 +123,13 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
     private MenuFlyout BuildMenu()
     {
         var menu = new MenuFlyout();
-        menu.Items.Add(MakeItem("Refresh", async () => await RefreshAsync().ConfigureAwait(false)));
-        menu.Items.Add(MakeItem("Toggle", TogglePopup));
-        menu.Items.Add(MakeItem("Reconnect", async () => await ReconnectAsync().ConfigureAwait(false)));
+        menu.Items.Add(MakeItem(Loc.T("Refresh", "새로 고침"), async () => await RefreshAsync().ConfigureAwait(false)));
+        menu.Items.Add(MakeItem(Loc.T("Toggle popup", "팝업 토글"), TogglePopup));
+        menu.Items.Add(MakeItem(Loc.T("Reconnect", "재연결"), async () => await ReconnectAsync().ConfigureAwait(false)));
         menu.Items.Add(new MenuFlyoutSeparator());
-        menu.Items.Add(MakeItem("Settings...", OpenSettings));
+        menu.Items.Add(MakeItem(Loc.T("Settings...", "설정..."), OpenSettings));
         menu.Items.Add(new MenuFlyoutSeparator());
-        menu.Items.Add(MakeItem("Exit", ExitApplication));
+        menu.Items.Add(MakeItem(Loc.T("Exit", "종료"), ExitApplication));
         return menu;
     }
 
@@ -309,10 +310,15 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
 
     private void OnSettingsChanged(SettingsChange kind)
     {
+        Loc.SetLanguage(_settings.Language);
         if (kind == SettingsChange.Providers)
         {
             RebuildProviders();
         }
+        // Rebuild menus so language changes apply without restart.
+        var menu = BuildMenu();
+        _trayIcon.SetMenu(menu);
+        _popup?.SetMenu(BuildMenu());
         _popup?.ApplySettings();
         ApplyTrayVisuals(CurrentUsages());
     }
