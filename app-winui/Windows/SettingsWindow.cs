@@ -371,7 +371,13 @@ internal sealed class SettingsWindow
         {
             _settings.Glassmorphism = glass.IsOn;
             Save(SettingsChange.Appearance);
+            RefreshCurrentPage(); // show/hide the strength picker
         };
+
+        var glassStrength = MakeCombo(
+            new[] { "Subtle", "Medium", "Strong" },
+            _settings.GlassStrength,
+            value => { _settings.GlassStrength = value; Save(SettingsChange.Appearance); });
 
         var trayStyle = MakeCombo(
             new[] { "UsageArc", "Glyph" },
@@ -420,6 +426,14 @@ internal sealed class SettingsWindow
             Row(Loc.T("Theme", "테마"), Loc.T("Dark, Light, or Midnight (pure black). Applies to popup and settings.", "다크, 라이트, 미드나잇(순수 검정). 팝업과 설정창에 적용됩니다."), themeCombo),
             Row(Loc.T("Glassmorphism", "글래스모피즘"), Loc.T("Translucent acrylic that shows the desktop behind the popup.", "팝업 뒤 배경이 비치는 아크릴 반투명 효과."), glass)
         });
+        if (_settings.Glassmorphism)
+        {
+            rows.Add(Row(
+                Loc.T("Glass strength", "글래스 강도"),
+                Loc.T("Stronger lets more of the desktop through the popup and its cards.",
+                      "강할수록 팝업과 카드 너머 배경이 더 많이 비칩니다."),
+                glassStrength));
+        }
         if (!AcrylicBackdropHost.IsSupported)
         {
             rows.Add(MutedText(Loc.T(
