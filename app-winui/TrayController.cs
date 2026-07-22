@@ -163,16 +163,12 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
 
     public void OpenSettings()
     {
-        if (_settingsWindow is null)
-        {
-            _settingsWindow = new SettingsWindow(
-                _settings,
-                OnSettingsChanged,
-                () => _codexProvider?.ResolvedCommandText ?? "disabled",
-                () => _ = ReconnectAsync(),
-                this);
-            _settingsWindow.Closed += () => _settingsWindow = null;
-        }
+        _settingsWindow ??= new SettingsWindow(
+            _settings,
+            OnSettingsChanged,
+            () => _codexProvider?.ResolvedCommandText ?? "disabled",
+            () => _ = ReconnectAsync(),
+            this);
         _settingsWindow.Activate();
     }
 

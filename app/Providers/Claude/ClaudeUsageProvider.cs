@@ -101,6 +101,7 @@ internal sealed class ClaudeUsageProvider : IUsageProvider
 
             var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             using var doc = JsonDocument.Parse(body);
+            DumpLastResponse(body);
             var usage = ClaudeUsageMapper.FromJson(doc.RootElement);
             _backoffStep = 0;
             _nextFetchAt = now + _minPollInterval;
@@ -136,6 +137,20 @@ internal sealed class ClaudeUsageProvider : IUsageProvider
         return _lastSuccess is null
             ? "Claude usage unavailable"
             : $"Stale - last {_lastSuccess.UpdatedAt.ToLocalTime():h:mm tt}";
+    }
+
+    // Local-only diagnostic: the last successful response body (usage numbers,
+    // no credentials) next to the exe, for verifying live schema changes.
+    private static void DumpLastResponse(string body)
+    {
+        try
+        {
+            System.IO.File.WriteAllText(
+                System.IO.Path.Combine(AppContext.BaseDirectory, "claude_usage_last.json"), body);
+        }
+        catch
+        {
+        }
     }
 
     private static string FormatDelay(TimeSpan delay)
