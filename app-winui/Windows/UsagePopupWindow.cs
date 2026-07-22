@@ -434,7 +434,7 @@ internal sealed class UsagePopupWindow
         void FlushPending()
         {
             if (pendingCircle is null) return;
-            _sectionsPanel.Children.Add(BuildCardRow(BuildBentoCard(pendingCircle, palette), null, palette));
+            _sectionsPanel.Children.Add(BuildCardRow(BuildBentoCard(providerId, pendingCircle, palette), null, palette));
             pendingCircle = null;
         }
 
@@ -443,13 +443,13 @@ internal sealed class UsagePopupWindow
             if (RowShapes.Resolve(_settings, providerId, row) == RowShapes.Bars)
             {
                 FlushPending();
-                _sectionsPanel.Children.Add(BuildBarRow(row, palette));
+                _sectionsPanel.Children.Add(BuildBarRow(providerId, row, palette));
                 continue;
             }
 
             if (!twoColumn)
             {
-                _sectionsPanel.Children.Add(BuildCardRow(BuildBentoCard(row, palette), null, palette));
+                _sectionsPanel.Children.Add(BuildCardRow(BuildBentoCard(providerId, row, palette), null, palette));
                 continue;
             }
 
@@ -460,7 +460,7 @@ internal sealed class UsagePopupWindow
             }
 
             _sectionsPanel.Children.Add(BuildCardRow(
-                BuildBentoCard(pendingCircle, palette), BuildBentoCard(row, palette), palette));
+                BuildBentoCard(providerId, pendingCircle, palette), BuildBentoCard(providerId, row, palette), palette));
             pendingCircle = null;
         }
 
@@ -547,45 +547,63 @@ internal sealed class UsagePopupWindow
         };
     }
 
-    private FrameworkElement BuildBarRow(UsageRow row, PopupPalette palette)
+    private FrameworkElement BuildBarRow(string providerId, UsageRow row, PopupPalette palette)
     {
+        // label | reset time (stretches) | percent, so the number always sits
+        // hard right and the times line up.
         var grid = new Grid { Margin = new Thickness(12, 8, 12, 8) };
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
+        var labelText = Loc.RowLabel(providerId, row.Label);
         var label = new TextBlock
         {
-            Text = Loc.RowLabel(row.Label),
+            Text = labelText,
             FontFamily = UiFont,
             FontSize = 13.5,
             FontWeight = FontWeights.Bold,
             Foreground = Brush(palette.Text),
-            MinWidth = Loc.RowLabel(row.Label).Length > 6 ? 104 : 72
+            TextTrimming = TextTrimming.CharacterEllipsis
         };
         Grid.SetRow(label, 0);
         Grid.SetColumn(label, 0);
         grid.Children.Add(label);
 
-        var right = new TextBlock
+        var timeText = new TextBlock
         {
             FontFamily = UiFont,
             FontSize = 12.5,
             Foreground = Brush(palette.Muted),
             TextAlignment = TextAlignment.Right,
-            TextTrimming = TextTrimming.CharacterEllipsis
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(10, 0, 10, 0)
         };
-        Grid.SetRow(right, 0);
-        Grid.SetColumn(right, 1);
-        grid.Children.Add(right);
+        Grid.SetRow(timeText, 0);
+        Grid.SetColumn(timeText, 1);
+        grid.Children.Add(timeText);
+
+        var percentText = new TextBlock
+        {
+            FontFamily = UiFont,
+            FontSize = 12.5,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = Brush(palette.Text),
+            TextAlignment = TextAlignment.Right
+        };
+        Grid.SetRow(percentText, 0);
+        Grid.SetColumn(percentText, 2);
+        grid.Children.Add(percentText);
 
         if (row.Window is { } window)
         {
             var used = RoundPercent(window);
             var display = DisplayPercent(window);
-            right.Text = $"{display}%  {FormatWindowTime(window)}";
-            right.Tapped += (_, _) => ToggleTimeDisplayMode();
+            timeText.Text = FormatWindowTime(window);
+            timeText.Tapped += (_, _) => ToggleTimeDisplayMode();
+            percentText.Text = $"{display}%";
 
             var bar = new ProgressBar
             {
@@ -600,12 +618,12 @@ internal sealed class UsagePopupWindow
             };
             Grid.SetRow(bar, 1);
             Grid.SetColumn(bar, 0);
-            Grid.SetColumnSpan(bar, 2);
+            Grid.SetColumnSpan(bar, 3);
             grid.Children.Add(bar);
         }
         else
         {
-            right.Text = row.DetailText ?? "--";
+            percentText.Text = row.DetailText ?? "--";
         }
 
         return new Border
@@ -659,7 +677,7 @@ internal sealed class UsagePopupWindow
         return Brush(palette.GlassEdge(isDark, GlassStrength.Parse(_settings.GlassStrength)));
     }
 
-    private FrameworkElement BuildBentoCard(UsageRow row, PopupPalette palette)
+    private FrameworkElement BuildBentoCard(string providerId, UsageRow row, PopupPalette palette)
     {
         var grid = new Grid { Margin = new Thickness(14, 12, 14, 12) };
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -668,11 +686,12 @@ internal sealed class UsagePopupWindow
 
         var label = new TextBlock
         {
-            Text = Loc.RowLabel(row.Label),
+            Text = Loc.RowLabel(providerId, row.Label),
             FontFamily = UiFont,
             FontSize = 12.5,
             FontWeight = FontWeights.Bold,
-            Foreground = Brush(palette.Text)
+            Foreground = Brush(palette.Text),
+            TextTrimming = TextTrimming.CharacterEllipsis
         };
         Grid.SetRow(label, 0);
         grid.Children.Add(label);
@@ -917,29 +936,10 @@ internal sealed class UsagePopupWindow
 
     private string FormatWindowTime(RateLimitWindow? window)
     {
-        if (window?.ResetsAt is null) return "reset --";
-        if (string.Equals(_settings.TimeDisplayMode, "RemainingTime", StringComparison.OrdinalIgnoreCase))
-        {
-            return FormatRemaining(window.ResetsAt.Value);
-        }
-
-        var local = window.ResetsAt.Value.ToLocalTime().DateTime;
-        return local.ToString("h:mm tt");
-    }
-
-    private static string FormatRemaining(DateTimeOffset resetsAt)
-    {
-        var remaining = resetsAt - DateTimeOffset.Now;
-        if (remaining <= TimeSpan.Zero) return "0m";
-        if (remaining.TotalDays >= 1)
-        {
-            return $"{(int)remaining.TotalDays}d {remaining.Hours}h";
-        }
-        if (remaining.TotalHours >= 1)
-        {
-            return $"{(int)remaining.TotalHours}h {remaining.Minutes}m";
-        }
-        return $"{Math.Max(1, remaining.Minutes)}m";
+        if (window?.ResetsAt is null) return Loc.T("reset --", "재설정 --");
+        return string.Equals(_settings.TimeDisplayMode, "RemainingTime", StringComparison.OrdinalIgnoreCase)
+            ? Loc.ResetIn(window.ResetsAt.Value - DateTimeOffset.Now)
+            : Loc.ResetClock(window.ResetsAt.Value.ToLocalTime());
     }
 
     private static SolidColorBrush Brush(Color color) => new(color);

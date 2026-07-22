@@ -496,7 +496,7 @@ internal sealed class SettingsWindow
             line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var label = new TextBlock
             {
-                Text = $"{rowRef.ProviderName} · {Loc.RowLabel(rowRef.Label)}",
+                Text = $"{rowRef.ProviderName} · {Loc.RowLabel(rowRef.ProviderId, rowRef.Label)}",
                 FontSize = 13,
                 VerticalAlignment = VerticalAlignment.Center
             };

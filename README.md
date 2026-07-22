@@ -4,8 +4,8 @@
 
 ![Platform](https://img.shields.io/badge/platform-Windows-0078D4?logo=windows&logoColor=white)
 ![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)
-![UI](https://img.shields.io/badge/UI-Windows%20Forms-5C2D91)
-![Codex](https://img.shields.io/badge/Codex-app--server-111827)
+![UI](https://img.shields.io/badge/UI-WinUI%203-0078D4)
+![Providers](https://img.shields.io/badge/providers-Codex%20%7C%20Claude-111827)
 ![Privacy](https://img.shields.io/badge/privacy-local--only-10B981)
 ![Status](https://img.shields.io/badge/status-unofficial-6B7280)
 
@@ -13,27 +13,28 @@ QuotaScope is a small Windows tray utility for checking Codex and Claude usage l
 
 For Codex it starts `codex app-server` locally and reads rate limit data through stdio JSON-RPC. For Claude it reads the local Claude Code sign-in and polls Anthropic's usage endpoint. Results show in a compact tray popup.
 
-## Screenshots
+## Install
 
-| Codex + Spark usage | Codex usage only |
-|---|---|
-| <img src="docs/images/usage-with-spark.svg" alt="QuotaScope showing Codex and Spark usage windows" width="347"> | <img src="docs/images/usage-codex-only.svg" alt="QuotaScope showing only Codex usage windows" width="350"> |
+1. Download `QuotaScope-win-x64.zip` from the [latest release](https://github.com/EvanHexX/quota-scope/releases/latest).
+2. Extract it anywhere.
+3. Run `QuotaScopeWinUI.exe`.
+
+The build is self-contained: no .NET or Windows App SDK runtime install is required. Windows 11 is recommended (Windows 10 works, but the popup gets square corners instead of rounded ones).
 
 ## Features
 
-- Windows system tray utility
-- Compact usage popup
-- Codex and Claude (Pro/Max) usage in one popup
-- Payload-driven usage gauges: one row per rate-limit window the provider reports
-- Optional secondary rows (GPT-5.3-Codex-Spark, Claude per-model windows)
-- Optional credits rows (Codex credits balance, Claude extra usage)
-- Tray icon signals overall usage with an arc fill (5% steps) and a 3-level state color; exact numbers are in the tooltip and popup
-- Pinned popup mode
-- Global hotkey: `Ctrl+Alt+U`
-- Manual refresh and reconnect controls
-- Position, time display, shape theme, and color theme settings
-- Local settings persistence
-- No separate credential required
+- Windows system tray utility with a compact usage popup
+- Codex and Claude (Pro/Max) usage side by side, in labeled per-provider sections
+- Payload-driven rows: one row per rate-limit window the provider reports, so new windows (for example a per-model weekly limit) appear without an app update
+- Optional secondary rows (GPT-5.3-Codex-Spark, Claude per-model windows) and credits rows
+- Tray icon signals overall usage with an arc fill (5% steps) and a 3-level state color; exact numbers live in the tooltip and popup
+- Optional tray notification when usage crosses the warning threshold
+- Layout: bars, gauges, or mix & match with a per-row shape and a forced one/two column mode
+- Themes: Dark, Light, Midnight, optional system-theme following, and glassmorphism with four strength levels
+- UI scale (80–150%) and English / Korean interface
+- Configurable global hotkeys: toggle popup (default `Ctrl+Alt+U`), refresh all, toggle pin
+- Dedicated settings window; pinned popup mode; start with Windows
+- Local settings persistence; no separate credential required
 
 ## How it works
 
@@ -54,93 +55,37 @@ Each provider is isolated: one provider failing does not affect the other. The a
 
 ## Requirements
 
-- Windows
-- Codex CLI / Codex app-server available through the `codex` command
+- Windows 10 or later (Windows 11 recommended)
+- Codex CLI / Codex app-server available through the `codex` command (optional, only for Codex usage)
 - Claude Code signed in on this machine (optional, only for Claude usage)
-- .NET 10 SDK for local development
-
-Current project target:
-
-```text
-net10.0-windows
-Windows Forms
-```
-
-## Run locally
-
-From the repository root:
-
-```powershell
-dotnet run --project app/QuotaScope.csproj
-```
-
-Or from the app directory:
-
-```powershell
-cd app
-dotnet run
-```
-
-Run the built-in mapper self-test:
-
-```powershell
-dotnet run --project app/QuotaScope.csproj -- --self-test
-```
+- .NET 10 SDK only if you want to build from source
 
 ## Usage
 
 - Left-click the tray icon to open or close the popup.
-- Press `Ctrl+Alt+U` to toggle the popup.
+- Press `Ctrl+Alt+U` (or your own binding) to toggle the popup.
 - Use the pin button to keep the popup open.
-- Right-click the tray icon or popup to open the menu.
-- Use `Settings > Usage Rows > GPT-5.3 Spark` to show or hide Spark rows.
-- Use `Settings > Usage Rows > Credits` to show or hide the credits balance row.
+- Drag the popup header to move it.
 - Click the time text to switch between clock time and remaining time.
+- Right-click the tray icon for refresh, reconnect, settings, and exit.
+- Right-click the popup for the same menu.
+
+When Claude needs a sign-in, `Reconnect` opens a terminal running the Claude Code login flow; finish the browser sign-in and usage resumes automatically.
 
 ## Settings
 
-The app stores local settings in `settings.json`.
+Everything is configured in the settings window (tray icon → `Settings…`), applied immediately, and stored in `settings.json` next to the executable.
 
-Example:
-
-```json
-{
-  "Hotkey": "Ctrl+Alt+U",
-  "WarningThresholdPercent": 20,
-  "PopupGraph": "half-circle",
-  "PopupPosition": "BottomRight",
-  "ShapeTheme": "Bars",
-  "ColorTheme": "DarkBluePurple",
-  "TimeDisplayMode": "ClockTime",
-  "IsPinned": false,
-  "Providers": {
-    "codex": {
-      "Enabled": true,
-      "RefreshSeconds": 60,
-      "ShowSecondaryRows": false,
-      "ShowCredits": false,
-      "Command": "codex"
-    },
-    "claude": {
-      "Enabled": true,
-      "RefreshSeconds": 60,
-      "ShowSecondaryRows": false,
-      "ShowCredits": false,
-      "Command": "codex"
-    }
-  }
-}
-```
+- **General**: language, start with Windows, popup position (including "last position"), time display, warning threshold, threshold notification
+- **Providers**: per-provider enable, refresh interval, secondary rows, credits row, Codex command, Claude credential status, reconnect
+- **Appearance**: shape theme (bars / gauges / mix & match), per-row shapes and column count, UI scale, theme, glassmorphism and its strength, tray icon style, gauge metric
+- **Hotkeys**: toggle popup, refresh all, toggle pin — press a combination to bind; conflicts are reported inline and never saved silently
+- **About**: version, disclaimer, repository link
 
 Notes:
 
-- `TimeDisplayMode` can be `ClockTime` or `RemainingTime`.
-- Provider options live under `Providers`, one entry per provider.
-- `ShowSecondaryRows` enables secondary model rows (GPT-5.3-Codex-Spark, Claude per-model windows).
-- `ShowCredits` enables the credits rows.
-- `Command` is only used by the Codex provider.
-- Claude polling is clamped to at least 60 seconds regardless of `RefreshSeconds`.
-- The `Hotkey` setting exists in the settings file, but the current registered hotkey is fixed to `Ctrl+Alt+U`.
+- Claude polling is clamped to at least 60 seconds regardless of the configured interval.
+- Gauges and percentages follow the gauge metric setting (used or remaining); state colors always key off usage.
 
 ## Privacy
 
@@ -155,39 +100,44 @@ QuotaScope is designed as a local utility.
 ## Current limitations
 
 - Windows-only.
-- The current UI is Windows Forms.
-- The app depends on Codex app-server behavior and available rate limit fields.
+- The app depends on Codex app-server behavior and the rate limit fields it exposes.
 - Claude usage relies on an undocumented Anthropic endpoint that may change or stop working without notice.
 - Claude usage requires being signed in to Claude Code on the same machine.
 - It is a local tray utility, not a cloud dashboard or analytics product.
-- Packaging and installer distribution are not finalized yet.
+- No installer or auto-update yet; releases are portable zips.
 
-## Roadmap
-
-Near-term:
-
-1. Stabilize the current Windows desktop tray experience.
-2. Improve app icon, screenshots, README, and release notes.
-3. Add a reproducible Windows build workflow.
-4. Prepare a first tagged release.
-
-Next major UI direction:
-
-1. Evaluate or implement a WinUI 3 port.
-2. Keep the Codex app-server integration and rate limit mapping behavior stable.
-3. Rebuild the UI with a more modern native Windows app structure.
-4. Re-evaluate packaging and distribution after the UI direction is settled.
-
-Provider scope:
+## Provider scope
 
 - The approved provider scope is Codex (OpenAI) and Claude (Anthropic).
 - Both providers are implemented; no other providers are planned without explicit approval.
 
-> This project was previously named `Codex Usage Tray` and was renamed to `QuotaScope` on 2026-07-22.
+> This project was previously named `Codex Usage Tray` and was renamed to `QuotaScope` on 2026-07-22. The legacy Windows Forms app remains in the repository under `app/` while the WinUI 3 app in `app-winui/` is the released one.
+
+## Build from source
+
+```powershell
+dotnet build app-winui/QuotaScope.WinUI.csproj
+```
+
+Run the built-in self-tests (rate limit mappers and the hotkey parser):
+
+```powershell
+dotnet run --project app-winui/QuotaScope.WinUI.csproj -- --self-test
+```
+
+Publish a self-contained build:
+
+```powershell
+dotnet publish app-winui/QuotaScope.WinUI.csproj -c Release -r win-x64 --self-contained true
+```
 
 ## Disclaimer
 
 > This project is not affiliated with, endorsed by, or sponsored by OpenAI or Anthropic. Codex is a product/service of OpenAI. Claude is a product/service of Anthropic.
+
+## License
+
+[MIT](LICENSE)
 
 ## Documentation
 
@@ -196,5 +146,6 @@ Project notes live under `docs/`.
 - `docs/README.md`: operating notes and behavior details
 - `docs/PROJECT_MAP.md`: module and file map
 - `docs/MODERNIZATION_PLAN.md`: .NET / WinUI modernization plan
+- `docs/WINUI3_PARITY.md`: WinUI 3 port notes, parity checklist, and window/backdrop findings
 - `docs/modules/codex_rate_limits.md`: Codex app-server rate limit schema and mapping notes
 - `docs/modules/claude_rate_limits.md`: Claude usage endpoint schema and mapping notes
