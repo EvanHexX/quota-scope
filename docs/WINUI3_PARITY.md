@@ -51,6 +51,15 @@ WinForms app is a separate follow-up task after sign-off.
   `DWMWA_WINDOW_ROUNDED_CORNER_PREFERENCE`, which is Windows 11-only; on
   Windows 10 corners are square. Accepted.
 
+## Lifecycle
+
+- `Application.DispatcherShutdownMode` must be `OnExplicitShutdown`. The
+  default (`OnLastWindowClose`) silently exits the whole app — tray icon
+  included — as soon as the last open window closes, e.g. closing the
+  settings window while the popup is hidden. This was the cause of the
+  "silent exit with settings open" reports; only the tray Exit menu calls
+  `Application.Exit()`.
+
 ## Popup window chrome
 
 - The popup keeps a logical DWM border with

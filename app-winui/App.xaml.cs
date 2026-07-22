@@ -15,6 +15,12 @@ public partial class App : Application
         _toggleSignal = toggleSignal;
         InitializeComponent();
 
+        // Tray app lifecycle: the default DispatcherShutdownMode is
+        // OnLastWindowClose, which silently exits the whole app (tray included)
+        // when e.g. the settings window is closed while the popup is hidden.
+        // Only the tray menu's Exit may end the app.
+        DispatcherShutdownMode = DispatcherShutdownMode.OnExplicitShutdown;
+
         // A tray utility should survive and log instead of dying silently.
         UnhandledException += (_, e) =>
         {
