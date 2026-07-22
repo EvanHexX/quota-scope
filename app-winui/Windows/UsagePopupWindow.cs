@@ -144,6 +144,9 @@ internal sealed class UsagePopupWindow
 
         _window.Activated += (_, e) =>
         {
+            // Something in the WinUI/backdrop stack can reset DWM attributes
+            // around activation; re-applying is idempotent and cheap.
+            ApplyWindowChrome();
             if (e.WindowActivationState == WindowActivationState.Deactivated
                 && Visible && !_settings.IsPinned && !_menuOpen)
             {
@@ -191,6 +194,7 @@ internal sealed class UsagePopupWindow
         // Backdrops can silently fail on a never-shown window; re-apply now.
         _appliedBackdropTheme = null;
         ApplyBackdrop();
+        ApplyWindowChrome();
     }
 
     public void Hide()
@@ -721,14 +725,22 @@ internal sealed class UsagePopupWindow
     private const int DwmwaBorderColor = 34;
     private const uint DwmwaColorNone = 0xFFFFFFFE;
 
+    private bool _chromeFailureLogged;
+
     private void ApplyWindowChrome()
     {
         // Windows 11 only; on Windows 10 these fail harmlessly.
         var preference = DwmwcpRound;
-        _ = DwmSetWindowAttribute(_hwnd, DwmwaWindowCornerPreference, ref preference, sizeof(int));
+        var cornerResult = DwmSetWindowAttribute(_hwnd, DwmwaWindowCornerPreference, ref preference, sizeof(int));
         // Remove the system's 1px window border line around the borderless popup.
         var none = unchecked((int)DwmwaColorNone);
-        _ = DwmSetWindowAttribute(_hwnd, DwmwaBorderColor, ref none, sizeof(int));
+        var borderResult = DwmSetWindowAttribute(_hwnd, DwmwaBorderColor, ref none, sizeof(int));
+        if ((cornerResult != 0 || borderResult != 0) && !_chromeFailureLogged)
+        {
+            _chromeFailureLogged = true;
+            CrashLog.Write("window-chrome", new InvalidOperationException(
+                $"DwmSetWindowAttribute results: corner=0x{cornerResult:X8}, border=0x{borderResult:X8}"));
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)]
