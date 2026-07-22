@@ -516,7 +516,8 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
             var rows = usage.Rows.Where(r => r.IsPrimary && r.Window is not null).ToList();
             parts.Add(rows.Count == 0
                 ? $"{usage.DisplayName} --"
-                : $"{usage.DisplayName} " + string.Join(" / ", rows.Select(r => $"{r.Label} {FormatPercent(r.Window!)}")));
+                : $"{usage.DisplayName} " + string.Join(" / ", rows.Select(r =>
+                    $"{Loc.RowLabel(usage.ProviderId, r.Label)} {FormatPercent(r.Window!)}")));
         }
         return string.Join("  |  ", parts);
     }

@@ -23,18 +23,79 @@ internal static partial class Loc
     public static string T(string en, string ko) => IsKorean ? ko : en;
 
     // Provider row labels are produced in English ("5h", "7d", "Spark 7d",
-    // "7d Fable"); only the duration tokens are localized so model names stay
-    // recognizable.
-    public static string RowLabel(string label)
+    // "7d Fable"). Display names follow each provider's own vocabulary: Codex
+    // calls its overall weekly window "General", Claude phrases windows the way
+    // its /usage view does.
+    public static string RowLabel(string providerId, string label)
     {
-        if (!IsKorean || string.IsNullOrEmpty(label)) return label;
-        var localized = DurationTokenRegex().Replace(label, match => match.Groups[2].Value switch
+        if (string.IsNullOrEmpty(label)) return label;
+        if (label.Equals("Credits", StringComparison.OrdinalIgnoreCase)) return T("Credits", "크레딧");
+
+        if (providerId.Equals("codex", StringComparison.OrdinalIgnoreCase))
+        {
+            if (label.StartsWith("Spark ", StringComparison.OrdinalIgnoreCase)) return "Spark";
+            if (label is "7d" or "1w") return T("General", "일반");
+            return DurationLabel(label);
+        }
+
+        if (providerId.Equals("claude", StringComparison.OrdinalIgnoreCase))
+        {
+            if (label == "5h") return T("5-hour limit", "5시간 한도");
+            if (label == "7d") return T("Weekly · All models", "주간 · 전체 모델");
+            if (label.StartsWith("7d ", StringComparison.Ordinal))
+            {
+                var model = label[3..];
+                return T($"Weekly · {model}", $"주간 · {model}");
+            }
+            return DurationLabel(label);
+        }
+
+        return DurationLabel(label);
+    }
+
+    private static string DurationLabel(string label)
+    {
+        if (!IsKorean) return label;
+        return DurationTokenRegex().Replace(label, match => match.Groups[2].Value switch
         {
             "h" => match.Groups[1].Value + "시간",
             "d" => match.Groups[1].Value + "일",
             _ => match.Groups[1].Value + "주"
         });
-        return localized == "Credits" ? "크레딧" : localized.Replace("Credits", "크레딧");
+    }
+
+    // Reset clock time: same-day windows show only the time, longer windows
+    // (weekly) also need the date to be meaningful.
+    public static string ResetClock(DateTimeOffset localReset)
+    {
+        var korean = new CultureInfo("ko-KR");
+        var isToday = localReset.Date == DateTimeOffset.Now.Date;
+        if (IsKorean)
+        {
+            return isToday
+                ? localReset.ToString("tt h:mm", korean)
+                : localReset.ToString("M월 d일 HH:mm", korean);
+        }
+        return isToday
+            ? localReset.ToString("h:mm tt", CultureInfo.InvariantCulture)
+            : localReset.ToString("MMM d, h:mm tt", CultureInfo.InvariantCulture);
+    }
+
+    public static string ResetIn(TimeSpan remaining)
+    {
+        if (remaining <= TimeSpan.Zero) return T("resets now", "곧 초기화");
+        if (remaining.TotalDays >= 1)
+        {
+            var days = (int)remaining.TotalDays;
+            return T($"resets in {days}d {remaining.Hours}h", $"{days}일 {remaining.Hours}시간 뒤 초기화");
+        }
+        if (remaining.TotalHours >= 1)
+        {
+            var hours = (int)remaining.TotalHours;
+            return T($"resets in {hours}h {remaining.Minutes}m", $"{hours}시간 {remaining.Minutes}분 뒤 초기화");
+        }
+        var minutes = Math.Max(1, remaining.Minutes);
+        return T($"resets in {minutes}m", $"{minutes}분 뒤 초기화");
     }
 
     // Display text for settings values that are stored as stable English keys.
