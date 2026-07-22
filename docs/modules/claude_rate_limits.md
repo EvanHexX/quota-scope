@@ -23,6 +23,7 @@ User-Agent: claude-code/<version>
 - 앱은 토큰을 **저장/복사/로깅하지 않는다**. 매 폴링마다 파일을 읽어 요청에 쓰고 버린다.
 - 토큰 refresh는 Claude Code가 담당한다. 앱은 refresh를 시도하지 않는다.
 - 401 이후에는 자격증명 파일의 수정 시각이 바뀔 때까지(=Claude Code가 재로그인/refresh로 파일을 다시 쓸 때까지) 폴링을 일시 중단한다.
+- WinUI 앱에서 로그인이 필요한 상태로 재연결을 실행하면 `cmd /k claude /login` 터미널을 자동으로 띄운다. 사용자는 브라우저 로그인만 완료하면 되고, 파일 변화 감지로 폴링이 자동 재개된다.
 
 ## Response
 
