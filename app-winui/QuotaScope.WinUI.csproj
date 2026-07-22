@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <UseWinUI>true</UseWinUI>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>QuotaScopeWinUI</AssemblyName>
+    <RootNamespace>QuotaScope.WinUI</RootNamespace>
+    <!-- WindowsAppSDK rejects AnyCPU; pin so plain `dotnet build` works. -->
+    <Platforms>x64;arm64</Platforms>
+    <Platform Condition="'$(Platform)' == ''">x64</Platform>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- Unpackaged with the WinAppSDK runtime copied next to the exe: no installer
+         needed, and the headless self-test path never touches the bootstrapper. -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <!-- We provide our own Main so the self-test flag can run before any XAML init. -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\app\Assets\QuotaScope.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.*" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.*" />
+    <!-- Reuses app/TrayIconRenderer.cs unmodified (System.Drawing.Icon). -->
+    <PackageReference Include="System.Drawing.Common" Version="10.0.*" />
+    <!-- Tray icon host: WinUI 3 has no NotifyIcon; this handles Shell_NotifyIcon,
+         TaskbarCreated re-registration, and MenuFlyout hosting. See docs/WINUI3_PARITY.md. -->
+    <PackageReference Include="H.NotifyIcon.WinUI" Version="2.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Shared sources linked from the WinForms app; those files are never edited here. -->
+    <Compile Include="..\app\AppSettings.cs" Link="Shared\AppSettings.cs" />
+    <Compile Include="..\app\TrayIconRenderer.cs" Link="Shared\TrayIconRenderer.cs" />
+    <Compile Include="..\app\Providers\**\*.cs" Link="Shared\Providers\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>
