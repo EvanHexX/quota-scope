@@ -17,7 +17,12 @@ internal sealed class ProviderSettings
 internal sealed class AppSettings
 {
     public string Hotkey { get; set; } = "Ctrl+Alt+U";
+    public string HotkeyRefreshAll { get; set; } = "";
+    public string HotkeyTogglePin { get; set; } = "";
     public int WarningThresholdPercent { get; set; } = 20;
+    public bool FollowSystemTheme { get; set; } = true;
+    public string ThemeOverride { get; set; } = "Dark";
+    public bool Autostart { get; set; } = false;
     public string PopupGraph { get; set; } = "half-circle";
     public string PopupPosition { get; set; } = "BottomRight";
     public string ShapeTheme { get; set; } = "Bars";

@@ -26,10 +26,30 @@ internal sealed class TrayController : IDisposable
     private readonly DispatcherQueueTimer _timer;
     private CodexUsageProvider? _codexProvider;
     private UsagePopupWindow? _popup;
+    private SettingsWindow? _settingsWindow;
     private bool _refreshing;
     private bool _disposed;
 
     public TrayController()
+    {
+        BuildProviders();
+
+        _trayIcon = new TrayIconHost();
+        _trayIcon.SetMenu(BuildMenu());
+        _trayIcon.SetTooltip("Checking usage");
+        _trayIcon.SetIcon(TrayIconRenderer.CreateUsageIcon(0, TrayIconState.Normal, TrayIconRenderer.GetNativeIconSize()));
+        _trayIcon.LeftClicked += TogglePopup;
+        _trayIcon.Show();
+
+        _timer = _dispatcherQueue.CreateTimer();
+        _timer.Interval = ComputeTimerInterval();
+        _timer.IsRepeating = true;
+        _timer.Tick += async (_, _) => await RefreshAsync().ConfigureAwait(false);
+        _timer.Start();
+        _ = RefreshAsync();
+    }
+
+    private void BuildProviders()
     {
         var codexSettings = _settings.GetProvider("codex");
         if (codexSettings.Enabled)
@@ -50,22 +70,30 @@ internal sealed class TrayController : IDisposable
                 provider.Id, provider.DisplayName, $"Waiting for {provider.DisplayName} connection", ProviderState.Unavailable);
             provider.UsageUpdated += UpdateUsage;
         }
+    }
 
-        _trayIcon = new TrayIconHost();
-        _trayIcon.SetMenu(BuildMenu());
-        _trayIcon.SetTooltip("Checking usage");
-        _trayIcon.SetIcon(TrayIconRenderer.CreateUsageIcon(0, TrayIconState.Normal, TrayIconRenderer.GetNativeIconSize()));
-        _trayIcon.LeftClicked += TogglePopup;
-        _trayIcon.Show();
-
+    private TimeSpan ComputeTimerInterval()
+    {
         var refreshSeconds = _providers.Count > 0
             ? _providers.Min(p => _settings.GetProvider(p.Id).RefreshSeconds)
             : 60;
-        _timer = _dispatcherQueue.CreateTimer();
-        _timer.Interval = TimeSpan.FromSeconds(Math.Max(10, refreshSeconds));
-        _timer.IsRepeating = true;
-        _timer.Tick += async (_, _) => await RefreshAsync().ConfigureAwait(false);
-        _timer.Start();
+        return TimeSpan.FromSeconds(Math.Max(10, refreshSeconds));
+    }
+
+    // Applied when provider enable/refresh settings change: tear down and recreate.
+    private void RebuildProviders()
+    {
+        foreach (var provider in _providers)
+        {
+            provider.UsageUpdated -= UpdateUsage;
+            provider.Dispose();
+        }
+        _providers.Clear();
+        _usages.Clear();
+        _codexProvider = null;
+
+        BuildProviders();
+        _timer.Interval = ComputeTimerInterval();
         _ = RefreshAsync();
     }
 
@@ -76,9 +104,7 @@ internal sealed class TrayController : IDisposable
         menu.Items.Add(MakeItem("Toggle", TogglePopup));
         menu.Items.Add(MakeItem("Reconnect", async () => await ReconnectAsync().ConfigureAwait(false)));
         menu.Items.Add(new MenuFlyoutSeparator());
-        var settingsItem = MakeItem("Settings...", () => { });
-        settingsItem.IsEnabled = false; // enabled when the settings window lands
-        menu.Items.Add(settingsItem);
+        menu.Items.Add(MakeItem("Settings...", OpenSettings));
         menu.Items.Add(new MenuFlyoutSeparator());
         menu.Items.Add(MakeItem("Exit", ExitApplication));
         return menu;
@@ -110,6 +136,30 @@ internal sealed class TrayController : IDisposable
             _popup = new UsagePopupWindow(_settings, BuildMenu);
         }
         return _popup;
+    }
+
+    public void OpenSettings()
+    {
+        if (_settingsWindow is null)
+        {
+            _settingsWindow = new SettingsWindow(
+                _settings,
+                OnSettingsChanged,
+                () => _codexProvider?.ResolvedCommandText ?? "disabled",
+                () => _ = ReconnectAsync());
+            _settingsWindow.Closed += () => _settingsWindow = null;
+        }
+        _settingsWindow.Activate();
+    }
+
+    private void OnSettingsChanged(SettingsChange kind)
+    {
+        if (kind == SettingsChange.Providers)
+        {
+            RebuildProviders();
+        }
+        _popup?.ApplySettings();
+        ApplyTrayVisuals(CurrentUsages());
     }
 
     private async Task RefreshAsync()
@@ -186,8 +236,11 @@ internal sealed class TrayController : IDisposable
         if (_disposed) return;
 
         _usages[usage.ProviderId] = usage;
-        var usages = CurrentUsages();
+        ApplyTrayVisuals(CurrentUsages());
+    }
 
+    private void ApplyTrayVisuals(IReadOnlyList<ProviderUsage> usages)
+    {
         var overall = usages.Count > 0 ? usages.Max(u => u.OverallUsedPercent) : 0d;
         var anyRateLimited = usages.Any(u => u.State == ProviderState.RateLimited);
         var state = TrayIconRenderer.ComputeState(overall, _settings.WarningThresholdPercent, anyRateLimited);
