@@ -1,5 +1,6 @@
 using System;
 using System.Windows.Forms;
+using QuotaScope.Hotkeys;
 using QuotaScope.Providers.Claude;
 using QuotaScope.Providers.Codex;
 
@@ -12,7 +13,9 @@ internal static class Program
     {
         if (args.Length > 0 && args[0].Equals("--self-test", StringComparison.OrdinalIgnoreCase))
         {
-            return RateLimitMapper.RunSelfTest() && ClaudeUsageMapper.RunSelfTest() ? 0 : 1;
+            return RateLimitMapper.RunSelfTest()
+                && ClaudeUsageMapper.RunSelfTest()
+                && HotkeyDefinition.RunSelfTest() ? 0 : 1;
         }
 
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);

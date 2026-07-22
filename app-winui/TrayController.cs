@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using QuotaScope.Hotkeys;
 using QuotaScope.Providers;
 using QuotaScope.Providers.Claude;
 using QuotaScope.Providers.Codex;
@@ -14,9 +15,26 @@ using QuotaScope.WinUI.Windows;
 
 namespace QuotaScope.WinUI;
 
+internal enum HotkeyAction
+{
+    TogglePopup = 1,
+    RefreshAll = 2,
+    TogglePin = 3
+}
+
+// Settings window talks to the hotkey subsystem through this seam.
+internal interface IHotkeyConfigurator
+{
+    IReadOnlyList<string> LoadWarnings { get; }
+    string CurrentBinding(HotkeyAction action);
+    // Returns null on success; an error message when the binding was rejected
+    // (parse failure or RegisterHotKey conflict). Failed bindings are not saved.
+    string? TryBind(HotkeyAction action, string text);
+}
+
 // WinUI port of the WinForms TrayApplicationContext: owns providers, polling,
 // the tray icon, and (from commit 2) the usage popup.
-internal sealed class TrayController : IDisposable
+internal sealed class TrayController : IDisposable, IHotkeyConfigurator
 {
     private readonly AppSettings _settings = AppSettings.Load();
     private readonly DispatcherQueue _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
@@ -24,9 +42,11 @@ internal sealed class TrayController : IDisposable
     private readonly Dictionary<string, ProviderUsage> _usages = new(StringComparer.OrdinalIgnoreCase);
     private readonly ITrayIcon _trayIcon;
     private readonly DispatcherQueueTimer _timer;
+    private readonly List<string> _hotkeyWarnings = new();
     private CodexUsageProvider? _codexProvider;
     private UsagePopupWindow? _popup;
     private SettingsWindow? _settingsWindow;
+    private Hotkeys.HotkeyWindow? _hotkeyWindow;
     private bool _refreshing;
     private bool _disposed;
 
@@ -40,6 +60,8 @@ internal sealed class TrayController : IDisposable
         _trayIcon.SetIcon(TrayIconRenderer.CreateUsageIcon(0, TrayIconState.Normal, TrayIconRenderer.GetNativeIconSize()));
         _trayIcon.LeftClicked += TogglePopup;
         _trayIcon.Show();
+
+        InitializeHotkeys();
 
         _timer = _dispatcherQueue.CreateTimer();
         _timer.Interval = ComputeTimerInterval();
@@ -146,10 +168,137 @@ internal sealed class TrayController : IDisposable
                 _settings,
                 OnSettingsChanged,
                 () => _codexProvider?.ResolvedCommandText ?? "disabled",
-                () => _ = ReconnectAsync());
+                () => _ = ReconnectAsync(),
+                this);
             _settingsWindow.Closed += () => _settingsWindow = null;
         }
         _settingsWindow.Activate();
+    }
+
+    // ----- hotkeys -----
+
+    public IReadOnlyList<string> LoadWarnings => _hotkeyWarnings;
+
+    private void InitializeHotkeys()
+    {
+        try
+        {
+            _hotkeyWindow = new Hotkeys.HotkeyWindow();
+        }
+        catch (Exception ex)
+        {
+            _hotkeyWarnings.Add("Hotkeys unavailable: " + ex.Message);
+            return;
+        }
+
+        _hotkeyWindow.Pressed += OnHotkeyPressed;
+        RegisterFromSettings(HotkeyAction.TogglePopup, _settings.Hotkey, fallback: "Ctrl+Alt+U");
+        RegisterFromSettings(HotkeyAction.RefreshAll, _settings.HotkeyRefreshAll, fallback: null);
+        RegisterFromSettings(HotkeyAction.TogglePin, _settings.HotkeyTogglePin, fallback: null);
+    }
+
+    private void OnHotkeyPressed(int id)
+    {
+        switch ((HotkeyAction)id)
+        {
+            case HotkeyAction.TogglePopup:
+                TogglePopup();
+                break;
+            case HotkeyAction.RefreshAll:
+                _ = RefreshAsync();
+                break;
+            case HotkeyAction.TogglePin:
+                GetPopup().TogglePin();
+                break;
+        }
+    }
+
+    private void RegisterFromSettings(HotkeyAction action, string text, string? fallback)
+    {
+        if (_hotkeyWindow is null || string.IsNullOrWhiteSpace(text)) return;
+
+        if (!HotkeyDefinition.TryParse(text, out var definition))
+        {
+            // Invalid persisted string: fall back to the default (or unbound) and warn once.
+            if (fallback is not null && HotkeyDefinition.TryParse(fallback, out var fallbackDefinition))
+            {
+                _hotkeyWarnings.Add($"Invalid hotkey '{text}' for {action}; using default {fallback}.");
+                SetBindingSetting(action, fallback);
+                _settings.Save();
+                if (!_hotkeyWindow.TryRegister((int)action, fallbackDefinition, out var fallbackError))
+                {
+                    _hotkeyWarnings.Add($"{action}: {fallbackError}");
+                }
+            }
+            else
+            {
+                _hotkeyWarnings.Add($"Invalid hotkey '{text}' for {action}; left unbound.");
+                SetBindingSetting(action, "");
+                _settings.Save();
+            }
+            return;
+        }
+
+        if (!_hotkeyWindow.TryRegister((int)action, definition, out var error))
+        {
+            _hotkeyWarnings.Add($"{action}: {error}");
+        }
+    }
+
+    private void SetBindingSetting(HotkeyAction action, string text)
+    {
+        switch (action)
+        {
+            case HotkeyAction.TogglePopup:
+                _settings.Hotkey = text;
+                break;
+            case HotkeyAction.RefreshAll:
+                _settings.HotkeyRefreshAll = text;
+                break;
+            case HotkeyAction.TogglePin:
+                _settings.HotkeyTogglePin = text;
+                break;
+        }
+    }
+
+    public string CurrentBinding(HotkeyAction action) => action switch
+    {
+        HotkeyAction.RefreshAll => _settings.HotkeyRefreshAll,
+        HotkeyAction.TogglePin => _settings.HotkeyTogglePin,
+        _ => _settings.Hotkey
+    };
+
+    public string? TryBind(HotkeyAction action, string text)
+    {
+        if (_hotkeyWindow is null) return "Hotkeys are unavailable in this session.";
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            _hotkeyWindow.Unregister((int)action);
+            SetBindingSetting(action, "");
+            _settings.Save();
+            return null;
+        }
+
+        if (!HotkeyDefinition.TryParse(text, out var definition))
+        {
+            return $"'{text}' is not a valid hotkey.";
+        }
+
+        var previous = CurrentBinding(action);
+        if (!_hotkeyWindow.TryRegister((int)action, definition, out var error))
+        {
+            // Restore the previous binding and do not save the failed one.
+            if (HotkeyDefinition.TryParse(previous, out var previousDefinition))
+            {
+                _hotkeyWindow.TryRegister((int)action, previousDefinition, out _);
+            }
+            return error;
+        }
+
+        SetBindingSetting(action, definition.Format());
+        _settings.Save();
+        return null;
     }
 
     private void OnSettingsChanged(SettingsChange kind)
@@ -291,6 +440,7 @@ internal sealed class TrayController : IDisposable
         if (_disposed) return;
         _disposed = true;
         _timer.Stop();
+        _hotkeyWindow?.Dispose();
         _popup?.Hide();
         _trayIcon.Dispose();
         foreach (var provider in _providers)

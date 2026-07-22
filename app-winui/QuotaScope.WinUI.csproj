@@ -35,6 +35,7 @@
     <!-- Shared sources linked from the WinForms app; those files are never edited here. -->
     <Compile Include="..\app\AppSettings.cs" Link="Shared\AppSettings.cs" />
     <Compile Include="..\app\TrayIconRenderer.cs" Link="Shared\TrayIconRenderer.cs" />
+    <Compile Include="..\app\Hotkeys\HotkeyDefinition.cs" Link="Shared\Hotkeys\HotkeyDefinition.cs" />
     <Compile Include="..\app\Providers\**\*.cs" Link="Shared\Providers\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

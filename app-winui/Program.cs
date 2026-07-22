@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using Microsoft.UI.Dispatching;
+using QuotaScope.Hotkeys;
 using QuotaScope.Providers.Claude;
 using QuotaScope.Providers.Codex;
 
@@ -17,7 +18,9 @@ internal static class Program
         // Must run before any XAML/WinRT initialization so it stays headless.
         if (args.Length > 0 && args[0].Equals("--self-test", StringComparison.OrdinalIgnoreCase))
         {
-            return RateLimitMapper.RunSelfTest() && ClaudeUsageMapper.RunSelfTest() ? 0 : 1;
+            return RateLimitMapper.RunSelfTest()
+                && ClaudeUsageMapper.RunSelfTest()
+                && HotkeyDefinition.RunSelfTest() ? 0 : 1;
         }
 
         using var mutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out var isFirstInstance);
