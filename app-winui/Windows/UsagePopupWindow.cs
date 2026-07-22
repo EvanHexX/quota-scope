@@ -45,6 +45,8 @@ internal sealed class UsagePopupWindow
     private IReadOnlyList<ProviderUsage> _usages = Array.Empty<ProviderUsage>();
     private string? _appliedBackdropTheme;
     private bool _menuOpen;
+    private bool _manuallyPositioned;
+    private bool _resizePendingAfterDrag;
 
     public bool Visible { get; private set; }
 
@@ -83,14 +85,6 @@ internal sealed class UsagePopupWindow
         Grid.SetColumn(_pinButton, 1);
         _headerGrid.Children.Add(_titleText);
         _headerGrid.Children.Add(_pinButton);
-        // Header doubles as the drag handle: manual pointer-capture drag gives
-        // smooth continuous movement (the WM_NCLBUTTONDOWN trick stutters under
-        // WinUI's input stack).
-        _headerGrid.PointerPressed += OnHeaderPointerPressed;
-        _headerGrid.PointerMoved += OnHeaderPointerMoved;
-        _headerGrid.PointerReleased += OnHeaderPointerReleased;
-        _headerGrid.PointerCaptureLost += (_, _) => _dragging = false;
-
         _headerDivider = new Border { Height = 1, Margin = new Thickness(2, 6, 2, 10) };
 
         _sectionsPanel = new StackPanel();
@@ -102,8 +96,13 @@ internal sealed class UsagePopupWindow
 
         _rootBorder = new Border
         {
-            CornerRadius = new CornerRadius(12),
-            BorderThickness = new Thickness(1),
+            // DWM owns the popup's outer rounded geometry. Applying a second,
+            // larger XAML radius exposes the square island background between
+            // the two curves, which looks like a black plate behind the card.
+            CornerRadius = new CornerRadius(0),
+            // Do not draw a second outer stroke. A square XAML border clipped
+            // by DWM leaves dark lines and broken pixels at rounded corners.
+            BorderThickness = new Thickness(0),
             Padding = new Thickness(20, 14, 20, 18),
             Child = layoutRoot,
             RequestedTheme = ElementTheme.Dark
@@ -116,6 +115,12 @@ internal sealed class UsagePopupWindow
                 Hide();
             }
         };
+        // Include the top padding as well as the visible header in the manual
+        // drag region. The pin button remains interactive and is excluded below.
+        _rootBorder.PointerPressed += OnDragRegionPointerPressed;
+        _rootBorder.PointerMoved += OnDragRegionPointerMoved;
+        _rootBorder.PointerReleased += OnDragRegionPointerReleased;
+        _rootBorder.PointerCaptureLost += OnDragRegionPointerCaptureLost;
 
         SetMenu(menuFactory());
 
@@ -142,7 +147,9 @@ internal sealed class UsagePopupWindow
         {
         }
         _presenter = OverlappedPresenter.Create();
-        _presenter.SetBorderAndTitleBar(false, false);
+        // Keep the logical DWM border so Windows can retain its rounded corners
+        // and shadow. The visible one-pixel stroke is synchronized to the card.
+        _presenter.SetBorderAndTitleBar(true, false);
         _presenter.IsResizable = false;
         _presenter.IsMaximizable = false;
         _presenter.IsMinimizable = false;
@@ -155,7 +162,7 @@ internal sealed class UsagePopupWindow
             e.Cancel = true;
             Hide();
         };
-        InstallNcCalcSizeSubclass();
+        InstallTopNcCalcSizeSubclass();
         ApplyWindowChrome();
 
         _window.Activated += (_, e) =>
@@ -179,13 +186,22 @@ internal sealed class UsagePopupWindow
         if (Visible)
         {
             Rebuild();
-            PositionAndSize();
+            if (_dragging)
+            {
+                _resizePendingAfterDrag = true;
+            }
+            else
+            {
+                PositionAndSize(_manuallyPositioned);
+            }
         }
     }
 
     public void ApplySettings()
     {
         _presenter.IsAlwaysOnTop = _settings.IsPinned;
+        _manuallyPositioned = false;
+        _resizePendingAfterDrag = false;
         Rebuild();
         if (Visible)
         {
@@ -201,6 +217,8 @@ internal sealed class UsagePopupWindow
 
     public void Show()
     {
+        _manuallyPositioned = false;
+        _resizePendingAfterDrag = false;
         Rebuild();
         PositionAndSize();
         _appWindow.Show(true);
@@ -242,18 +260,21 @@ internal sealed class UsagePopupWindow
     private NativePoint _dragStartCursor;
     private PointInt32 _dragStartWindow;
 
-    private void OnHeaderPointerPressed(object sender, PointerRoutedEventArgs e)
+    private void OnDragRegionPointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        var point = e.GetCurrentPoint(_headerGrid);
-        if (!point.Properties.IsLeftButtonPressed) return;
+        var point = e.GetCurrentPoint(_rootBorder);
+        var dragRegionHeight = _rootBorder.Padding.Top + _headerGrid.Height;
+        if (!point.Properties.IsLeftButtonPressed || point.Position.Y > dragRegionHeight) return;
+        if (IsDescendantOf(e.OriginalSource as DependencyObject, _pinButton)) return;
         GetCursorPos(out _dragStartCursor);
         _dragStartWindow = _appWindow.Position;
         _dragging = true;
-        _headerGrid.CapturePointer(e.Pointer);
+        _manuallyPositioned = true;
+        _rootBorder.CapturePointer(e.Pointer);
         e.Handled = true;
     }
 
-    private void OnHeaderPointerMoved(object sender, PointerRoutedEventArgs e)
+    private void OnDragRegionPointerMoved(object sender, PointerRoutedEventArgs e)
     {
         if (!_dragging) return;
         GetCursorPos(out var cursor);
@@ -262,10 +283,33 @@ internal sealed class UsagePopupWindow
             _dragStartWindow.Y + (cursor.Y - _dragStartCursor.Y)));
     }
 
-    private void OnHeaderPointerReleased(object sender, PointerRoutedEventArgs e)
+    private void OnDragRegionPointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        _rootBorder.ReleasePointerCapture(e.Pointer);
+        EndDrag();
+    }
+
+    private void OnDragRegionPointerCaptureLost(object sender, PointerRoutedEventArgs e) => EndDrag();
+
+    private void EndDrag()
     {
         _dragging = false;
-        _headerGrid.ReleasePointerCapture(e.Pointer);
+        if (!_resizePendingAfterDrag) return;
+
+        _resizePendingAfterDrag = false;
+        if (Visible)
+        {
+            PositionAndSize(preservePosition: true);
+        }
+    }
+
+    private static bool IsDescendantOf(DependencyObject? source, DependencyObject ancestor)
+    {
+        for (var current = source; current is not null; current = VisualTreeHelper.GetParent(current))
+        {
+            if (ReferenceEquals(current, ancestor)) return true;
+        }
+        return false;
     }
 
     // ----- content -----
@@ -297,12 +341,11 @@ internal sealed class UsagePopupWindow
         _islandRoot.Background = _settings.Glassmorphism
             ? new SolidColorBrush(Colors.Transparent)
             : Brush(Color.FromArgb(255, palette.Card.R, palette.Card.G, palette.Card.B));
-        _chromeBorderColor = palette.Card;
+        _chromeBorderColor = Color.FromArgb(255, palette.Card.R, palette.Card.G, palette.Card.B);
         ApplyWindowChrome();
         _titleText.Text = Loc.T("Usage", "사용량");
 
         _rootBorder.Background = Brush(palette.Card);
-        _rootBorder.BorderBrush = Brush(palette.Border);
         _titleText.Foreground = Brush(palette.Text);
         _headerDivider.Background = Brush(Color.FromArgb(118, palette.AccentBlue.R, palette.AccentBlue.G, palette.AccentBlue.B));
         _pinIcon.Foreground = _settings.IsPinned ? Brush(Colors.White) : Brush(palette.Muted);
@@ -627,7 +670,7 @@ internal sealed class UsagePopupWindow
 
     // ----- sizing & position -----
 
-    private void PositionAndSize()
+    private void PositionAndSize(bool preservePosition = false)
     {
         var sections = BuildSections();
         var usesBento = string.Equals(_settings.ShapeTheme, "BentoCircles", StringComparison.OrdinalIgnoreCase);
@@ -637,12 +680,19 @@ internal sealed class UsagePopupWindow
             : BarsWidth;
         var uiScale = Math.Clamp(_settings.UiScale, 0.7, 1.6);
 
+        var currentPosition = _appWindow.Position;
         GetCursorPos(out var cursor);
-        var area = DisplayArea.GetFromPoint(new PointInt32(cursor.X, cursor.Y), DisplayAreaFallback.Nearest);
+        var areaAnchor = preservePosition
+            ? new PointInt32(currentPosition.X, currentPosition.Y)
+            : new PointInt32(cursor.X, cursor.Y);
+        var area = DisplayArea.GetFromPoint(areaAnchor, DisplayAreaFallback.Nearest);
         var work = area.WorkArea;
 
         // Land on the target monitor first so GetDpiForWindow reports its scale.
-        _appWindow.Move(new PointInt32(work.X + 8, work.Y + 8));
+        if (!preservePosition)
+        {
+            _appWindow.Move(new PointInt32(work.X + 8, work.Y + 8));
+        }
         var scale = GetDpiForWindow(_hwnd) / 96.0;
 
         // Measure content at the base width; the Viewbox stretches the fixed
@@ -657,38 +707,48 @@ internal sealed class UsagePopupWindow
         var height = (int)Math.Round(heightDip * uiScale * scale);
         var margin = (int)Math.Round(16 * scale);
 
-        var position = _settings.PopupPosition ?? "BottomRight";
-        var x = work.X + work.Width - width - margin;
-        var y = work.Y + work.Height - height - margin;
-
-        if (position.Equals("TopRight", StringComparison.OrdinalIgnoreCase))
+        int x;
+        int y;
+        if (preservePosition)
         {
+            x = Math.Min(Math.Max(currentPosition.X, work.X), Math.Max(work.X, work.X + work.Width - width));
+            y = Math.Min(Math.Max(currentPosition.Y, work.Y), Math.Max(work.Y, work.Y + work.Height - height));
+        }
+        else
+        {
+            var position = _settings.PopupPosition ?? "BottomRight";
             x = work.X + work.Width - width - margin;
-            y = work.Y + margin;
-        }
-        else if (position.Equals("TopLeft", StringComparison.OrdinalIgnoreCase))
-        {
-            x = work.X + margin;
-            y = work.Y + margin;
-        }
-        else if (position.Equals("BottomLeft", StringComparison.OrdinalIgnoreCase))
-        {
-            x = work.X + margin;
             y = work.Y + work.Height - height - margin;
-        }
-        else if (position.Equals("Center", StringComparison.OrdinalIgnoreCase))
-        {
-            x = work.X + (work.Width - width) / 2;
-            y = work.Y + (work.Height - height) / 2;
-        }
-        else if (position.Equals("NearCursor", StringComparison.OrdinalIgnoreCase))
-        {
-            x = cursor.X + (int)Math.Round(14 * scale);
-            y = cursor.Y + (int)Math.Round(14 * scale);
-        }
 
-        x = Math.Min(Math.Max(x, work.X + margin), work.X + work.Width - width - margin);
-        y = Math.Min(Math.Max(y, work.Y + margin), work.Y + work.Height - height - margin);
+            if (position.Equals("TopRight", StringComparison.OrdinalIgnoreCase))
+            {
+                x = work.X + work.Width - width - margin;
+                y = work.Y + margin;
+            }
+            else if (position.Equals("TopLeft", StringComparison.OrdinalIgnoreCase))
+            {
+                x = work.X + margin;
+                y = work.Y + margin;
+            }
+            else if (position.Equals("BottomLeft", StringComparison.OrdinalIgnoreCase))
+            {
+                x = work.X + margin;
+                y = work.Y + work.Height - height - margin;
+            }
+            else if (position.Equals("Center", StringComparison.OrdinalIgnoreCase))
+            {
+                x = work.X + (work.Width - width) / 2;
+                y = work.Y + (work.Height - height) / 2;
+            }
+            else if (position.Equals("NearCursor", StringComparison.OrdinalIgnoreCase))
+            {
+                x = cursor.X + (int)Math.Round(14 * scale);
+                y = cursor.Y + (int)Math.Round(14 * scale);
+            }
+
+            x = Math.Min(Math.Max(x, work.X + margin), work.X + work.Width - width - margin);
+            y = Math.Min(Math.Max(y, work.Y + margin), work.Y + work.Height - height - margin);
+        }
 
         _appWindow.MoveAndResize(new RectInt32(x, y, width, height));
     }
@@ -748,21 +808,18 @@ internal sealed class UsagePopupWindow
     private bool _chromeFailureLogged;
     private Color _chromeBorderColor = Color.FromArgb(255, 24, 26, 46);
 
-    private const uint SwpFlags = 0x0001 /*NOSIZE*/ | 0x0002 /*NOMOVE*/ | 0x0004 /*NOZORDER*/ | 0x0010 /*NOACTIVATE*/ | 0x0020 /*FRAMECHANGED*/;
-
     private void ApplyWindowChrome()
     {
-        // Frame styles are deliberately KEPT (WS_THICKFRAME is what makes DWM
-        // round the corners and draw the shadow); the WM_NCCALCSIZE subclass
-        // removes every visible frame pixel instead.
-
         // Windows 11 only; on Windows 10 these fail harmlessly.
         var preference = DwmwcpRound;
         var cornerResult = DwmSetWindowAttribute(_hwnd, DwmwaWindowCornerPreference, ref preference, sizeof(int));
-        // DWMWA_COLOR_NONE is ignored in some environments, so instead the DWM
-        // border is painted in the card color: even when drawn, it is invisible.
-        var colorRef = _chromeBorderColor.R | (_chromeBorderColor.G << 8) | (_chromeBorderColor.B << 16);
-        var borderResult = DwmSetWindowAttribute(_hwnd, DwmwaBorderColor, ref colorRef, sizeof(int));
+        // This OS build still composites a one-pixel visible frame when
+        // DWMWA_COLOR_NONE is requested. Painting that frame in the current
+        // card color absorbs the top row while retaining DWM rounding/shadow.
+        var borderColor = _chromeBorderColor.R
+            | (_chromeBorderColor.G << 8)
+            | (_chromeBorderColor.B << 16);
+        var borderResult = DwmSetWindowAttribute(_hwnd, DwmwaBorderColor, ref borderColor, sizeof(int));
         if ((cornerResult != 0 || borderResult != 0) && !_chromeFailureLogged)
         {
             _chromeFailureLogged = true;
@@ -787,30 +844,31 @@ internal sealed class UsagePopupWindow
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
 
-    // Removing the non-client TOP strip only (the white line source): let the
-    // default WM_NCCALCSIZE computation run, then restore the top edge to the
-    // window's top. Claiming the whole rect instead makes the XAML island sit
-    // inset by the frame margins, leaving a dead black band on every side.
+    // WinUI can leave a one-pixel non-client strip after hiding the title bar.
+    // Preserve the default side/bottom frame calculation for DWM rounding and
+    // shadow, but reclaim only the top inset as client content.
     private const uint WmNcCalcSize = 0x0083;
+    private const uint SwpFrameChangedFlags = 0x0001 /*NOSIZE*/ | 0x0002 /*NOMOVE*/
+        | 0x0004 /*NOZORDER*/ | 0x0010 /*NOACTIVATE*/ | 0x0020 /*FRAMECHANGED*/;
     private SubclassProc? _subclassProc;
 
     private delegate IntPtr SubclassProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, IntPtr idSubclass, IntPtr refData);
 
-    private void InstallNcCalcSizeSubclass()
+    private void InstallTopNcCalcSizeSubclass()
     {
         _subclassProc = OnSubclassMessage; // rooted for the window's lifetime
         SetWindowSubclass(_hwnd, _subclassProc, IntPtr.Zero, IntPtr.Zero);
-        SetWindowPos(_hwnd, IntPtr.Zero, 0, 0, 0, 0, SwpFlags); // re-evaluate the frame
+        SetWindowPos(_hwnd, IntPtr.Zero, 0, 0, 0, 0, SwpFrameChangedFlags);
     }
 
-    private IntPtr OnSubclassMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, IntPtr idSubclass, IntPtr refData)
+    private static IntPtr OnSubclassMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, IntPtr idSubclass, IntPtr refData)
     {
         if (msg == WmNcCalcSize && wParam != IntPtr.Zero)
         {
-            // NCCALCSIZE_PARAMS starts with RECT rgrc[0] = proposed window rect.
-            var windowTop = Marshal.ReadInt32(lParam, 4); // RECT.top
+            // NCCALCSIZE_PARAMS begins with rgrc[0], whose second int is RECT.top.
+            var proposedTop = Marshal.ReadInt32(lParam, sizeof(int));
             var result = DefSubclassProc(hwnd, msg, wParam, lParam);
-            Marshal.WriteInt32(lParam, 4, windowTop); // reclaim only the top strip
+            Marshal.WriteInt32(lParam, sizeof(int), proposedTop);
             return result;
         }
         return DefSubclassProc(hwnd, msg, wParam, lParam);
