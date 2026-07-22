@@ -23,8 +23,9 @@ It runs locally, starts `codex app-server`, reads Codex rate limit data through 
 
 - Windows system tray utility
 - Compact usage popup
-- 5-hour and 1-week Codex usage gauges
-- Optional Spark usage gauges
+- Payload-driven usage gauges: one row per rate-limit window the provider reports
+- Optional GPT-5.3-Codex-Spark usage rows
+- Optional credits balance row
 - Pinned popup mode
 - Global hotkey: `Ctrl+Alt+U`
 - Manual refresh and reconnect controls
@@ -83,6 +84,7 @@ dotnet run --project app/QuotaScope.csproj -- --self-test
 - Use the pin button to keep the popup open.
 - Right-click the tray icon or popup to open the menu.
 - Use `Settings > Usage Rows > GPT-5.3 Spark` to show or hide Spark rows.
+- Use `Settings > Usage Rows > Credits` to show or hide the credits balance row.
 - Click the time text to switch between clock time and remaining time.
 
 ## Settings
@@ -93,25 +95,33 @@ Example:
 
 ```json
 {
-  "hotkey": "Ctrl+Alt+U",
-  "refreshSeconds": 60,
-  "warningThresholdPercent": 20,
-  "popupGraph": "half-circle",
-  "codexCommand": "codex",
-  "popupPosition": "BottomRight",
-  "shapeTheme": "Bars",
-  "colorTheme": "DarkBluePurple",
-  "timeDisplayMode": "ClockTime",
-  "isPinned": false,
-  "showSparkUsage": false
+  "Hotkey": "Ctrl+Alt+U",
+  "WarningThresholdPercent": 20,
+  "PopupGraph": "half-circle",
+  "PopupPosition": "BottomRight",
+  "ShapeTheme": "Bars",
+  "ColorTheme": "DarkBluePurple",
+  "TimeDisplayMode": "ClockTime",
+  "IsPinned": false,
+  "Providers": {
+    "codex": {
+      "Enabled": true,
+      "RefreshSeconds": 60,
+      "ShowSecondaryRows": false,
+      "ShowCredits": false,
+      "Command": "codex"
+    }
+  }
 }
 ```
 
 Notes:
 
-- `timeDisplayMode` can be `ClockTime` or `RemainingTime`.
-- `showSparkUsage` enables the Spark rows.
-- The `hotkey` setting exists in the settings file, but the current registered hotkey is fixed to `Ctrl+Alt+U`.
+- `TimeDisplayMode` can be `ClockTime` or `RemainingTime`.
+- Provider options live under `Providers`, one entry per provider.
+- `ShowSecondaryRows` enables secondary model rows (GPT-5.3-Codex-Spark).
+- `ShowCredits` enables the credits balance row.
+- The `Hotkey` setting exists in the settings file, but the current registered hotkey is fixed to `Ctrl+Alt+U`.
 
 ## Privacy
 

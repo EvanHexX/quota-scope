@@ -11,12 +11,17 @@
 - executable icon asset -> `app/Assets/QuotaScope.ico`
 - global hotkey native window -> `app/HotkeyWindow.cs`
 
+## Providers
+
+- provider interface -> `app/Providers/IUsageProvider.cs`
+- shared usage models (ProviderUsage/UsageRow) -> `app/Providers/UsageModels.cs`
+
 ## Codex Rate Limits
 
-- Codex app-server JSON-RPC client -> `app/CodexAppServerClient.cs`
-- rate limit DTOs -> `app/Models.cs`
-- rate limit mapping -> `app/RateLimitMapper.cs`
-- Codex command resolution -> `app/CodexCommandResolver.cs`
+- Codex usage provider -> `app/Providers/Codex/CodexUsageProvider.cs`
+- Codex app-server JSON-RPC client -> `app/Providers/Codex/CodexAppServerClient.cs`
+- rate limit mapping -> `app/Providers/Codex/RateLimitMapper.cs`
+- Codex command resolution -> `app/Providers/Codex/CodexCommandResolver.cs`
 - module notes -> `docs/modules/codex_rate_limits.md`
 
 ## Settings
