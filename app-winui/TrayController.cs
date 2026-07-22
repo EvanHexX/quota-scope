@@ -387,6 +387,22 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
     private async Task ReconnectAsync()
     {
         if (_refreshing || _disposed) return;
+
+        // If Claude needs a sign-in, open the login terminal right away so the
+        // user only has to complete the browser flow; polling resumes on its
+        // own once Claude Code rewrites the credentials file.
+        var claudeSettings = _settings.GetProvider("claude");
+        var claudeNeedsLogin = claudeSettings.Enabled
+            && (!ClaudeCredentialReader.CredentialsFileExists()
+                || (_usages.TryGetValue("claude", out var claudeUsage) && claudeUsage.State == ProviderState.Unauthenticated));
+        if (claudeNeedsLogin && ClaudeLoginLauncher.TryLaunch())
+        {
+            _trayIcon.ShowNotification(
+                Loc.T("Claude sign-in", "Claude 로그인"),
+                Loc.T("Complete the login in the opened terminal/browser. Usage resumes automatically.",
+                      "열린 터미널/브라우저에서 로그인을 완료하세요. 사용량 표시는 자동으로 재개됩니다."));
+        }
+
         _refreshing = true;
         try
         {
