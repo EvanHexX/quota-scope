@@ -433,11 +433,23 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
         ApplyTrayVisuals(CurrentUsages());
     }
 
+    private TrayIconState _lastIconState = TrayIconState.Normal;
+
     private void ApplyTrayVisuals(IReadOnlyList<ProviderUsage> usages)
     {
         var overallUsed = usages.Count > 0 ? usages.Max(u => u.OverallUsedPercent) : 0d;
         var anyRateLimited = usages.Any(u => u.State == ProviderState.RateLimited);
         var state = TrayIconRenderer.ComputeState(overallUsed, _settings.WarningThresholdPercent, anyRateLimited);
+
+        // Notify once per escalation (Normal -> Warning -> Critical); recovery resets silently.
+        if (_settings.NotifyOnThreshold && state > _lastIconState)
+        {
+            var title = state == TrayIconState.Critical
+                ? Loc.T("Usage critical", "사용량 위험")
+                : Loc.T("Usage warning", "사용량 경고");
+            _trayIcon.ShowNotification(title, TruncateTrayText(BuildTrayText(usages)));
+        }
+        _lastIconState = state;
         var size = TrayIconRenderer.GetNativeIconSize();
         // The arc fill follows the configured gauge metric; state colors always key off usage.
         var fill = string.Equals(_settings.GaugeMetric, "Remaining", StringComparison.OrdinalIgnoreCase)

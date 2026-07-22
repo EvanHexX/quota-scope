@@ -26,6 +26,7 @@ internal sealed class AppSettings
     public string TrayIconStyle { get; set; } = "UsageArc";
     public string GaugeMetric { get; set; } = "Used";
     public string Language { get; set; } = "System";
+    public bool NotifyOnThreshold { get; set; } = true;
     public double UiScale { get; set; } = 1.0;
     public bool Glassmorphism { get; set; } = false;
     public string PopupGraph { get; set; } = "half-circle";
