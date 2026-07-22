@@ -92,7 +92,9 @@ internal sealed class UsagePopupForm : Form
         {
             var cardCount = sections.Sum(s => s.Rows.Count);
             var cardRows = Math.Max(1, (cardCount + 1) / 2);
-            targetSize = new Size(452, BentoTop + cardRows * BentoCardHeight + (cardRows - 1) * BentoRowGap + 24);
+            // Single card: shrink the popup to one-card width instead of stretching the card.
+            var width = cardCount == 1 ? 240 : 452;
+            targetSize = new Size(width, BentoTop + cardRows * BentoCardHeight + (cardRows - 1) * BentoRowGap + 24);
         }
         else
         {
