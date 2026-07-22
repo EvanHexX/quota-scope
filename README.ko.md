@@ -19,7 +19,7 @@ AI 코딩 도구를 자주 사용하는 사용자가 작업 중 남은 사용량
 - Payload 기반 사용량 gauge: provider가 보고하는 rate limit window마다 1행
 - 선택 가능한 secondary 행 (GPT-5.3-Codex-Spark, Claude 모델별 window)
 - 선택 가능한 credits 행 (Codex 잔액, Claude extra usage)
-- 트레이 아이콘은 provider 전체 중 남은 사용량 최솟값 표시
+- 트레이 아이콘은 전체 사용률을 호 채움(5% 단위)과 3단계 상태 색상으로 표시, 정확한 수치는 툴팁/팝업에서 제공
 - Pinned popup mode
 - Global hotkey: `Ctrl+Alt+U`
 - 수동 refresh 및 reconnect control

@@ -611,9 +611,10 @@ internal sealed class UsagePopupWindow
 
     // ----- formatting (ported from UsagePopupForm) -----
 
+    // Gauges fill with usage: 0% = untouched, full bar/ring = exhausted.
     private static int RoundPercent(RateLimitWindow window)
     {
-        return (int)Math.Round(Math.Clamp(window.RemainingPercent, 0d, 100d));
+        return (int)Math.Round(Math.Clamp(window.UsedPercent, 0d, 100d));
     }
 
     private string FormatWindowTime(RateLimitWindow? window)

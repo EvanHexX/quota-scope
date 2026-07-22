@@ -51,6 +51,23 @@ WinForms app is a separate follow-up task after sign-off.
   `DWMWA_WINDOW_ROUNDED_CORNER_PREFERENCE`, which is Windows 11-only; on
   Windows 10 corners are square. Accepted.
 
+## Tray icon design decisions (maintainer, 2026-07-22)
+
+- Remove the numeric text from the tray icon. The signal is limited to two
+  channels: arc fill ratio (quantized to 5% steps) and a 3-level state color
+  (normal / warning / critical).
+- Stop rendering a fixed 32x32 icon and letting the shell downscale it.
+  Render at the DPI-native size (16/20/24/32 px) with per-size stroke widths.
+- Unify every layer on `usedPercent` (remove `remainingPercent` from the
+  models). Gauges and the tray arc fill with usage; state colors key off the
+  warning threshold in used terms.
+- Exact numbers live in the tooltip and popup. The tooltip is a per-provider
+  5h/7d summary.
+- Consider a toast notification when crossing the warning threshold (TODO,
+  not implemented yet).
+- Fallback: if the small tray icon still reads poorly, drop the arc and use a
+  fixed glyph with state color only.
+
 ## Measurements (fill in during final verification)
 
 | Metric | WinForms | WinUI 3 |

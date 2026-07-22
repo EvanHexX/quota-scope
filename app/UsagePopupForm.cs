@@ -398,10 +398,10 @@ internal sealed class UsagePopupForm : Form
         g.DrawArc(progress, bounds, -90, 360 * Math.Clamp(percent, 0, 100) / 100f);
     }
 
-    private static Color BlendAccent(PopupPalette palette, int percent)
+    private static Color BlendAccent(PopupPalette palette, int usedPercent)
     {
-        if (percent <= 20) return Color.FromArgb(255, 126, 91);
-        if (percent <= 50) return Color.FromArgb(132, 124, 255);
+        if (usedPercent >= 80) return Color.FromArgb(255, 126, 91);
+        if (usedPercent >= 50) return Color.FromArgb(132, 124, 255);
         return palette.AccentBlue;
     }
 
@@ -410,9 +410,10 @@ internal sealed class UsagePopupForm : Form
         TextRenderer.DrawText(g, value, font, bounds, color, flags | TextFormatFlags.GlyphOverhangPadding);
     }
 
+    // Gauges fill with usage: 0% = untouched, full bar/ring = exhausted.
     private static int RoundPercent(RateLimitWindow window)
     {
-        return (int)Math.Round(Math.Clamp(window.RemainingPercent, 0d, 100d));
+        return (int)Math.Round(Math.Clamp(window.UsedPercent, 0d, 100d));
     }
 
     private static string FormatPercent(RateLimitWindow window)

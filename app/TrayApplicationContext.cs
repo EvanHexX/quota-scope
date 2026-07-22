@@ -50,7 +50,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _notifyIcon = new NotifyIcon
         {
             Text = "Checking usage",
-            Icon = TrayIconRenderer.CreateUsageIcon(100, false),
+            Icon = TrayIconRenderer.CreateUsageIcon(0, TrayIconState.Normal, TrayIconRenderer.GetNativeIconSize()),
             Visible = true,
             ContextMenuStrip = BuildMenu()
         };
@@ -336,11 +336,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _usages[usage.ProviderId] = usage;
         var usages = CurrentUsages();
 
-        var overall = usages.Count > 0 ? usages.Min(u => u.OverallRemainingPercent) : 100d;
-        var low = overall <= _settings.WarningThresholdPercent;
+        var overall = usages.Count > 0 ? usages.Max(u => u.OverallUsedPercent) : 0d;
+        var anyRateLimited = usages.Any(u => u.State == ProviderState.RateLimited);
+        var state = TrayIconRenderer.ComputeState(overall, _settings.WarningThresholdPercent, anyRateLimited);
         _notifyIcon.Text = TruncateTrayText(BuildTrayText(usages));
         var oldIcon = _notifyIcon.Icon;
-        _notifyIcon.Icon = TrayIconRenderer.CreateUsageIcon((int)Math.Round(overall), low);
+        _notifyIcon.Icon = TrayIconRenderer.CreateUsageIcon(overall, state, TrayIconRenderer.GetNativeIconSize());
         oldIcon?.Dispose();
         popup.SetUsage(usages);
     }
@@ -368,7 +369,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private static string FormatPercent(RateLimitWindow window)
     {
-        return $"{(int)Math.Round(window.RemainingPercent)}%";
+        return $"{(int)Math.Round(window.UsedPercent)}%";
     }
 
     private void TogglePopup()
