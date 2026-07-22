@@ -65,11 +65,11 @@ internal static class RateLimitMapper
         rows.Add(new UsageRow(labelFactory(FormatDurationLabel(window.WindowDurationMins)), window, isPrimary));
     }
 
+    // Unified label units across providers: hours under a day, days above (10080 -> "7d").
     public static string FormatDurationLabel(long? durationMins)
     {
         if (!durationMins.HasValue || durationMins.Value <= 0) return "usage";
         var mins = durationMins.Value;
-        if (mins % 10080 == 0) return $"{mins / 10080}w";
         if (mins % 1440 == 0) return $"{mins / 1440}d";
         if (mins % 60 == 0) return $"{mins / 60}h";
         return $"{mins}m";
@@ -233,9 +233,9 @@ internal static class RateLimitMapper
         return usage.Rows.Count == 4
             && NearlyEquals(usage.OverallRemainingPercent, 63)
             && RowMatches(usage.Rows[0], "5h", 63, isPrimary: true)
-            && RowMatches(usage.Rows[1], "1w", 88, isPrimary: true)
+            && RowMatches(usage.Rows[1], "7d", 88, isPrimary: true)
             && RowMatches(usage.Rows[2], "Spark 5h", 96, isPrimary: false)
-            && RowMatches(usage.Rows[3], "Spark 1w", 92, isPrimary: false);
+            && RowMatches(usage.Rows[3], "Spark 7d", 92, isPrimary: false);
     }
 
     // New schema (codex-cli 0.145.0-alpha.27): weekly-only primary, null secondary,
@@ -274,8 +274,8 @@ internal static class RateLimitMapper
         var usage = FromJsonResult(doc.RootElement);
         return usage.Rows.Count == 3
             && NearlyEquals(usage.OverallRemainingPercent, 87.5)
-            && RowMatches(usage.Rows[0], "1w", 87.5, isPrimary: true)
-            && RowMatches(usage.Rows[1], "Spark 1w", 96, isPrimary: false)
+            && RowMatches(usage.Rows[0], "7d", 87.5, isPrimary: true)
+            && RowMatches(usage.Rows[1], "Spark 7d", 96, isPrimary: false)
             && usage.Rows[2] is { Label: "Credits", Window: null, IsPrimary: false, DetailText: "146.09" };
     }
 

@@ -65,7 +65,8 @@ The app reads the local Claude Code sign-in (`%USERPROFILE%\.claude\.credentials
 - The popup is a titlebarless dark/glass-style window.
 - Color themes currently include `DarkBluePurple`, `MidnightBlack`, `Nebula`, and `Glassmorphism`.
 - The outer canvas uses a transparency key.
-- Usage rows are payload-driven: one row per rate-limit window the provider reports, labeled from the window duration (300 mins -> `5h`, 10080 mins -> `1w`).
+- Usage rows are payload-driven: one row per rate-limit window the provider reports, labeled from the window duration with unified hour/day units (300 mins -> `5h`, 10080 mins -> `7d`).
+- The popup shows one labeled section per provider (provider name + status) so Codex and Claude are visually separated.
 - `Spark <window>` rows (GPT-5.3-Codex-Spark) and the `Credits` balance row are optional.
 - User-visible popup labels and connection status messages are written in English.
 - Clicking the time text toggles between `Clock Time` and `Remaining Time` display.
