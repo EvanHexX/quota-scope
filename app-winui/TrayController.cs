@@ -195,6 +195,12 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
         RegisterFromSettings(HotkeyAction.TogglePopup, _settings.Hotkey, fallback: "Ctrl+Alt+U");
         RegisterFromSettings(HotkeyAction.RefreshAll, _settings.HotkeyRefreshAll, fallback: null);
         RegisterFromSettings(HotkeyAction.TogglePin, _settings.HotkeyTogglePin, fallback: null);
+
+        if (_hotkeyWarnings.Count > 0)
+        {
+            // Surface load-time problems immediately, not only on the settings page.
+            _trayIcon.ShowNotification("QuotaScope hotkeys", string.Join("\n", _hotkeyWarnings));
+        }
     }
 
     private void OnHotkeyPressed(int id)
@@ -390,11 +396,19 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
 
     private void ApplyTrayVisuals(IReadOnlyList<ProviderUsage> usages)
     {
-        var overall = usages.Count > 0 ? usages.Max(u => u.OverallUsedPercent) : 0d;
+        var overallUsed = usages.Count > 0 ? usages.Max(u => u.OverallUsedPercent) : 0d;
         var anyRateLimited = usages.Any(u => u.State == ProviderState.RateLimited);
-        var state = TrayIconRenderer.ComputeState(overall, _settings.WarningThresholdPercent, anyRateLimited);
+        var state = TrayIconRenderer.ComputeState(overallUsed, _settings.WarningThresholdPercent, anyRateLimited);
+        var size = TrayIconRenderer.GetNativeIconSize();
+        // The arc fill follows the configured gauge metric; state colors always key off usage.
+        var fill = string.Equals(_settings.GaugeMetric, "Remaining", StringComparison.OrdinalIgnoreCase)
+            ? 100d - overallUsed
+            : overallUsed;
+        var icon = string.Equals(_settings.TrayIconStyle, "Glyph", StringComparison.OrdinalIgnoreCase)
+            ? TrayIconRenderer.CreateGlyphIcon(state, size)
+            : TrayIconRenderer.CreateUsageIcon(fill, state, size);
         _trayIcon.SetTooltip(TruncateTrayText(BuildTrayText(usages)));
-        _trayIcon.SetIcon(TrayIconRenderer.CreateUsageIcon(overall, state, TrayIconRenderer.GetNativeIconSize()));
+        _trayIcon.SetIcon(icon);
         _popup?.SetUsage(usages);
     }
 

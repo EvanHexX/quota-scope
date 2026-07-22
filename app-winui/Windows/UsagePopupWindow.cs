@@ -375,19 +375,20 @@ internal sealed class UsagePopupWindow
 
         if (row.Window is { } window)
         {
-            var percent = RoundPercent(window);
-            right.Text = $"{percent}%  {FormatWindowTime(window)}";
+            var used = RoundPercent(window);
+            var display = DisplayPercent(window);
+            right.Text = $"{display}%  {FormatWindowTime(window)}";
             right.Tapped += (_, _) => ToggleTimeDisplayMode();
 
             var bar = new ProgressBar
             {
                 Minimum = 0,
                 Maximum = 100,
-                Value = percent,
+                Value = display,
                 Height = 8,
                 Margin = new Thickness(0, 8, 0, 0),
                 CornerRadius = new CornerRadius(4),
-                Foreground = Brush(palette.AccentFor(percent)),
+                Foreground = Brush(palette.AccentFor(used)),
                 Background = Brush(palette.Track)
             };
             Grid.SetRow(bar, 1);
@@ -461,22 +462,23 @@ internal sealed class UsagePopupWindow
 
         if (row.Window is { } window)
         {
-            var percent = RoundPercent(window);
+            var used = RoundPercent(window);
+            var display = DisplayPercent(window);
             var ringGrid = new Grid { VerticalAlignment = VerticalAlignment.Center };
             var ring = new ProgressRing
             {
                 IsIndeterminate = false,
                 Minimum = 0,
                 Maximum = 100,
-                Value = percent,
+                Value = display,
                 Width = 118,
                 Height = 118,
-                Foreground = Brush(palette.AccentFor(percent)),
+                Foreground = Brush(palette.AccentFor(used)),
                 Background = Brush(palette.Track)
             };
             var percentText = new TextBlock
             {
-                Text = $"{percent}%",
+                Text = $"{display}%",
                 FontFamily = UiFont,
                 FontSize = 24,
                 FontWeight = FontWeights.Bold,
@@ -611,10 +613,19 @@ internal sealed class UsagePopupWindow
 
     // ----- formatting (ported from UsagePopupForm) -----
 
-    // Gauges fill with usage: 0% = untouched, full bar/ring = exhausted.
+    // Model is usedPercent; accent colors always key off usage.
     private static int RoundPercent(RateLimitWindow window)
     {
         return (int)Math.Round(Math.Clamp(window.UsedPercent, 0d, 100d));
+    }
+
+    // What gauges and percent texts show follows the configured metric.
+    private int DisplayPercent(RateLimitWindow window)
+    {
+        var used = RoundPercent(window);
+        return string.Equals(_settings.GaugeMetric, "Remaining", StringComparison.OrdinalIgnoreCase)
+            ? 100 - used
+            : used;
     }
 
     private string FormatWindowTime(RateLimitWindow? window)

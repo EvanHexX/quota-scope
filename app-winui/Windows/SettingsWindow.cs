@@ -279,9 +279,21 @@ internal sealed class SettingsWindow
             Save(SettingsChange.Appearance);
         };
 
+        var trayStyle = MakeCombo(
+            new[] { "UsageArc", "Glyph" },
+            _settings.TrayIconStyle,
+            value => { _settings.TrayIconStyle = value; Save(SettingsChange.Appearance); });
+
+        var gaugeMetric = MakeCombo(
+            new[] { "Used", "Remaining" },
+            _settings.GaugeMetric,
+            value => { _settings.GaugeMetric = value; Save(SettingsChange.Appearance); });
+
         return Page("Appearance",
             Row("Shape theme", "Bars or bento circle cards in the popup.", shape),
             Row("Color theme", null, color),
+            Row("Tray icon style", "Usage arc, or a plain dot carrying only the state color.", trayStyle),
+            Row("Gauge metric", "Whether gauges and percentages show used or remaining capacity.", gaugeMetric),
             Row("Follow system theme", "Applies to this settings window.", followSystem),
             Row("Theme override", "Used when not following the system theme.", overrideCombo));
     }

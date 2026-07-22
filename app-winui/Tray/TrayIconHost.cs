@@ -13,6 +13,7 @@ internal interface ITrayIcon : IDisposable
     void SetIcon(System.Drawing.Icon icon);
     void SetTooltip(string text);
     void SetMenu(MenuFlyout menu);
+    void ShowNotification(string title, string message);
     void Show();
 }
 
@@ -40,6 +41,18 @@ internal sealed class TrayIconHost : ITrayIcon
     public void SetTooltip(string text) => _taskbarIcon.ToolTipText = text;
 
     public void SetMenu(MenuFlyout menu) => _taskbarIcon.ContextFlyout = menu;
+
+    public void ShowNotification(string title, string message)
+    {
+        try
+        {
+            _taskbarIcon.ShowNotification(title, message);
+        }
+        catch
+        {
+            // Notifications are best-effort; never take the app down for one.
+        }
+    }
 
     public void Show() => _taskbarIcon.ForceCreate();
 
