@@ -14,11 +14,12 @@ internal sealed class UsagePopupForm : Form
     private const int Htcaption = 2;
     private const int BarRowHeight = 54;
     private const int BarRowSpacing = 68;
-    private const int BarTop = 86;
-    private const int SectionHeaderHeight = 56;
-    private const int BentoTop = 84;
+    private const int HeaderBottom = 78;
+    private const int SectionHeaderHeight = 34;
+    private const int SectionDividerGap = 14;
     private const int BentoCardHeight = 230;
     private const int BentoRowGap = 14;
+    private const int BentoSectionBottomGap = 10;
     private static readonly Color TransparentCanvas = Color.FromArgb(1, 2, 3);
     private static readonly string UiFontFamily = ResolveUiFontFamily();
     private readonly List<Rectangle> _timeToggleBounds = new();
@@ -90,19 +91,31 @@ internal sealed class UsagePopupForm : Form
         Size targetSize;
         if (usesBento)
         {
-            var cardCount = sections.Sum(s => s.Rows.Count);
-            var cardRows = Math.Max(1, (cardCount + 1) / 2);
-            // Single card: shrink the popup to one-card width instead of stretching the card.
-            var width = cardCount == 1 ? 240 : 452;
-            targetSize = new Size(width, BentoTop + cardRows * BentoCardHeight + (cardRows - 1) * BentoRowGap + 24);
+            var totalCards = sections.Sum(s => s.Rows.Count);
+            // Single card overall: shrink the popup to one-card width.
+            var width = totalCards == 1 ? 240 : 452;
+            var height = HeaderBottom;
+            for (var i = 0; i < sections.Count; i++)
+            {
+                var cardRows = (sections[i].Rows.Count + 1) / 2;
+                height += (i > 0 ? SectionDividerGap : 0) + SectionHeaderHeight;
+                if (cardRows > 0)
+                {
+                    height += cardRows * BentoCardHeight + (cardRows - 1) * BentoRowGap + BentoSectionBottomGap;
+                }
+            }
+            if (sections.Count == 0) height = 300;
+            targetSize = new Size(width, height + 10);
         }
         else
         {
-            var rowCount = sections.Sum(s => s.Rows.Count);
-            var extraHeaders = Math.Max(0, sections.Count - 1) * SectionHeaderHeight;
-            var height = BarTop + rowCount * BarRowSpacing + extraHeaders + 14;
-            if (rowCount == 0) height = 236;
-            targetSize = new Size(408, height);
+            var height = HeaderBottom;
+            for (var i = 0; i < sections.Count; i++)
+            {
+                height += (i > 0 ? SectionDividerGap : 0) + SectionHeaderHeight + sections[i].Rows.Count * BarRowSpacing;
+            }
+            if (sections.Count == 0) height = 236;
+            targetSize = new Size(408, height + 4);
         }
 
         MinimumSize = targetSize;
@@ -146,10 +159,11 @@ internal sealed class UsagePopupForm : Form
         using var titleFont = new Font(UiFontFamily, 13f, FontStyle.Bold, GraphicsUnit.Point);
         using var statusFont = new Font(UiFontFamily, 8.8f, FontStyle.Regular, GraphicsUnit.Point);
 
-        var title = _usages.Count > 0 ? $"{_usages[0].DisplayName} Usage" : "Usage";
-        var status = _usages.Count > 0 ? _usages[0].StatusText : "Waiting for connection";
-        DrawText(g, title, titleFont, palette.Text, new Rectangle(22, 18, ClientSize.Width - 74, 24), TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
-        DrawText(g, status, statusFont, palette.Muted, new Rectangle(22, 43, ClientSize.Width - 74, 22), TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+        DrawText(g, "Usage", titleFont, palette.Text, new Rectangle(22, 18, ClientSize.Width - 74, 24), TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+        if (_usages.Count == 0)
+        {
+            DrawText(g, "Waiting for connection", statusFont, palette.Muted, new Rectangle(22, 43, ClientSize.Width - 74, 22), TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+        }
         DrawPinIcon(g, palette, GetPinBounds(), _settings.IsPinned);
 
         if (string.Equals(_settings.ShapeTheme, "BentoCircles", StringComparison.OrdinalIgnoreCase))
@@ -239,28 +253,37 @@ internal sealed class UsagePopupForm : Form
     {
         using var labelFont = new Font(UiFontFamily, 11f, FontStyle.Bold, GraphicsUnit.Point);
         using var metaFont = new Font(UiFontFamily, 10f, FontStyle.Regular, GraphicsUnit.Point);
-        using var sectionTitleFont = new Font(UiFontFamily, 11.5f, FontStyle.Bold, GraphicsUnit.Point);
-        using var sectionStatusFont = new Font(UiFontFamily, 8.8f, FontStyle.Regular, GraphicsUnit.Point);
 
         var sections = BuildSections();
-        var y = BarTop;
+        var y = HeaderBottom;
         for (var i = 0; i < sections.Count; i++)
         {
             var (usage, rows) = sections[i];
-            if (i > 0)
-            {
-                // The first section shares the popup header; later sections get their own.
-                DrawText(g, usage.DisplayName, sectionTitleFont, palette.Text, new Rectangle(22, y + 6, ClientSize.Width - 44, 22), TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
-                DrawText(g, usage.StatusText, sectionStatusFont, palette.Muted, new Rectangle(22, y + 28, ClientSize.Width - 44, 20), TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
-                y += SectionHeaderHeight;
-            }
-
+            y = DrawSectionHeader(g, palette, usage, y, i > 0);
             foreach (var row in rows)
             {
                 DrawBarRow(g, palette, new Rectangle(22, y, ClientSize.Width - 44, BarRowHeight), row, labelFont, metaFont);
                 y += BarRowSpacing;
             }
         }
+    }
+
+    // Every provider gets its own labeled section so providers are easy to tell apart.
+    private int DrawSectionHeader(Graphics g, PopupPalette palette, ProviderUsage usage, int y, bool withDivider)
+    {
+        if (withDivider)
+        {
+            using var divider = new Pen(Color.FromArgb(90, palette.Border), 1);
+            g.DrawLine(divider, 24, y + 6, ClientSize.Width - 24, y + 6);
+            y += SectionDividerGap;
+        }
+
+        using var nameFont = new Font(UiFontFamily, 10.5f, FontStyle.Bold, GraphicsUnit.Point);
+        using var statusFont = new Font(UiFontFamily, 8.8f, FontStyle.Regular, GraphicsUnit.Point);
+        var nameWidth = Math.Min(140, ClientSize.Width / 3);
+        DrawText(g, usage.DisplayName, nameFont, palette.AccentBlue, new Rectangle(22, y + 2, nameWidth, 20), TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+        DrawText(g, usage.StatusText, statusFont, palette.Muted, new Rectangle(22 + nameWidth, y + 4, ClientSize.Width - 44 - nameWidth, 18), TextFormatFlags.Right | TextFormatFlags.EndEllipsis);
+        return y + SectionHeaderHeight;
     }
 
     private void DrawBarRow(Graphics g, PopupPalette palette, Rectangle bounds, UsageRow row, Font labelFont, Font metaFont)
@@ -294,19 +317,31 @@ internal sealed class UsagePopupForm : Form
         const int gap = 16;
         var cardWidth = (ClientSize.Width - (marginX * 2) - gap) / 2;
 
-        var cards = BuildSections().SelectMany(s => s.Rows).ToList();
-        for (var i = 0; i < cards.Count; i++)
+        var sections = BuildSections();
+        var y = HeaderBottom;
+        for (var s = 0; s < sections.Count; s++)
         {
-            var col = i % 2;
-            var rowIndex = i / 2;
-            // A trailing odd card spans the full width so the grid has no hole.
-            var isTrailingOdd = i == cards.Count - 1 && cards.Count % 2 == 1;
-            var bounds = new Rectangle(
-                marginX + col * (cardWidth + gap),
-                BentoTop + rowIndex * (BentoCardHeight + BentoRowGap),
-                isTrailingOdd ? ClientSize.Width - marginX * 2 : cardWidth,
-                BentoCardHeight);
-            DrawBentoCard(g, palette, bounds, cards[i]);
+            var (usage, rows) = sections[s];
+            y = DrawSectionHeader(g, palette, usage, y, s > 0);
+            for (var i = 0; i < rows.Count; i++)
+            {
+                var col = i % 2;
+                var rowIndex = i / 2;
+                // A trailing odd card spans the full width so the grid has no hole.
+                var isTrailingOdd = i == rows.Count - 1 && rows.Count % 2 == 1;
+                var bounds = new Rectangle(
+                    marginX + col * (cardWidth + gap),
+                    y + rowIndex * (BentoCardHeight + BentoRowGap),
+                    isTrailingOdd ? ClientSize.Width - marginX * 2 : cardWidth,
+                    BentoCardHeight);
+                DrawBentoCard(g, palette, bounds, rows[i]);
+            }
+
+            var cardRows = (rows.Count + 1) / 2;
+            if (cardRows > 0)
+            {
+                y += cardRows * BentoCardHeight + (cardRows - 1) * BentoRowGap + BentoSectionBottomGap;
+            }
         }
     }
 

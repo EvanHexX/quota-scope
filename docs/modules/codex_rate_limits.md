@@ -65,7 +65,7 @@ cmd /c codex app-server generate-json-schema --experimental --out E:\Business\ou
 ## Mapping
 
 - 앱에 표시하는 percent는 `remaining = 100 - usedPercent`다.
-- Row는 payload 기반 동적 생성이다. 존재하는 window만 row가 되고, 라벨은 `windowDurationMins`에서 유도한다 (300 -> `5h`, 10080 -> `1w`).
+- Row는 payload 기반 동적 생성이다. 존재하는 window만 row가 되고, 라벨은 `windowDurationMins`에서 유도한다 (300 -> `5h`, 10080 -> `7d`). 라벨 단위는 Claude와 통일된 시간/일 단위를 쓴다.
 - overall 남은 사용량은 main snapshot의 window remaining 중 가장 낮은 값으로 표시한다.
 - Spark rows는 `limitName`/`limitId`에서 `spark`, `bengalfox`, `gpt-5.3-codex`를 찾고, 해당 snapshot의 window들을 `Spark <라벨>` secondary row로 표시한다.
 - `credits.hasCredits == true`이면 잔액을 `Credits` row로 표시할 수 있다 (per-provider 표시 옵션, 기본 off). Claude의 `extra_usage`와 대칭 구조다.

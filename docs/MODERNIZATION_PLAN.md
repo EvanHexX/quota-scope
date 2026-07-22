@@ -235,7 +235,8 @@ Decisions (apply from Phase 5.1 onward):
 
 1. **Rows are payload-driven (dynamic).** Render only the rate-limit windows the
    provider actually returns. No hardcoded 5h/1w slots. Row labels derive from
-   `windowDurationMins` (300 -> `5h`, 10080 -> `1w`).
+   `windowDurationMins` and use unified hour/day units across providers
+   (300 -> `5h`, 10080 -> `7d`, matching Claude's `5h`/`7d` labels).
 2. **Per-provider display options are mix-and-match.** The user selects which
    row groups to show per provider: primary windows are always shown; secondary
    model rows (e.g., GPT-5.3-Codex-Spark) and credit rows are individually

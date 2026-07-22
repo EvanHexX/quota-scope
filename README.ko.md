@@ -31,7 +31,7 @@ AI 코딩 도구를 자주 사용하는 사용자가 작업 중 남은 사용량
 
 현재 WinForms UI는 원형 사용량 card를 가진 compact dark tray popup입니다.
 
-표시 행은 payload 기반으로 동적으로 생성됩니다. provider가 보고하는 rate limit window만 행이 되며, 라벨은 window 길이에서 유도됩니다 (예: 300분 -> `5h`, 10080분 -> `1w`).
+표시 행은 payload 기반으로 동적으로 생성됩니다. provider가 보고하는 rate limit window만 행이 되며, 라벨은 window 길이에서 유도됩니다 (예: 300분 -> `5h`, 10080분 -> `7d`). 라벨 단위는 provider와 무관하게 시간/일(`5h`/`7d`)로 통일되어 있습니다.
 
 선택 표시 항목:
 
