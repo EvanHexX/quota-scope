@@ -454,6 +454,82 @@ internal sealed class SettingsWindow
         return Page(Loc.T("Appearance", "모양"), rows.ToArray());
     }
 
+    private FrameworkElement BuildMixMatchRow(IReadOnlyList<UsageRowRef> providerRows, int index)
+    {
+        var rowRef = providerRows[index];
+        var key = RowShapes.Key(rowRef.ProviderId, rowRef.Label);
+        var current = _settings.RowShapes.TryGetValue(key, out var stored) ? stored : RowShapes.Circle;
+        var combo = MakeCombo(
+            new[] { RowShapes.Circle, RowShapes.Bars },
+            current,
+            value =>
+            {
+                _settings.RowShapes[key] = value;
+                Save(SettingsChange.Appearance);
+            },
+            width: 130);
+        combo.VerticalAlignment = VerticalAlignment.Center;
+
+        var up = MoveButton("", Loc.T("Move up", "위로"), index > 0, () => MoveRow(providerRows, index, -1));
+        var down = MoveButton("", Loc.T("Move down", "아래로"), index < providerRows.Count - 1, () => MoveRow(providerRows, index, 1));
+
+        var line = new Grid { MinHeight = 40 };
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var label = new TextBlock
+        {
+            Text = Loc.RowLabel(rowRef.ProviderId, rowRef.Label),
+            FontSize = 13,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+        Grid.SetColumn(label, 0);
+        Grid.SetColumn(up, 1);
+        Grid.SetColumn(down, 2);
+        Grid.SetColumn(combo, 3);
+        line.Children.Add(label);
+        line.Children.Add(up);
+        line.Children.Add(down);
+        line.Children.Add(combo);
+        return line;
+    }
+
+    private static Button MoveButton(string glyph, string tooltip, bool enabled, Action onClick)
+    {
+        var button = new Button
+        {
+            Content = new FontIcon { Glyph = glyph, FontSize = 12 },
+            Width = 34,
+            Height = 32,
+            Padding = new Thickness(0),
+            Margin = new Thickness(2, 0, 2, 0),
+            IsEnabled = enabled,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        ToolTipService.SetToolTip(button, tooltip);
+        button.Click += (_, _) => onClick();
+        return button;
+    }
+
+    private void MoveRow(IReadOnlyList<UsageRowRef> providerRows, int index, int delta)
+    {
+        var target = index + delta;
+        if (target < 0 || target >= providerRows.Count) return;
+
+        var reordered = providerRows.ToList();
+        (reordered[index], reordered[target]) = (reordered[target], reordered[index]);
+        // Persist the whole provider's order so later rows stay put.
+        for (var i = 0; i < reordered.Count; i++)
+        {
+            _settings.RowOrder[RowShapes.Key(reordered[i].ProviderId, reordered[i].Label)] = i;
+        }
+        Save(SettingsChange.Appearance);
+        RefreshCurrentPage();
+    }
+
     // Mix & match: one shape selector per known row. Bars always span the full
     // content width; gauges pair up two per line when at least one provider has
     // two of them, otherwise everything stacks in a single column.
@@ -466,8 +542,8 @@ internal sealed class SettingsWindow
             FontSize = 14
         });
         panel.Children.Add(MutedText(Loc.T(
-            "Bars take the full popup width; gauges sit two per line when possible.",
-            "막대는 팝업 전체 폭을 쓰고, 게이지는 가능하면 한 줄에 두 개씩 배치됩니다.")));
+            "Bars take the full popup width; gauges sit two per line when they are next to each other, so reorder rows to pair the gauges you want side by side.",
+            "막대는 팝업 전체 폭을 쓰고, 게이지는 서로 이웃할 때만 한 줄에 두 개씩 배치됩니다. 나란히 두고 싶은 게이지는 순서를 옮겨 붙여 주세요.")));
 
         var rows = _currentRows();
         if (rows.Count == 0)
@@ -477,35 +553,24 @@ internal sealed class SettingsWindow
                 "아직 표시할 행이 없습니다. 팝업을 한 번 열어 프로바이더 행을 받아오세요.")));
         }
 
-        foreach (var rowRef in rows)
+        // Ordering is per provider: rows only ever pair within their section.
+        foreach (var providerId in rows.Select(r => r.ProviderId).Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            var key = RowShapes.Key(rowRef.ProviderId, rowRef.Label);
-            var current = _settings.RowShapes.TryGetValue(key, out var stored) ? stored : RowShapes.Circle;
-            var combo = MakeCombo(
-                new[] { RowShapes.Circle, RowShapes.Bars },
-                current,
-                value =>
-                {
-                    _settings.RowShapes[key] = value;
-                    Save(SettingsChange.Appearance);
-                },
-                width: 140);
-
-            var line = new Grid { MinHeight = 40 };
-            line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var label = new TextBlock
+            var providerRows = RowShapes.Order(
+                _settings, providerId, rows.Where(r => r.ProviderId.Equals(providerId, StringComparison.OrdinalIgnoreCase)), r => r.Label);
+            panel.Children.Add(new TextBlock
             {
-                Text = $"{rowRef.ProviderName} · {Loc.RowLabel(rowRef.ProviderId, rowRef.Label)}",
+                Text = providerRows[0].ProviderName,
                 FontSize = 13,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            combo.VerticalAlignment = VerticalAlignment.Center;
-            Grid.SetColumn(label, 0);
-            Grid.SetColumn(combo, 1);
-            line.Children.Add(label);
-            line.Children.Add(combo);
-            panel.Children.Add(line);
+                FontWeight = FontWeights.SemiBold,
+                Opacity = 0.8,
+                Margin = new Thickness(0, 6, 0, 0)
+            });
+
+            for (var index = 0; index < providerRows.Count; index++)
+            {
+                panel.Children.Add(BuildMixMatchRow(providerRows, index));
+            }
         }
 
         var card = new Border

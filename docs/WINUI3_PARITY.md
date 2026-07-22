@@ -110,6 +110,10 @@ WinForms app is a separate follow-up task after sign-off.
   single-column layout and two columns wide in a two-column layout.
 - `LayoutColumns` (`Auto` | `OneColumn` | `TwoColumns`, surfaced in mix & match)
   overrides that heuristic when the user wants a forced column count.
+- Gauges only pair when they are adjacent, so the mix & match list also lets
+  rows be reordered per provider (`RowOrder`, same key as `RowShapes`). Moving
+  two gauges next to each other is what makes them share a line even when a bar
+  row originally sat between them.
 
 ## Backdrops
 
