@@ -97,8 +97,10 @@ WinForms app is a separate follow-up task after sign-off.
   warning threshold in used terms.
 - Exact numbers live in the tooltip and popup. The tooltip is a per-provider
   5h/7d summary.
-- Consider a toast notification when crossing the warning threshold (TODO,
-  not implemented yet).
+- Toast on threshold: implemented. A tray notification fires once per
+  escalation (Normal -> Warning -> Critical; recovery resets silently),
+  controlled by Settings > General > Threshold notification
+  (`NotifyOnThreshold`, default on).
 - Fallback: if the small tray icon still reads poorly, drop the arc and use a
   fixed glyph with state color only.
 - Update (post-verification): visibility was judged good. Both channels are

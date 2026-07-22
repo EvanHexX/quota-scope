@@ -199,13 +199,21 @@ internal sealed class SettingsWindow
                 }
             });
 
+        var notify = new ToggleSwitch { IsOn = _settings.NotifyOnThreshold };
+        notify.Toggled += (_, _) =>
+        {
+            _settings.NotifyOnThreshold = notify.IsOn;
+            Save(SettingsChange.General);
+        };
+
         return Page(Loc.T("General", "일반"),
             Row(Loc.T("Language", "언어"), Loc.T("Menus and settings text. Reopen this window to fully apply.", "메뉴와 설정 텍스트에 적용됩니다. 완전 적용은 이 창을 다시 여세요."), language),
             Row(Loc.T("UI scale", "UI 크기"), Loc.T("Overall popup size.", "팝업 전체 크기를 조절합니다."), uiScale),
             Row(Loc.T("Start with Windows", "Windows 시작 시 자동 실행"), Loc.T("Registers the app in the current user's Run key.", "현재 사용자 Run 레지스트리에 등록합니다."), autostart),
             Row(Loc.T("Popup position", "팝업 위치"), null, position),
             Row(Loc.T("Time display", "시간 표시"), Loc.T("Reset times as clock time or remaining time.", "리셋 시각을 시계 시간 또는 남은 시간으로 표시합니다."), timeDisplay),
-            Row(Loc.T("Warning threshold", "경고 임계값"), Loc.T("Warn when remaining capacity drops to this percent.", "남은 용량이 이 퍼센트 이하로 떨어지면 경고합니다."), threshold));
+            Row(Loc.T("Warning threshold", "경고 임계값"), Loc.T("Warn when remaining capacity drops to this percent.", "남은 용량이 이 퍼센트 이하로 떨어지면 경고합니다."), threshold),
+            Row(Loc.T("Threshold notification", "임계값 알림"), Loc.T("Show a tray notification when usage crosses into warning or critical.", "사용량이 경고/위험 단계로 진입하면 트레이 알림을 표시합니다."), notify));
     }
 
     private UIElement BuildProvidersPage()
