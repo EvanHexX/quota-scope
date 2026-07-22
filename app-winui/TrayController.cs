@@ -54,7 +54,7 @@ internal sealed class TrayController : IDisposable
         _trayIcon = new TrayIconHost();
         _trayIcon.SetMenu(BuildMenu());
         _trayIcon.SetTooltip("Checking usage");
-        _trayIcon.SetIcon(TrayIconRenderer.CreateUsageIcon(100, false));
+        _trayIcon.SetIcon(TrayIconRenderer.CreateUsageIcon(0, TrayIconState.Normal, TrayIconRenderer.GetNativeIconSize()));
         _trayIcon.LeftClicked += TogglePopup;
         _trayIcon.Show();
 
@@ -188,10 +188,11 @@ internal sealed class TrayController : IDisposable
         _usages[usage.ProviderId] = usage;
         var usages = CurrentUsages();
 
-        var overall = usages.Count > 0 ? usages.Min(u => u.OverallRemainingPercent) : 100d;
-        var low = overall <= _settings.WarningThresholdPercent;
+        var overall = usages.Count > 0 ? usages.Max(u => u.OverallUsedPercent) : 0d;
+        var anyRateLimited = usages.Any(u => u.State == ProviderState.RateLimited);
+        var state = TrayIconRenderer.ComputeState(overall, _settings.WarningThresholdPercent, anyRateLimited);
         _trayIcon.SetTooltip(TruncateTrayText(BuildTrayText(usages)));
-        _trayIcon.SetIcon(TrayIconRenderer.CreateUsageIcon((int)Math.Round(overall), low));
+        _trayIcon.SetIcon(TrayIconRenderer.CreateUsageIcon(overall, state, TrayIconRenderer.GetNativeIconSize()));
         _popup?.SetUsage(usages);
     }
 
@@ -223,7 +224,7 @@ internal sealed class TrayController : IDisposable
 
     private static string FormatPercent(RateLimitWindow window)
     {
-        return $"{(int)Math.Round(window.RemainingPercent)}%";
+        return $"{(int)Math.Round(window.UsedPercent)}%";
     }
 
     private void ExitApplication()

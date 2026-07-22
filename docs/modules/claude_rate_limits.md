@@ -50,7 +50,7 @@ User-Agent: claude-code/<version>
 | `extra_usage` | `is_enabled == true`일 때만 secondary, `Credits` (utilization 게이지, 없으면 used/limit 텍스트) |
 
 - null인 필드는 row를 만들지 않는다.
-- overall 남은 사용량은 primary row(5h, 7d) remaining 중 최솟값이다.
+- overall 수치는 primary row(5h, 7d)의 usedPercent 중 최댓값이다 (전 계층 usedPercent 통일).
 - secondary row와 Credits row 표시는 per-provider 옵션(`ShowSecondaryRows`, `ShowCredits`)을 따른다.
 
 ## Reliability

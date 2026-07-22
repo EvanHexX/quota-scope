@@ -68,10 +68,10 @@ internal sealed record PopupPalette(
         Color.FromArgb(255, 92, 196, 255),
         Color.FromArgb(255, 176, 146, 255));
 
-    public Color AccentFor(int remainingPercent)
+    public Color AccentFor(int usedPercent)
     {
-        if (remainingPercent <= 20) return Color.FromArgb(255, 255, 126, 91);
-        if (remainingPercent <= 50) return Color.FromArgb(255, 132, 124, 255);
+        if (usedPercent >= 80) return Color.FromArgb(255, 255, 126, 91);
+        if (usedPercent >= 50) return Color.FromArgb(255, 132, 124, 255);
         return AccentBlue;
     }
 }

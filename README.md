@@ -27,7 +27,7 @@ For Codex it starts `codex app-server` locally and reads rate limit data through
 - Payload-driven usage gauges: one row per rate-limit window the provider reports
 - Optional secondary rows (GPT-5.3-Codex-Spark, Claude per-model windows)
 - Optional credits rows (Codex credits balance, Claude extra usage)
-- Tray icon shows the lowest remaining percent across providers
+- Tray icon signals overall usage with an arc fill (5% steps) and a 3-level state color; exact numbers are in the tooltip and popup
 - Pinned popup mode
 - Global hotkey: `Ctrl+Alt+U`
 - Manual refresh and reconnect controls

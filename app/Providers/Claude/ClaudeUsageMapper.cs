@@ -24,7 +24,7 @@ internal static class ClaudeUsageMapper
             ProviderId,
             ProviderDisplayName,
             rows,
-            ComputeOverallRemaining(rows),
+            ComputeOverallUsed(rows),
             "Claude rate limit",
             DateTimeOffset.Now,
             ProviderState.Ok);
@@ -60,17 +60,15 @@ internal static class ClaudeUsageMapper
         rows.Add(new UsageRow("Credits", null, IsPrimary: false, detail));
     }
 
-    private static double ComputeOverallRemaining(List<UsageRow> rows)
+    private static double ComputeOverallUsed(List<UsageRow> rows)
     {
-        var min = 100d;
-        var found = false;
+        var max = 0d;
         foreach (var row in rows)
         {
             if (!row.IsPrimary || row.Window is null) continue;
-            min = Math.Min(min, row.Window.RemainingPercent);
-            found = true;
+            max = Math.Max(max, row.Window.UsedPercent);
         }
-        return found ? min : 100d;
+        return max;
     }
 
     private static RateLimitWindow? ParseWindow(JsonElement? element)
@@ -133,10 +131,10 @@ internal static class ClaudeUsageMapper
         using var doc = JsonDocument.Parse(sample);
         var usage = FromJson(doc.RootElement);
         return usage.Rows.Count == 3
-            && NearlyEquals(usage.OverallRemainingPercent, 67)
-            && RowMatches(usage.Rows[0], "5h", 67, isPrimary: true)
-            && RowMatches(usage.Rows[1], "7d", 87, isPrimary: true)
-            && RowMatches(usage.Rows[2], "7d Sonnet", 99, isPrimary: false)
+            && NearlyEquals(usage.OverallUsedPercent, 33)
+            && RowMatches(usage.Rows[0], "5h", 33, isPrimary: true)
+            && RowMatches(usage.Rows[1], "7d", 13, isPrimary: true)
+            && RowMatches(usage.Rows[2], "7d Sonnet", 1, isPrimary: false)
             && usage.Rows[0].Window!.ResetsAt is { } resetsAt
             && resetsAt.UtcDateTime.Hour == 7;
     }
@@ -155,20 +153,20 @@ internal static class ClaudeUsageMapper
         using var doc = JsonDocument.Parse(sample);
         var usage = FromJson(doc.RootElement);
         return usage.Rows.Count == 5
-            && NearlyEquals(usage.OverallRemainingPercent, 62.5)
-            && RowMatches(usage.Rows[0], "5h", 62.5, isPrimary: true)
-            && RowMatches(usage.Rows[1], "7d", 76.5, isPrimary: true)
-            && RowMatches(usage.Rows[2], "7d Sonnet", 99, isPrimary: false)
+            && NearlyEquals(usage.OverallUsedPercent, 37.5)
+            && RowMatches(usage.Rows[0], "5h", 37.5, isPrimary: true)
+            && RowMatches(usage.Rows[1], "7d", 23.5, isPrimary: true)
+            && RowMatches(usage.Rows[2], "7d Sonnet", 1, isPrimary: false)
             && RowMatches(usage.Rows[3], "7d Opus", 50, isPrimary: false)
-            && RowMatches(usage.Rows[4], "Credits", 74.5, isPrimary: false);
+            && RowMatches(usage.Rows[4], "Credits", 25.5, isPrimary: false);
     }
 
-    private static bool RowMatches(UsageRow row, string label, double remainingPercent, bool isPrimary)
+    private static bool RowMatches(UsageRow row, string label, double usedPercent, bool isPrimary)
     {
         return row.Label == label
             && row.IsPrimary == isPrimary
             && row.Window is not null
-            && NearlyEquals(row.Window.RemainingPercent, remainingPercent);
+            && NearlyEquals(row.Window.UsedPercent, usedPercent);
     }
 
     private static bool NearlyEquals(double actual, double expected) => Math.Abs(actual - expected) < 0.001;

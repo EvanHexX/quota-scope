@@ -53,7 +53,7 @@ internal static class RateLimitMapper
             ProviderId,
             ProviderDisplayName,
             rows,
-            ComputeOverallRemaining(snapshot),
+            ComputeOverallUsed(snapshot),
             string.IsNullOrWhiteSpace(snapshot.RateLimitReachedType) ? "Codex rate limit" : snapshot.RateLimitReachedType!,
             DateTimeOffset.Now,
             ProviderState.Ok);
@@ -75,17 +75,15 @@ internal static class RateLimitMapper
         return $"{mins}m";
     }
 
-    private static double ComputeOverallRemaining(RateLimitSnapshot snapshot)
+    private static double ComputeOverallUsed(RateLimitSnapshot snapshot)
     {
-        var min = 100d;
-        var found = false;
+        var max = 0d;
         foreach (var window in new[] { snapshot.Primary, snapshot.Secondary })
         {
             if (window is null) continue;
-            min = Math.Min(min, window.RemainingPercent);
-            found = true;
+            max = Math.Max(max, window.UsedPercent);
         }
-        return found ? min : 100d;
+        return max;
     }
 
     private static string FormatCredits(CodexCredits credits)
@@ -231,11 +229,11 @@ internal static class RateLimitMapper
         using var doc = JsonDocument.Parse(sample);
         var usage = FromJsonResult(doc.RootElement);
         return usage.Rows.Count == 4
-            && NearlyEquals(usage.OverallRemainingPercent, 63)
-            && RowMatches(usage.Rows[0], "5h", 63, isPrimary: true)
-            && RowMatches(usage.Rows[1], "7d", 88, isPrimary: true)
-            && RowMatches(usage.Rows[2], "Spark 5h", 96, isPrimary: false)
-            && RowMatches(usage.Rows[3], "Spark 7d", 92, isPrimary: false);
+            && NearlyEquals(usage.OverallUsedPercent, 37)
+            && RowMatches(usage.Rows[0], "5h", 37, isPrimary: true)
+            && RowMatches(usage.Rows[1], "7d", 12, isPrimary: true)
+            && RowMatches(usage.Rows[2], "Spark 5h", 4, isPrimary: false)
+            && RowMatches(usage.Rows[3], "Spark 7d", 8, isPrimary: false);
     }
 
     // New schema (codex-cli 0.145.0-alpha.27): weekly-only primary, null secondary,
@@ -273,18 +271,18 @@ internal static class RateLimitMapper
         using var doc = JsonDocument.Parse(sample);
         var usage = FromJsonResult(doc.RootElement);
         return usage.Rows.Count == 3
-            && NearlyEquals(usage.OverallRemainingPercent, 87.5)
-            && RowMatches(usage.Rows[0], "7d", 87.5, isPrimary: true)
-            && RowMatches(usage.Rows[1], "Spark 7d", 96, isPrimary: false)
+            && NearlyEquals(usage.OverallUsedPercent, 12.5)
+            && RowMatches(usage.Rows[0], "7d", 12.5, isPrimary: true)
+            && RowMatches(usage.Rows[1], "Spark 7d", 4, isPrimary: false)
             && usage.Rows[2] is { Label: "Credits", Window: null, IsPrimary: false, DetailText: "146.09" };
     }
 
-    private static bool RowMatches(UsageRow row, string label, double remainingPercent, bool isPrimary)
+    private static bool RowMatches(UsageRow row, string label, double usedPercent, bool isPrimary)
     {
         return row.Label == label
             && row.IsPrimary == isPrimary
             && row.Window is not null
-            && NearlyEquals(row.Window.RemainingPercent, remainingPercent);
+            && NearlyEquals(row.Window.UsedPercent, usedPercent);
     }
 
     private static bool NearlyEquals(double actual, double expected) => Math.Abs(actual - expected) < 0.001;
