@@ -219,9 +219,35 @@ The maintainer explicitly approved the following scope changes on 2026-07-22:
 Planned sub-phases (each is a separate task and a separate commit):
 
 - Phase 5.0: rename the project to QuotaScope and update rule documents. (This phase.)
-- Phase 5.1: introduce an `IUsageProvider` abstraction while keeping Codex as the only provider. No behavior or UI change.
+- Phase 5.1: introduce an `IUsageProvider` abstraction while keeping Codex as the only provider.
 - Phase 5.2: add a Claude usage provider.
 - Phase 5.3: port the UI to WinUI 3, split settings into a dedicated window, and support custom hotkeys.
+
+### Display model decisions (maintainer, 2026-07-22)
+
+Context: the Codex app-server payload changed upstream. The 5-hour window is gone
+(`secondary` is now `null`), the weekly window is the only `primary`, and new
+fields appeared: `credits` (`hasCredits`/`unlimited`/`balance`),
+`spendControlReached`, and top-level `rateLimitResetCredits`. The old hardcoded
+5h/1w row layout therefore renders an empty 5h row.
+
+Decisions (apply from Phase 5.1 onward):
+
+1. **Rows are payload-driven (dynamic).** Render only the rate-limit windows the
+   provider actually returns. No hardcoded 5h/1w slots. Row labels derive from
+   `windowDurationMins` (300 -> `5h`, 10080 -> `1w`).
+2. **Per-provider display options are mix-and-match.** The user selects which
+   row groups to show per provider: primary windows are always shown; secondary
+   model rows (e.g., GPT-5.3-Codex-Spark) and credit rows are individually
+   toggleable.
+3. **Credits are a symmetric concept across providers.** Codex `credits` and
+   Claude `extra_usage` both map to an optional "Credits" row controlled by a
+   per-provider display option.
+4. **Settings schema.** `providers` dictionary with per-provider
+   `{ enabled, refreshSeconds, showSecondaryRows, showCredits, command }`.
+   No migration from the old flat keys (pre-release policy).
+5. The Phase 5.1 "pixel-identical UI" completion condition is superseded by
+   decision 1: the empty 5h row disappears by design.
 
 ## Suggested task order for Codex
 

@@ -28,13 +28,47 @@ cmd /c codex app-server generate-json-schema --experimental --out E:\Business\ou
 - `RateLimitWindow.resetsAt`: Unix timestamp
 - `RateLimitWindow.windowDurationMins`: window 길이
 
+## Schema Update (codex-cli 0.145.0-alpha.27, 2026-07-22 실측)
+
+실제 `account/rateLimits/read` 응답이 다음과 같이 변경됨을 확인했다:
+
+```json
+"rateLimits": {
+  "limitId": "codex",
+  "limitName": null,
+  "primary":   { "usedPercent": 0, "windowDurationMins": 10080, "resetsAt": 1785269431 },
+  "secondary": null,
+  "credits":   { "hasCredits": true, "unlimited": false, "balance": "146.0874125000" },
+  "individualLimit": null,
+  "spendControlReached": false,
+  "planType": "pro",
+  "rateLimitReachedType": null
+},
+"rateLimitsByLimitId": {
+  "codex": { "...": "rateLimits와 동일" },
+  "codex_bengalfox": {
+    "limitName": "GPT-5.3-Codex-Spark",
+    "primary": { "usedPercent": 4, "windowDurationMins": 10080, "resetsAt": 1785269459 },
+    "secondary": null,
+    "credits": null
+  }
+},
+"rateLimitResetCredits": { "availableCount": 0, "credits": [] }
+```
+
+변경 요점:
+
+- **5시간 window가 사라졌다.** `primary`가 곧바로 주간(10080분) window이고 `secondary`는 `null`이다. Spark limit도 동일하게 주간 window 하나만 온다.
+- 신규 field: `credits`(잔액 문자열), `individualLimit`, `spendControlReached`, top-level `rateLimitResetCredits`.
+- 따라서 primary=짧은 window / secondary=긴 window라는 기존 가정은 더 이상 유효하지 않다. window 의미는 `windowDurationMins`로만 판별해야 한다.
+
 ## Mapping
 
 - 앱에 표시하는 percent는 `remaining = 100 - usedPercent`다.
-- `windowDurationMins <= 1440`인 window 중 가장 짧은 값을 `5시간` row로 표시한다.
-- `windowDurationMins >= 8640`인 window 중 가장 긴 값을 `1주` row로 표시한다.
-- overall 남은 사용량은 primary/secondary remaining 중 더 낮은 값으로 표시한다.
-- Spark rows는 `limitName`/`limitId`에서 `spark`, `bengalfox`, `gpt-5.3-codex`를 찾고, 해당 snapshot의 primary를 `Spark 5h`, secondary를 `Spark 1w`로 표시한다.
+- Row는 payload 기반 동적 생성이다. 존재하는 window만 row가 되고, 라벨은 `windowDurationMins`에서 유도한다 (300 -> `5h`, 10080 -> `1w`).
+- overall 남은 사용량은 main snapshot의 window remaining 중 가장 낮은 값으로 표시한다.
+- Spark rows는 `limitName`/`limitId`에서 `spark`, `bengalfox`, `gpt-5.3-codex`를 찾고, 해당 snapshot의 window들을 `Spark <라벨>` secondary row로 표시한다.
+- `credits.hasCredits == true`이면 잔액을 `Credits` row로 표시할 수 있다 (per-provider 표시 옵션, 기본 off). Claude의 `extra_usage`와 대칭 구조다.
 
 ## Failure Handling
 
