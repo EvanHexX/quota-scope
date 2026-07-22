@@ -402,6 +402,15 @@ internal sealed class SettingsWindow
         };
         if (string.Equals(_settings.ShapeTheme, "MixMatch", StringComparison.OrdinalIgnoreCase))
         {
+            var columns = MakeCombo(
+                new[] { "Auto", "OneColumn", "TwoColumns" },
+                _settings.LayoutColumns,
+                value => { _settings.LayoutColumns = value; Save(SettingsChange.Appearance); });
+            rows.Add(Row(
+                Loc.T("Columns", "열 수"),
+                Loc.T("Auto uses two columns only when a provider has two gauges.",
+                      "자동은 한 프로바이더에 게이지가 2개 이상일 때만 2열로 배치합니다."),
+                columns));
             rows.Add(BuildMixMatchList());
         }
         rows.Add(Row(Loc.T("UI scale", "UI 크기"), Loc.T("Overall popup size.", "팝업 전체 크기를 조절합니다."), uiScale));

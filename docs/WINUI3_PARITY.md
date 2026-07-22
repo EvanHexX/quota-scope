@@ -108,6 +108,8 @@ WinForms app is a separate follow-up task after sign-off.
   (452 dip) for the two-column case, compact (240 dip) for a single lone gauge,
   and one-column width (408 dip) otherwise — so bars are one column wide in a
   single-column layout and two columns wide in a two-column layout.
+- `LayoutColumns` (`Auto` | `OneColumn` | `TwoColumns`, surfaced in mix & match)
+  overrides that heuristic when the user wants a forced column count.
 
 ## Localization
 

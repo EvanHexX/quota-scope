@@ -26,6 +26,8 @@ internal sealed class AppSettings
     // Per-row shape overrides used when ShapeTheme is "MixMatch".
     // Key: "<providerId>|<row label>", value: "Circle" | "Bars".
     public Dictionary<string, string> RowShapes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    // "Auto" | "OneColumn" | "TwoColumns".
+    public string LayoutColumns { get; set; } = "Auto";
     public string TrayIconStyle { get; set; } = "UsageArc";
     public string GaugeMetric { get; set; } = "Used";
     public string Language { get; set; } = "System";

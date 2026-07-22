@@ -388,9 +388,12 @@ internal sealed class UsagePopupWindow
 
     // Two columns only pay off when some section actually has a pair of gauges
     // to place side by side; otherwise everything stacks in one column and bar
-    // rows get the single-column width.
+    // rows get the single-column width. The user can force either column count.
     private bool UsesTwoColumnLayout(List<(ProviderUsage Usage, List<UsageRow> Rows)> sections)
     {
+        if (string.Equals(_settings.LayoutColumns, "OneColumn", StringComparison.OrdinalIgnoreCase)) return false;
+        if (string.Equals(_settings.LayoutColumns, "TwoColumns", StringComparison.OrdinalIgnoreCase)) return true;
+
         foreach (var (usage, rows) in sections)
         {
             var circles = 0;
@@ -712,6 +715,7 @@ internal sealed class UsagePopupWindow
         var totalRows = sections.Sum(s => s.Rows.Count);
         var twoColumn = UsesTwoColumnLayout(sections);
         var singleGaugeOnly = totalRows == 1
+            && !string.Equals(_settings.LayoutColumns, "TwoColumns", StringComparison.OrdinalIgnoreCase)
             && sections.All(s => s.Rows.All(r => RowShapes.Resolve(_settings, s.Usage.ProviderId, r) == RowShapes.Circle));
         // Two columns need the wide popup; a lone gauge gets the compact width;
         // anything else (bars present, or stacked gauges) uses one-column width.
