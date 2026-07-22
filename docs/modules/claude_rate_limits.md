@@ -42,12 +42,25 @@ User-Agent: claude-code/<version>
 
 ## Row Mapping
 
-| 응답 필드 | UsageRow |
+**신규 스키마 (2026-07-22 실측):** 응답에 `limits` 배열이 추가되었고, 구 `seven_day_<model>` 필드들은 null로 온다. `limits`가 존재하면 그것이 단일 진실 소스다:
+
+```json
+"limits": [
+  { "kind": "session",       "group": "session", "percent": 20, "resets_at": "...", "scope": null, "is_active": false },
+  { "kind": "weekly_all",    "group": "weekly",  "percent": 28, "resets_at": "...", "scope": null, "is_active": false },
+  { "kind": "weekly_scoped", "group": "weekly",  "percent": 55, "resets_at": "...",
+    "scope": { "model": { "id": null, "display_name": "Fable" }, "surface": null }, "is_active": true }
+]
+```
+
+| limits 항목 | UsageRow |
 |---|---|
-| `five_hour` | primary, `5h` |
-| `seven_day` | primary, `7d` |
-| `seven_day_<model>` (sonnet/opus/fable 등) | secondary, `7d <Model>` — **키를 하드코딩하지 않고 `seven_day_` 접두어를 동적 매핑**하므로 새 모델 창이 추가돼도 코드 변경 없이 표시된다 |
-| `extra_usage` | `is_enabled == true`일 때만 secondary, `Credits` (utilization 게이지, 없으면 used/limit 텍스트) |
+| `scope == null`, group `session` | primary, `5h` |
+| `scope == null`, group `weekly` | primary, `7d` |
+| scoped (model/surface) | `7d <이름>` — **`is_active == true`면 primary(항상 표시 + overall 반영)**, 아니면 secondary(모델별 행 토글) |
+| `extra_usage` | `is_enabled == true`일 때만 secondary, `Credits` |
+
+`limits`가 없는 구 응답은 기존 필드 매핑으로 폴백한다: `five_hour`/`seven_day` → primary, `seven_day_<model>` 접두어 동적 매핑 → secondary.
 
 - null인 필드는 row를 만들지 않는다.
 - overall 수치는 primary row(5h, 7d)의 usedPercent 중 최댓값이다 (전 계층 usedPercent 통일).
