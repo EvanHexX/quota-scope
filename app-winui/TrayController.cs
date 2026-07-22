@@ -308,19 +308,52 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
         return null;
     }
 
+    private DispatcherQueueTimer? _rebuildDebounce;
+
     private void OnSettingsChanged(SettingsChange kind)
     {
-        Loc.SetLanguage(_settings.Language);
-        if (kind == SettingsChange.Providers)
+        // Settings handlers run on UI-control events; a bug here must log,
+        // not take the whole tray app down.
+        try
         {
-            RebuildProviders();
+            Loc.SetLanguage(_settings.Language);
+            if (kind == SettingsChange.Providers)
+            {
+                // Debounce: NumberBox spinners fire per click; rebuilding
+                // providers (child process restart) per tick is wasteful.
+                _rebuildDebounce ??= CreateRebuildDebounce();
+                _rebuildDebounce.Stop();
+                _rebuildDebounce.Start();
+            }
+            // Rebuild menus so language changes apply without restart.
+            _trayIcon.SetMenu(BuildMenu());
+            _popup?.SetMenu(BuildMenu());
+            _popup?.ApplySettings();
+            ApplyTrayVisuals(CurrentUsages());
         }
-        // Rebuild menus so language changes apply without restart.
-        var menu = BuildMenu();
-        _trayIcon.SetMenu(menu);
-        _popup?.SetMenu(BuildMenu());
-        _popup?.ApplySettings();
-        ApplyTrayVisuals(CurrentUsages());
+        catch (Exception ex)
+        {
+            CrashLog.Write("settings-changed", ex);
+        }
+    }
+
+    private DispatcherQueueTimer CreateRebuildDebounce()
+    {
+        var timer = _dispatcherQueue.CreateTimer();
+        timer.Interval = TimeSpan.FromMilliseconds(600);
+        timer.IsRepeating = false;
+        timer.Tick += (_, _) =>
+        {
+            try
+            {
+                RebuildProviders();
+            }
+            catch (Exception ex)
+            {
+                CrashLog.Write("provider-rebuild", ex);
+            }
+        };
+        return timer;
     }
 
     private async Task RefreshAsync()
