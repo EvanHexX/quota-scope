@@ -735,12 +735,36 @@ internal sealed class UsagePopupWindow
 
     private bool _chromeFailureLogged;
 
+    private const int GwlStyle = -16;
+    private const int GwlExStyle = -20;
+    private const long WsBorder = 0x00800000;
+    private const long WsDlgFrame = 0x00400000;
+    private const long WsThickFrame = 0x00040000;
+    private const long WsExDlgModalFrame = 0x00000001;
+    private const long WsExWindowEdge = 0x00000100;
+    private const long WsExClientEdge = 0x00000200;
+    private const long WsExStaticEdge = 0x00020000;
+    private const uint SwpFlags = 0x0001 /*NOSIZE*/ | 0x0002 /*NOMOVE*/ | 0x0004 /*NOZORDER*/ | 0x0010 /*NOACTIVATE*/ | 0x0020 /*FRAMECHANGED*/;
+
     private void ApplyWindowChrome()
     {
+        // The borderless presenter leaves classic frame styles behind, and the
+        // resulting 1px non-client edge is drawn regardless of DWM border
+        // color. Strip every frame style directly.
+        var style = GetWindowLongPtr(_hwnd, GwlStyle).ToInt64();
+        var strippedStyle = style & ~(WsBorder | WsDlgFrame | WsThickFrame);
+        var exStyle = GetWindowLongPtr(_hwnd, GwlExStyle).ToInt64();
+        var strippedExStyle = exStyle & ~(WsExDlgModalFrame | WsExWindowEdge | WsExClientEdge | WsExStaticEdge);
+        if (strippedStyle != style || strippedExStyle != exStyle)
+        {
+            SetWindowLongPtr(_hwnd, GwlStyle, new IntPtr(strippedStyle));
+            SetWindowLongPtr(_hwnd, GwlExStyle, new IntPtr(strippedExStyle));
+            SetWindowPos(_hwnd, IntPtr.Zero, 0, 0, 0, 0, SwpFlags);
+        }
+
         // Windows 11 only; on Windows 10 these fail harmlessly.
         var preference = DwmwcpRound;
         var cornerResult = DwmSetWindowAttribute(_hwnd, DwmwaWindowCornerPreference, ref preference, sizeof(int));
-        // Remove the system's 1px window border line around the borderless popup.
         var none = unchecked((int)DwmwaColorNone);
         var borderResult = DwmSetWindowAttribute(_hwnd, DwmwaBorderColor, ref none, sizeof(int));
         if ((cornerResult != 0 || borderResult != 0) && !_chromeFailureLogged)
@@ -766,4 +790,13 @@ internal sealed class UsagePopupWindow
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+    private static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+    private static extern IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr value);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hwnd, IntPtr hwndInsertAfter, int x, int y, int width, int height, uint flags);
 }
