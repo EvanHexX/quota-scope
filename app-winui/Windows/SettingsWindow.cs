@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using QuotaScope.Providers.Claude;
+using QuotaScope.WinUI.Controls;
 using Windows.Graphics;
 using WinRT.Interop;
 
@@ -28,6 +29,7 @@ internal sealed class SettingsWindow
     private readonly Action<SettingsChange> _onChanged;
     private readonly Func<string> _codexResolvedCommand;
     private readonly Action _requestReconnect;
+    private readonly IHotkeyConfigurator _hotkeys;
     private readonly NavigationView _nav;
 
     public event Action? Closed;
@@ -36,12 +38,14 @@ internal sealed class SettingsWindow
         AppSettings settings,
         Action<SettingsChange> onChanged,
         Func<string> codexResolvedCommand,
-        Action requestReconnect)
+        Action requestReconnect,
+        IHotkeyConfigurator hotkeys)
     {
         _settings = settings;
         _onChanged = onChanged;
         _codexResolvedCommand = codexResolvedCommand;
         _requestReconnect = requestReconnect;
+        _hotkeys = hotkeys;
 
         _nav = new NavigationView
         {
@@ -284,9 +288,59 @@ internal sealed class SettingsWindow
 
     private UIElement BuildHotkeysPage()
     {
-        return Page("Hotkeys",
-            MutedText("The popup toggle hotkey is currently fixed to Ctrl+Alt+U."),
-            MutedText("Configurable hotkeys (toggle, refresh, pin) arrive with the next update."));
+        var error = new InfoBar
+        {
+            Severity = InfoBarSeverity.Error,
+            Title = "Hotkey not applied",
+            IsOpen = false,
+            IsClosable = true
+        };
+
+        var rows = new System.Collections.Generic.List<FrameworkElement>();
+        if (_hotkeys.LoadWarnings.Count > 0)
+        {
+            rows.Add(new InfoBar
+            {
+                Severity = InfoBarSeverity.Warning,
+                Title = "Hotkey load warnings",
+                Message = string.Join("\n", _hotkeys.LoadWarnings),
+                IsOpen = true,
+                IsClosable = true
+            });
+        }
+        rows.Add(HotkeyRow("Toggle popup", "Default Ctrl+Alt+U.", HotkeyAction.TogglePopup, error));
+        rows.Add(HotkeyRow("Refresh all", "Unbound by default.", HotkeyAction.RefreshAll, error));
+        rows.Add(HotkeyRow("Toggle pin", "Unbound by default.", HotkeyAction.TogglePin, error));
+        rows.Add(error);
+        rows.Add(MutedText("Click a box and press the combination (at least one modifier). Backspace clears the binding. If registration fails, the previous binding is kept and not overwritten."));
+        return Page("Hotkeys", rows.ToArray());
+    }
+
+    private FrameworkElement HotkeyRow(string title, string description, HotkeyAction action, InfoBar error)
+    {
+        var box = new HotkeyCaptureBox();
+        box.SetBinding(_hotkeys.CurrentBinding(action));
+        box.Captured += definition =>
+        {
+            var failure = _hotkeys.TryBind(action, definition.Format());
+            if (failure is null)
+            {
+                error.IsOpen = false;
+                box.SetBinding(definition.Format());
+            }
+            else
+            {
+                box.SetBinding(_hotkeys.CurrentBinding(action));
+                error.Message = failure;
+                error.IsOpen = true;
+            }
+        };
+        box.Cleared += () =>
+        {
+            _hotkeys.TryBind(action, "");
+            error.IsOpen = false;
+        };
+        return Row(title, description, box);
     }
 
     private UIElement BuildAboutPage()

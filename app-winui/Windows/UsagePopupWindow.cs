@@ -189,7 +189,7 @@ internal sealed class UsagePopupWindow
         Visible = false;
     }
 
-    private void TogglePin()
+    public void TogglePin()
     {
         _settings.IsPinned = !_settings.IsPinned;
         _presenter.IsAlwaysOnTop = _settings.IsPinned;
