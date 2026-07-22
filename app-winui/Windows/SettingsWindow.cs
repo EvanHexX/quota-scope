@@ -32,8 +32,6 @@ internal sealed class SettingsWindow
     private readonly IHotkeyConfigurator _hotkeys;
     private readonly NavigationView _nav;
 
-    public event Action? Closed;
-
     public SettingsWindow(
         AppSettings settings,
         Action<SettingsChange> onChanged,
@@ -79,7 +77,13 @@ internal sealed class SettingsWindow
         catch
         {
         }
-        _window.Closed += (_, _) => Closed?.Invoke();
+        // Hide instead of destroying: sidesteps last-window lifetime policy and
+        // any close-time teardown crashes, and keeps page state for reopening.
+        _window.AppWindow.Closing += (_, e) =>
+        {
+            e.Cancel = true;
+            _window.AppWindow.Hide();
+        };
 
         var hwnd = WindowNative.GetWindowHandle(_window);
         var scale = GetDpiForWindow(hwnd) / 96.0;
@@ -95,7 +99,17 @@ internal sealed class SettingsWindow
             work.Y + Math.Max(0, (work.Height - height) / 2)));
     }
 
-    public void Activate() => _window.Activate();
+    public void Activate()
+    {
+        // Rebuild the current page so reopened settings reflect external changes
+        // (e.g. pin toggled from the popup).
+        if (_nav.SelectedItem is NavigationViewItem item && item.Tag is string tag)
+        {
+            _nav.Content = BuildPage(tag);
+        }
+        _window.AppWindow.Show(true);
+        _window.Activate();
+    }
 
     private void AddNavItem(string tag, string glyph)
     {
