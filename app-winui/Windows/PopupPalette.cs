@@ -29,11 +29,14 @@ internal sealed record PopupPalette(
         return glassmorphism ? palette.WithGlass() : palette;
     }
 
-    // Strong translucency so the acrylic backdrop is unmistakably visible.
+    // The acrylic backdrop provides the tinted surface, so the outer card stays
+    // nearly clear and only the row cards keep a light fill for separation.
+    // Card's RGB is still used as the acrylic tint and the DWM border color.
     private PopupPalette WithGlass() => this with
     {
-        Card = Color.FromArgb(0x66, Card.R, Card.G, Card.B),
-        Row = Color.FromArgb(0x8C, Row.R, Row.G, Row.B)
+        Card = Color.FromArgb(0x14, Card.R, Card.G, Card.B),
+        Row = Color.FromArgb(0x4D, Row.R, Row.G, Row.B),
+        Track = Color.FromArgb(0x66, Track.R, Track.G, Track.B)
     };
 
     public static PopupPalette Light => new(

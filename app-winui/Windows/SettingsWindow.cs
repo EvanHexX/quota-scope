@@ -418,7 +418,22 @@ internal sealed class SettingsWindow
         {
             Row(Loc.T("Follow system theme", "시스템 테마 따르기"), Loc.T("Light/dark follows Windows.", "Windows의 라이트/다크를 따릅니다."), followSystem),
             Row(Loc.T("Theme", "테마"), Loc.T("Dark, Light, or Midnight (pure black). Applies to popup and settings.", "다크, 라이트, 미드나잇(순수 검정). 팝업과 설정창에 적용됩니다."), themeCombo),
-            Row(Loc.T("Glassmorphism", "글래스모피즘"), Loc.T("Translucent cards with an acrylic backdrop.", "아크릴 배경과 반투명 카드 효과."), glass),
+            Row(Loc.T("Glassmorphism", "글래스모피즘"), Loc.T("Translucent acrylic that shows the desktop behind the popup.", "팝업 뒤 배경이 비치는 아크릴 반투명 효과."), glass)
+        });
+        if (!AcrylicBackdropHost.IsSupported)
+        {
+            rows.Add(MutedText(Loc.T(
+                "Acrylic is not supported on this system; glassmorphism falls back to a flat tint.",
+                "이 시스템은 아크릴을 지원하지 않아 글래스모피즘이 단색으로 표시됩니다.")));
+        }
+        else if (!AcrylicBackdropHost.TransparencyEffectsEnabled)
+        {
+            rows.Add(MutedText(Loc.T(
+                "Windows transparency effects are off, so glass renders as a flat color. Turn them on in Settings > Personalization > Colors.",
+                "Windows 투명 효과가 꺼져 있어 글래스가 단색으로 표시됩니다. 설정 > 개인 설정 > 색에서 켜세요.")));
+        }
+        rows.AddRange(new[]
+        {
             Row(Loc.T("Tray icon style", "트레이 아이콘 스타일"), Loc.T("Usage arc, or a plain dot carrying only the state color.", "사용률 호 또는 상태 색상만 담은 점."), trayStyle),
             Row(Loc.T("Gauge metric", "게이지 지표"), Loc.T("Whether gauges and percentages show used or remaining capacity.", "게이지와 퍼센트가 사용량/잔여량 중 무엇을 표시할지."), gaugeMetric)
         });
