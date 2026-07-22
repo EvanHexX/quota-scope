@@ -27,9 +27,6 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.*" />
     <!-- Reuses app/TrayIconRenderer.cs unmodified (System.Drawing.Icon). -->
     <PackageReference Include="System.Drawing.Common" Version="10.0.*" />
-    <!-- Tray icon host: WinUI 3 has no NotifyIcon; this handles Shell_NotifyIcon,
-         TaskbarCreated re-registration, and MenuFlyout hosting. See docs/WINUI3_PARITY.md. -->
-    <PackageReference Include="H.NotifyIcon.WinUI" Version="2.*" />
   </ItemGroup>
   <ItemGroup>
     <!-- Shared sources linked from the WinForms app; those files are never edited here. -->

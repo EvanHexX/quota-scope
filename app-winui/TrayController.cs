@@ -56,7 +56,7 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
         BuildProviders();
 
         _trayIcon = new TrayIconHost();
-        _trayIcon.SetMenu(BuildMenu());
+        _trayIcon.SetMenu(BuildTrayMenuItems());
         _trayIcon.SetTooltip("Checking usage");
         _trayIcon.SetIcon(TrayIconRenderer.CreateUsageIcon(0, TrayIconState.Normal, TrayIconRenderer.GetNativeIconSize()));
         _trayIcon.LeftClicked += TogglePopup;
@@ -120,6 +120,22 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
         _ = RefreshAsync();
     }
 
+    // Native tray menu model (Win32 TrackPopupMenu inside TrayIconHost).
+    private IReadOnlyList<TrayMenuItem> BuildTrayMenuItems()
+    {
+        return new[]
+        {
+            new TrayMenuItem(Loc.T("Refresh", "새로 고침"), () => _ = RefreshAsync()),
+            new TrayMenuItem(Loc.T("Toggle popup", "팝업 토글"), TogglePopup),
+            new TrayMenuItem(Loc.T("Reconnect", "재연결"), () => _ = ReconnectAsync()),
+            TrayMenuItem.Separator,
+            new TrayMenuItem(Loc.T("Settings...", "설정..."), OpenSettings),
+            TrayMenuItem.Separator,
+            new TrayMenuItem(Loc.T("Exit", "종료"), ExitApplication)
+        };
+    }
+
+    // XAML flyout used as the popup's context menu.
     private MenuFlyout BuildMenu()
     {
         var menu = new MenuFlyout();
@@ -322,7 +338,7 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
                 _rebuildDebounce.Start();
             }
             // Rebuild menus so language changes apply without restart.
-            _trayIcon.SetMenu(BuildMenu());
+            _trayIcon.SetMenu(BuildTrayMenuItems());
             _popup?.SetMenu(BuildMenu());
             _popup?.ApplySettings();
             ApplyTrayVisuals(CurrentUsages());
