@@ -443,7 +443,7 @@ internal sealed class UsagePopupWindow
             if (RowShapes.Resolve(_settings, providerId, row) == RowShapes.Bars)
             {
                 FlushPending();
-                _sectionsPanel.Children.Add(BuildBarRow(providerId, row, palette));
+                _sectionsPanel.Children.Add(BuildBarRow(providerId, row, palette, stackTime: !twoColumn));
                 continue;
             }
 
@@ -547,16 +547,26 @@ internal sealed class UsagePopupWindow
         };
     }
 
-    private FrameworkElement BuildBarRow(string providerId, UsageRow row, PopupPalette palette)
+    private FrameworkElement BuildBarRow(string providerId, UsageRow row, PopupPalette palette, bool stackTime)
     {
-        // label | reset time (stretches) | percent, so the number always sits
-        // hard right and the times line up.
-        var grid = new Grid { Margin = new Thickness(12, 8, 12, 8) };
+        // Wide layout: label | reset time (stretches) | percent on one line.
+        // Narrow layout: label | percent, with the reset time on its own line
+        // underneath so nothing gets truncated.
+        var grid = new Grid { Margin = stackTime ? new Thickness(12, 11, 12, 11) : new Thickness(12, 8, 12, 8) };
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        if (stackTime) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        grid.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = stackTime ? new GridLength(1, GridUnitType.Star) : GridLength.Auto
+        });
+        if (!stackTime) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var timeColumn = stackTime ? 0 : 1;
+        var percentColumn = stackTime ? 1 : 2;
+        var barSpan = stackTime ? 2 : 3;
 
         var labelText = Loc.RowLabel(providerId, row.Label);
         var label = new TextBlock
@@ -579,10 +589,11 @@ internal sealed class UsagePopupWindow
             Foreground = Brush(palette.Muted),
             TextAlignment = TextAlignment.Right,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            Margin = new Thickness(10, 0, 10, 0)
+            Margin = stackTime ? new Thickness(0, 2, 0, 0) : new Thickness(10, 0, 10, 0)
         };
-        Grid.SetRow(timeText, 0);
-        Grid.SetColumn(timeText, 1);
+        Grid.SetRow(timeText, stackTime ? 1 : 0);
+        Grid.SetColumn(timeText, timeColumn);
+        if (stackTime) Grid.SetColumnSpan(timeText, 2);
         grid.Children.Add(timeText);
 
         var percentText = new TextBlock
@@ -594,7 +605,7 @@ internal sealed class UsagePopupWindow
             TextAlignment = TextAlignment.Right
         };
         Grid.SetRow(percentText, 0);
-        Grid.SetColumn(percentText, 2);
+        Grid.SetColumn(percentText, percentColumn);
         grid.Children.Add(percentText);
 
         if (row.Window is { } window)
@@ -616,9 +627,9 @@ internal sealed class UsagePopupWindow
                 Foreground = Brush(palette.AccentFor(used)),
                 Background = Brush(palette.Track)
             };
-            Grid.SetRow(bar, 1);
+            Grid.SetRow(bar, stackTime ? 2 : 1);
             Grid.SetColumn(bar, 0);
-            Grid.SetColumnSpan(bar, 3);
+            Grid.SetColumnSpan(bar, barSpan);
             grid.Children.Add(bar);
         }
         else
