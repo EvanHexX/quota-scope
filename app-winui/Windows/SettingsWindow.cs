@@ -201,18 +201,6 @@ internal sealed class SettingsWindow
             _settings.Language,
             value => { _settings.Language = value; Save(SettingsChange.General); });
 
-        var uiScale = MakeCombo(
-            new[] { "80%", "90%", "100%", "110%", "125%", "150%" },
-            $"{(int)Math.Round(Math.Clamp(_settings.UiScale, 0.7, 1.6) * 100)}%",
-            value =>
-            {
-                if (int.TryParse(value.TrimEnd('%'), out var percent))
-                {
-                    _settings.UiScale = percent / 100.0;
-                    Save(SettingsChange.Appearance);
-                }
-            });
-
         var notify = new ToggleSwitch { IsOn = _settings.NotifyOnThreshold };
         notify.Toggled += (_, _) =>
         {
@@ -222,7 +210,6 @@ internal sealed class SettingsWindow
 
         return Page(Loc.T("General", "일반"),
             Row(Loc.T("Language", "언어"), Loc.T("Menus and settings text. Reopen this window to fully apply.", "메뉴와 설정 텍스트에 적용됩니다. 완전 적용은 이 창을 다시 여세요."), language),
-            Row(Loc.T("UI scale", "UI 크기"), Loc.T("Overall popup size.", "팝업 전체 크기를 조절합니다."), uiScale),
             Row(Loc.T("Start with Windows", "Windows 시작 시 자동 실행"), Loc.T("Registers the app in the current user's Run key.", "현재 사용자 Run 레지스트리에 등록합니다."), autostart),
             Row(Loc.T("Popup position", "팝업 위치"), null, position),
             Row(Loc.T("Time display", "시간 표시"), Loc.T("Reset times as clock time or remaining time.", "리셋 시각을 시계 시간 또는 남은 시간으로 표시합니다."), timeDisplay),
@@ -353,8 +340,21 @@ internal sealed class SettingsWindow
             _settings.GaugeMetric,
             value => { _settings.GaugeMetric = value; Save(SettingsChange.Appearance); });
 
+        var uiScale = MakeCombo(
+            new[] { "80%", "90%", "100%", "110%", "125%", "150%" },
+            $"{(int)Math.Round(Math.Clamp(_settings.UiScale, 0.7, 1.6) * 100)}%",
+            value =>
+            {
+                if (int.TryParse(value.TrimEnd('%'), out var percent))
+                {
+                    _settings.UiScale = percent / 100.0;
+                    Save(SettingsChange.Appearance);
+                }
+            });
+
         return Page(Loc.T("Appearance", "모양"),
             Row(Loc.T("Shape theme", "게이지 모양"), Loc.T("Bars or bento circle cards in the popup.", "팝업의 바 또는 벤토 원형 카드."), shape),
+            Row(Loc.T("UI scale", "UI 크기"), Loc.T("Overall popup size.", "팝업 전체 크기를 조절합니다."), uiScale),
             Row(Loc.T("Follow system theme", "시스템 테마 따르기"), Loc.T("Light/dark follows Windows.", "Windows의 라이트/다크를 따릅니다."), followSystem),
             Row(Loc.T("Theme", "테마"), Loc.T("Dark, Light, or Midnight (pure black). Applies to popup and settings.", "Dark, Light, Midnight(순수 검정). 팝업과 설정창에 적용됩니다."), themeCombo),
             Row(Loc.T("Glassmorphism", "글래스모피즘"), Loc.T("Translucent cards with an acrylic backdrop.", "아크릴 배경과 반투명 카드 효과."), glass),
