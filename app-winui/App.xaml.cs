@@ -14,6 +14,20 @@ public partial class App : Application
     {
         _toggleSignal = toggleSignal;
         InitializeComponent();
+
+        // A tray utility should survive and log instead of dying silently.
+        UnhandledException += (_, e) =>
+        {
+            CrashLog.Write("xaml-unhandled", e.Exception);
+            e.Handled = true;
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            CrashLog.Write("appdomain-unhandled", e.ExceptionObject as Exception);
+        System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            CrashLog.Write("task-unobserved", e.Exception);
+            e.SetObserved();
+        };
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)

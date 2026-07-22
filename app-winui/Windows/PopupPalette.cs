@@ -23,16 +23,17 @@ internal sealed record PopupPalette(
         var palette = theme?.ToUpperInvariant() switch
         {
             "LIGHT" => Light,
-            "MIDNIGHT" => MidnightBlack,
+            "MIDNIGHT" => Midnight,
             _ => DarkBluePurple
         };
         return glassmorphism ? palette.WithGlass() : palette;
     }
 
+    // Strong translucency so the acrylic backdrop is unmistakably visible.
     private PopupPalette WithGlass() => this with
     {
-        Card = Color.FromArgb(0xCC, Card.R, Card.G, Card.B),
-        Row = Color.FromArgb(0xD9, Row.R, Row.G, Row.B)
+        Card = Color.FromArgb(0x66, Card.R, Card.G, Card.B),
+        Row = Color.FromArgb(0x8C, Row.R, Row.G, Row.B)
     };
 
     public static PopupPalette Light => new(
@@ -55,15 +56,17 @@ internal sealed record PopupPalette(
         Color.FromArgb(255, 68, 154, 255),
         Color.FromArgb(255, 156, 104, 255));
 
-    public static PopupPalette MidnightBlack => new(
-        Color.FromArgb(242, 5, 5, 7),
-        Color.FromArgb(255, 13, 13, 17),
-        Color.FromArgb(255, 46, 46, 54),
-        Color.FromArgb(255, 33, 33, 39),
-        Color.FromArgb(255, 248, 248, 250),
-        Color.FromArgb(255, 178, 180, 188),
-        Color.FromArgb(255, 75, 180, 255),
-        Color.FromArgb(255, 134, 116, 255));
+    // Midnight is deliberately dim end-to-end: near-black surfaces with muted
+    // text and desaturated accents so nothing glows in a dark room.
+    public static PopupPalette Midnight => new(
+        Color.FromArgb(242, 0, 0, 0),
+        Color.FromArgb(255, 10, 10, 12),
+        Color.FromArgb(255, 34, 34, 40),
+        Color.FromArgb(255, 24, 24, 28),
+        Color.FromArgb(255, 168, 172, 180),
+        Color.FromArgb(255, 105, 109, 118),
+        Color.FromArgb(255, 47, 111, 191),
+        Color.FromArgb(255, 104, 92, 178));
 
     public Color AccentFor(int usedPercent)
     {

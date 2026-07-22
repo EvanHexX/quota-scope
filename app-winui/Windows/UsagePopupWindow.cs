@@ -34,6 +34,7 @@ internal sealed class UsagePopupWindow
     private readonly IntPtr _hwnd;
     private readonly AppSettings _settings;
     private readonly Border _rootBorder;
+    private readonly Viewbox _scaleHost;
     private readonly Grid _headerGrid;
     private readonly TextBlock _titleText;
     private readonly Button _pinButton;
@@ -117,7 +118,11 @@ internal sealed class UsagePopupWindow
 
         SetMenu(menuFactory());
 
-        _window.Content = _rootBorder;
+        // Viewbox handles the UI-scale option: the root lays out at its base
+        // size and is stretched to the (scaled) window, so content always
+        // fills the window exactly — no white edges, no clipping.
+        _scaleHost = new Viewbox { Stretch = Stretch.Fill, Child = _rootBorder };
+        _window.Content = _scaleHost;
         _window.Title = "Usage";
         _hwnd = WindowNative.GetWindowHandle(_window);
         _appWindow = _window.AppWindow;
@@ -183,6 +188,9 @@ internal sealed class UsagePopupWindow
         _window.Activate();
         Visible = true;
         _pinButton.Focus(FocusState.Programmatic);
+        // Backdrops can silently fail on a never-shown window; re-apply now.
+        _appliedBackdropTheme = null;
+        ApplyBackdrop();
     }
 
     public void Hide()
@@ -266,11 +274,6 @@ internal sealed class UsagePopupWindow
             ? ElementTheme.Light
             : ElementTheme.Dark;
         ApplyBackdrop();
-
-        var uiScale = Math.Clamp(_settings.UiScale, 0.7, 1.6);
-        _rootBorder.RenderTransform = Math.Abs(uiScale - 1.0) < 0.001
-            ? null
-            : new ScaleTransform { ScaleX = uiScale, ScaleY = uiScale };
         _titleText.Text = Loc.T("Usage", "사용량");
 
         _rootBorder.Background = Brush(palette.Card);
@@ -617,11 +620,13 @@ internal sealed class UsagePopupWindow
         _appWindow.Move(new PointInt32(work.X + 8, work.Y + 8));
         var scale = GetDpiForWindow(_hwnd) / 96.0;
 
-        // Measure content at the base width; the UI scale is applied as a render
-        // transform, so the window is sized to base * uiScale.
+        // Measure content at the base width; the Viewbox stretches the fixed
+        // base-size root to the (uiScale-adjusted) window.
+        _rootBorder.Height = double.NaN;
         _rootBorder.Width = widthDip;
         _rootBorder.Measure(new global::Windows.Foundation.Size(widthDip, double.PositiveInfinity));
         var heightDip = Math.Ceiling(_rootBorder.DesiredSize.Height);
+        _rootBorder.Height = heightDip;
 
         var width = (int)Math.Round(widthDip * uiScale * scale);
         var height = (int)Math.Round(heightDip * uiScale * scale);
