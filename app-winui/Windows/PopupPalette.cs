@@ -18,7 +18,7 @@ internal sealed record PopupPalette(
 {
     // App theme model: Dark / Light / Midnight, with glassmorphism as an
     // orthogonal material switch (translucent cards + acrylic backdrop).
-    public static PopupPalette FromSettings(string? theme, bool glassmorphism)
+    public static PopupPalette FromSettings(string? theme, bool glassmorphism, string? strength = null)
     {
         var palette = theme?.ToUpperInvariant() switch
         {
@@ -26,17 +26,17 @@ internal sealed record PopupPalette(
             "MIDNIGHT" => Midnight,
             _ => DarkBluePurple
         };
-        return glassmorphism ? palette.WithGlass() : palette;
+        return glassmorphism ? palette.WithGlass(GlassStrength.Parse(strength)) : palette;
     }
 
     // The acrylic backdrop provides the tinted surface, so the outer card stays
-    // nearly clear and only the row cards keep a light fill for separation.
+    // nearly clear and the row cards keep just enough fill to read as panes.
     // Card's RGB is still used as the acrylic tint and the DWM border color.
-    private PopupPalette WithGlass() => this with
+    private PopupPalette WithGlass(GlassStrength strength) => this with
     {
-        Card = Color.FromArgb(0x14, Card.R, Card.G, Card.B),
-        Row = Color.FromArgb(0x4D, Row.R, Row.G, Row.B),
-        Track = Color.FromArgb(0x66, Track.R, Track.G, Track.B)
+        Card = Color.FromArgb(strength.CardAlpha, Card.R, Card.G, Card.B),
+        Row = Color.FromArgb(strength.RowAlpha, Row.R, Row.G, Row.B),
+        Track = Color.FromArgb(strength.TrackAlpha, Track.R, Track.G, Track.B)
     };
 
     public static PopupPalette Light => new(
@@ -70,6 +70,12 @@ internal sealed record PopupPalette(
         Color.FromArgb(255, 105, 109, 118),
         Color.FromArgb(255, 47, 111, 191),
         Color.FromArgb(255, 104, 92, 178));
+
+    // Glass edge highlight: the bright 1px rim that makes a translucent pane
+    // read as glass instead of a flat film.
+    public Color GlassEdge(bool isDark, GlassStrength strength) => isDark
+        ? Color.FromArgb(strength.EdgeAlpha, 255, 255, 255)
+        : Color.FromArgb((byte)(strength.EdgeAlpha + 24), 255, 255, 255);
 
     public Color AccentFor(int usedPercent)
     {

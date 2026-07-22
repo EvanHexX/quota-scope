@@ -122,7 +122,12 @@ WinForms app is a separate follow-up task after sign-off.
   desktop behind the popup actually shows. `IsInputActive` stays true so the
   effect survives losing focus (pinned popups).
 - In glass mode the surfaces get out of the way: the island root and outer card
-  are nearly clear (card alpha 0x14) and only row cards keep a light fill.
+  are nearly clear and the row cards themselves are rendered as glass panes —
+  a soft top-down sheen gradient plus a bright 1px rim — instead of a flat film
+  over the backdrop.
+- `GlassStrength` (`Subtle` | `Medium` | `Strong`, picker shown while
+  glassmorphism is on) drives both layers together: surface alphas and rim
+  brightness for the cards, tint/luminosity opacity for the acrylic controller.
 - Backdrops render as a flat fallback color when Windows "Transparency effects"
   is off or acrylic is unsupported; the Appearance page detects both
   (`UISettings.AdvancedEffectsEnabled`, `DesktopAcrylicController.IsSupported`)

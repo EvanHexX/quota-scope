@@ -83,6 +83,9 @@ internal static partial class Loc
             "Auto" => "자동",
             "OneColumn" => "1열",
             "TwoColumns" => "2열",
+            "Subtle" => "은은하게",
+            "Medium" => "보통",
+            "Strong" => "강하게",
             _ => value
         };
     }

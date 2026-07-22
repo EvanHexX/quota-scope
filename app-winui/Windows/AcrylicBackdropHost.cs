@@ -52,7 +52,7 @@ internal sealed class AcrylicBackdropHost : IDisposable
         }
     }
 
-    public bool TryAttach(Color tint, bool darkTheme)
+    public bool TryAttach(Color tint, bool darkTheme, GlassStrength strength)
     {
         if (!IsSupported) return false;
         try
@@ -81,8 +81,8 @@ internal sealed class AcrylicBackdropHost : IDisposable
             }
 
             _controller.TintColor = tint;
-            _controller.TintOpacity = 0.20f;
-            _controller.LuminosityOpacity = darkTheme ? 0.72f : 0.80f;
+            _controller.TintOpacity = strength.TintOpacity;
+            _controller.LuminosityOpacity = strength.LuminosityOpacity(darkTheme);
             _controller.FallbackColor = tint;
             return true;
         }

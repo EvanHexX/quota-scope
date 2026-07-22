@@ -34,6 +34,8 @@ internal sealed class AppSettings
     public bool NotifyOnThreshold { get; set; } = true;
     public double UiScale { get; set; } = 1.0;
     public bool Glassmorphism { get; set; } = false;
+    // "Subtle" | "Medium" | "Strong".
+    public string GlassStrength { get; set; } = "Medium";
     public string PopupGraph { get; set; } = "half-circle";
     public string PopupPosition { get; set; } = "BottomRight";
     public string ShapeTheme { get; set; } = "Bars";

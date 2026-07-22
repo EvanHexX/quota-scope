@@ -231,7 +231,7 @@ internal sealed class UsagePopupWindow
         // Backdrops can silently fail on a never-shown window; re-apply now.
         var shownTheme = ResolveTheme();
         _appliedBackdropTheme = null;
-        ApplyBackdrop(PopupPalette.FromSettings(shownTheme, _settings.Glassmorphism), shownTheme);
+        ApplyBackdrop(PopupPalette.FromSettings(shownTheme, _settings.Glassmorphism, _settings.GlassStrength), shownTheme);
         ApplyWindowChrome();
     }
 
@@ -337,7 +337,7 @@ internal sealed class UsagePopupWindow
     private void Rebuild()
     {
         var theme = ResolveTheme();
-        var palette = PopupPalette.FromSettings(theme, _settings.Glassmorphism);
+        var palette = PopupPalette.FromSettings(theme, _settings.Glassmorphism, _settings.GlassStrength);
         _rootBorder.RequestedTheme = string.Equals(theme, "Light", StringComparison.OrdinalIgnoreCase)
             ? ElementTheme.Light
             : ElementTheme.Dark;
@@ -597,13 +597,47 @@ internal sealed class UsagePopupWindow
 
         return new Border
         {
-            Background = Brush(palette.Row),
-            BorderBrush = Brush(palette.Border),
+            Background = CardFill(palette),
+            BorderBrush = CardStroke(palette),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(11),
             Margin = new Thickness(0, 0, 0, 12),
             Child = grid
         };
+    }
+
+    // In glass mode the panes get a soft top-down sheen plus a bright rim, so
+    // the cards themselves read as glass instead of flat film over the backdrop.
+    private Brush CardFill(PopupPalette palette)
+    {
+        if (!_settings.Glassmorphism) return Brush(palette.Row);
+
+        var strength = GlassStrength.Parse(_settings.GlassStrength);
+        var isDark = !string.Equals(ResolveTheme(), "Light", StringComparison.OrdinalIgnoreCase);
+        var sheen = isDark ? (byte)255 : (byte)255;
+        var topAlpha = (byte)Math.Min(255, palette.Row.A + strength.EdgeAlpha / 2);
+        var gradient = new LinearGradientBrush
+        {
+            StartPoint = new global::Windows.Foundation.Point(0, 0),
+            EndPoint = new global::Windows.Foundation.Point(0.35, 1)
+        };
+        gradient.GradientStops.Add(new GradientStop
+        {
+            Offset = 0,
+            Color = Color.FromArgb(topAlpha,
+                (byte)((palette.Row.R + sheen) / 2),
+                (byte)((palette.Row.G + sheen) / 2),
+                (byte)((palette.Row.B + sheen) / 2))
+        });
+        gradient.GradientStops.Add(new GradientStop { Offset = 1, Color = palette.Row });
+        return gradient;
+    }
+
+    private Brush CardStroke(PopupPalette palette)
+    {
+        if (!_settings.Glassmorphism) return Brush(palette.Border);
+        var isDark = !string.Equals(ResolveTheme(), "Light", StringComparison.OrdinalIgnoreCase);
+        return Brush(palette.GlassEdge(isDark, GlassStrength.Parse(_settings.GlassStrength)));
     }
 
     private FrameworkElement BuildBentoCard(UsageRow row, PopupPalette palette)
@@ -687,8 +721,8 @@ internal sealed class UsagePopupWindow
         return new Border
         {
             Height = BentoCardHeight,
-            Background = Brush(palette.Row),
-            BorderBrush = Brush(palette.Border),
+            Background = CardFill(palette),
+            BorderBrush = CardStroke(palette),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(14),
             Child = grid
@@ -699,8 +733,8 @@ internal sealed class UsagePopupWindow
     {
         var isGlass = _settings.Glassmorphism;
         var isDark = !string.Equals(theme, "Light", StringComparison.OrdinalIgnoreCase);
-        // Tint/luminosity depend on the palette, so re-apply when the theme changes.
-        var key = $"{(isGlass ? "acrylic" : "mica")}:{theme}";
+        // Tint/luminosity depend on palette and strength, so re-apply on change.
+        var key = $"{(isGlass ? "acrylic" : "mica")}:{theme}:{_settings.GlassStrength}";
         if (_appliedBackdropTheme == key) return;
         _appliedBackdropTheme = key;
         try
@@ -711,7 +745,9 @@ internal sealed class UsagePopupWindow
                 // luminosity control, which made glass look like a color shift.
                 _window.SystemBackdrop = null;
                 _glassAcrylicActive = _glass.TryAttach(
-                    Color.FromArgb(255, palette.Card.R, palette.Card.G, palette.Card.B), isDark);
+                    Color.FromArgb(255, palette.Card.R, palette.Card.G, palette.Card.B),
+                    isDark,
+                    GlassStrength.Parse(_settings.GlassStrength));
                 if (!_glassAcrylicActive)
                 {
                     _window.SystemBackdrop = new DesktopAcrylicBackdrop();
