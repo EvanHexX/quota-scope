@@ -20,14 +20,16 @@ WinForms app is a separate follow-up task after sign-off.
 
 ## Dependency justifications (AGENTS.md rule: new production dependencies need documented reasons)
 
-- **H.NotifyIcon.WinUI** — WinUI 3 has no `NotifyIcon` equivalent. A raw
-  Shell_NotifyIcon implementation needs a hidden top-level window,
-  `TaskbarCreated` re-registration after explorer restarts, and second-window
-  hosting to show a XAML `MenuFlyout` from the tray (~250 lines of
-  defect-prone interop). The package handles all of that and accepts
-  `System.Drawing.Icon`. It is wrapped behind `ITrayIcon`
-  (`app-winui/Tray/TrayIconHost.cs`) so a raw fallback can be swapped in
-  without touching `TrayController`. Approved by the maintainer on 2026-07-22.
+- **H.NotifyIcon.WinUI — REMOVED (2026-07-22)**. The package's internal
+  `SUBCLASSPROC` delegate was garbage-collected while still registered,
+  killing the entire app via `Environment.FailFast` ("callback on a garbage
+  collected delegate", confirmed in the Windows Application event log; GC
+  timing made it look like random silent exits, often with the settings
+  window open). The `ITrayIcon` seam was swapped to the planned raw
+  fallback: `TrayIconHost` now implements Shell_NotifyIcon directly with a
+  rooted WndProc, TaskbarCreated re-registration, NIF_INFO notifications,
+  and a native TrackPopupMenu context menu (the popup window keeps its XAML
+  MenuFlyout). No third-party tray dependency remains.
 - **System.Drawing.Common** — reuses `app/TrayIconRenderer.cs` unmodified for
   tray icon rendering. First-party Microsoft package, Windows-only supported.
 - **Microsoft.WindowsAppSDK / Microsoft.Windows.SDK.BuildTools** — the WinUI 3
