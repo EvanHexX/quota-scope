@@ -142,12 +142,8 @@ internal sealed class UsagePopupWindow
         {
         }
         _presenter = OverlappedPresenter.Create();
-        // Keep the border (WS_THICKFRAME): DWM rounding and the drop shadow
-        // require it. The WM_NCCALCSIZE subclass claims the full rect anyway,
-        // so no frame is visible and mouse-resize has no grip area. IsResizable
-        // must stay true - false strips the frame styles again (#7629).
-        _presenter.SetBorderAndTitleBar(true, false);
-        _presenter.IsResizable = true;
+        _presenter.SetBorderAndTitleBar(false, false);
+        _presenter.IsResizable = false;
         _presenter.IsMaximizable = false;
         _presenter.IsMinimizable = false;
         _presenter.IsAlwaysOnTop = _settings.IsPinned;
@@ -791,10 +787,10 @@ internal sealed class UsagePopupWindow
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
 
-    // The classic borderless-window technique: claiming the whole window rect
-    // as client area in WM_NCCALCSIZE removes the non-client top strip that
-    // keeps rendering as a white line despite every DWM/style-based attempt
-    // (see docs of microsoft-ui-xaml #8947 lineage; WinUIEx does the same).
+    // Removing the non-client TOP strip only (the white line source): let the
+    // default WM_NCCALCSIZE computation run, then restore the top edge to the
+    // window's top. Claiming the whole rect instead makes the XAML island sit
+    // inset by the frame margins, leaving a dead black band on every side.
     private const uint WmNcCalcSize = 0x0083;
     private SubclassProc? _subclassProc;
 
@@ -811,7 +807,11 @@ internal sealed class UsagePopupWindow
     {
         if (msg == WmNcCalcSize && wParam != IntPtr.Zero)
         {
-            return IntPtr.Zero; // client area == full window rect
+            // NCCALCSIZE_PARAMS starts with RECT rgrc[0] = proposed window rect.
+            var windowTop = Marshal.ReadInt32(lParam, 4); // RECT.top
+            var result = DefSubclassProc(hwnd, msg, wParam, lParam);
+            Marshal.WriteInt32(lParam, 4, windowTop); // reclaim only the top strip
+            return result;
         }
         return DefSubclassProc(hwnd, msg, wParam, lParam);
     }
