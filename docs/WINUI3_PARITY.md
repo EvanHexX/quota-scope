@@ -51,6 +51,40 @@ WinForms app is a separate follow-up task after sign-off.
   `DWMWA_WINDOW_ROUNDED_CORNER_PREFERENCE`, which is Windows 11-only; on
   Windows 10 corners are square. Accepted.
 
+## Popup window chrome
+
+- The popup keeps a logical DWM border with
+  `OverlappedPresenter.SetBorderAndTitleBar(true, false)` while remaining
+  non-resizable. `Window.ExtendsContentIntoTitleBar = true` removes the residual
+  WinUI title-bar strip.
+- `DWMWA_WINDOW_CORNER_PREFERENCE = DWMWCP_ROUND` supplies the Windows 11
+  rounded geometry and shadow. The tested Windows 11 build reports a one-pixel
+  `DWMWA_VISIBLE_FRAME_BORDER_THICKNESS` and still composites top-edge pixels
+  when `DWMWA_BORDER_COLOR = DWMWA_COLOR_NONE` is requested. The border color
+  is therefore synchronized to the active card surface color so those pixels
+  blend into the client surface. The outer XAML card has no separate border;
+  internal dividers and row-card borders remain unchanged.
+- The outer XAML card applies neither `CornerRadius` nor `BorderThickness`;
+  DWM is the single owner of the window silhouette. A second XAML radius exposes
+  the opaque island background between the curves, while a square one-pixel
+  stroke is clipped into dark lines and disconnected corner pixels.
+- A narrowly scoped `WM_NCCALCSIZE` subclass runs the default calculation and
+  restores only `rgrc[0].top`, reclaiming the residual one-pixel non-client top
+  strip. Never return zero for the full window rectangle here: that produced a
+  dead black band between the XAML island and outer window on the tested
+  fractional-DPI setup. No exact matching upstream Windows App SDK issue was
+  found, so the black-band behavior remains a project observation.
+- The manual drag region covers the outer card's top padding plus its header,
+  excluding the pin button. This keeps every visible top-row client pixel
+  draggable after the non-client strip is reclaimed.
+- Once the user manually moves a visible popup, asynchronous provider refreshes
+  rebuild and resize it at the current position instead of reapplying the
+  configured `PopupPosition`. A refresh received during pointer capture defers
+  its resize until the drag ends. A new show or an explicit settings change
+  intentionally re-anchors the popup to the configured position.
+- The corner and border attributes are re-applied after backdrop changes and on
+  show/activation because window state transitions can restore DWM defaults.
+
 ## Tray icon design decisions (maintainer, 2026-07-22)
 
 - Remove the numeric text from the tray icon. The signal is limited to two
