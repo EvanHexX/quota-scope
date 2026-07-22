@@ -44,6 +44,8 @@ internal sealed class UsagePopupWindow
     private readonly StackPanel _sectionsPanel;
     private IReadOnlyList<ProviderUsage> _usages = Array.Empty<ProviderUsage>();
     private string? _appliedBackdropTheme;
+    private AcrylicBackdropHost _glass = null!;
+    private bool _glassAcrylicActive;
     private bool _menuOpen;
     private bool _manuallyPositioned;
     private bool _resizePendingAfterDrag;
@@ -135,6 +137,7 @@ internal sealed class UsagePopupWindow
         _window.Content = _islandRoot;
         _window.Title = "Usage";
         _hwnd = WindowNative.GetWindowHandle(_window);
+        _glass = new AcrylicBackdropHost(_window);
         _appWindow = _window.AppWindow;
         // Known WinUI 3 issue (microsoft-ui-xaml #8947/#9621): hiding the title
         // bar via the presenter leaves a white pixel strip at the top. The
@@ -226,8 +229,9 @@ internal sealed class UsagePopupWindow
         Visible = true;
         _pinButton.Focus(FocusState.Programmatic);
         // Backdrops can silently fail on a never-shown window; re-apply now.
+        var shownTheme = ResolveTheme();
         _appliedBackdropTheme = null;
-        ApplyBackdrop();
+        ApplyBackdrop(PopupPalette.FromSettings(shownTheme, _settings.Glassmorphism), shownTheme);
         ApplyWindowChrome();
     }
 
@@ -337,7 +341,7 @@ internal sealed class UsagePopupWindow
         _rootBorder.RequestedTheme = string.Equals(theme, "Light", StringComparison.OrdinalIgnoreCase)
             ? ElementTheme.Light
             : ElementTheme.Dark;
-        ApplyBackdrop();
+        ApplyBackdrop(palette, theme);
         _islandRoot.Background = _settings.Glassmorphism
             ? new SolidColorBrush(Colors.Transparent)
             : Brush(Color.FromArgb(255, palette.Card.R, palette.Card.G, palette.Card.B));
@@ -691,18 +695,39 @@ internal sealed class UsagePopupWindow
         };
     }
 
-    private void ApplyBackdrop()
+    private void ApplyBackdrop(PopupPalette palette, string theme)
     {
         var isGlass = _settings.Glassmorphism;
-        var key = isGlass ? "acrylic" : "mica";
+        var isDark = !string.Equals(theme, "Light", StringComparison.OrdinalIgnoreCase);
+        // Tint/luminosity depend on the palette, so re-apply when the theme changes.
+        var key = $"{(isGlass ? "acrylic" : "mica")}:{theme}";
         if (_appliedBackdropTheme == key) return;
         _appliedBackdropTheme = key;
         try
         {
-            _window.SystemBackdrop = isGlass ? new DesktopAcrylicBackdrop() : new MicaBackdrop();
+            if (isGlass)
+            {
+                // Manual controller: the XAML backdrop element gives no tint or
+                // luminosity control, which made glass look like a color shift.
+                _window.SystemBackdrop = null;
+                _glassAcrylicActive = _glass.TryAttach(
+                    Color.FromArgb(255, palette.Card.R, palette.Card.G, palette.Card.B), isDark);
+                if (!_glassAcrylicActive)
+                {
+                    _window.SystemBackdrop = new DesktopAcrylicBackdrop();
+                }
+            }
+            else
+            {
+                _glass.Detach();
+                _glassAcrylicActive = false;
+                _window.SystemBackdrop = new MicaBackdrop();
+            }
         }
         catch
         {
+            _glass.Detach();
+            _glassAcrylicActive = false;
             _window.SystemBackdrop = null; // unsupported OS: opaque card still renders fine
         }
     }

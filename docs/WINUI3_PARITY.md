@@ -111,6 +111,23 @@ WinForms app is a separate follow-up task after sign-off.
 - `LayoutColumns` (`Auto` | `OneColumn` | `TwoColumns`, surfaced in mix & match)
   overrides that heuristic when the user wants a forced column count.
 
+## Backdrops
+
+- Non-glass mode uses `MicaBackdrop` through `Window.SystemBackdrop`.
+- Glassmorphism drives `DesktopAcrylicController` directly
+  (`app-winui/Windows/AcrylicBackdropHost.cs`) instead of the XAML
+  `DesktopAcrylicBackdrop` element: the element exposes no tint or luminosity
+  control, so the mode only shifted colors slightly. The controller sets
+  `Kind = Base`, a palette-derived tint, and low tint/luminosity opacity so the
+  desktop behind the popup actually shows. `IsInputActive` stays true so the
+  effect survives losing focus (pinned popups).
+- In glass mode the surfaces get out of the way: the island root and outer card
+  are nearly clear (card alpha 0x14) and only row cards keep a light fill.
+- Backdrops render as a flat fallback color when Windows "Transparency effects"
+  is off or acrylic is unsupported; the Appearance page detects both
+  (`UISettings.AdvancedEffectsEnabled`, `DesktopAcrylicController.IsSupported`)
+  and explains it inline instead of looking broken.
+
 ## Localization
 
 - `Loc` provides `T(en, ko)` plus `RowLabel` (duration tokens: `5h` -> `5시간`,
