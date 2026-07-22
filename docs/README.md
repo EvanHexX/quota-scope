@@ -1,11 +1,11 @@
 # QuotaScope Notes
 
-QuotaScope is a small Windows tray utility that shows Codex app-server rate limit information in a local popup.
+QuotaScope is a small Windows tray utility that shows Codex and Claude usage/rate limit information in a local popup.
 
 ## Purpose
 
-- Check remaining Codex rate limit percentage quickly.
-- View the short-window and weekly-window reset status without keeping a Codex app, CLI, or dashboard view open.
+- Check remaining rate limit percentages quickly across providers.
+- View window reset status without keeping each provider's app, CLI, or dashboard view open.
 - Keep the tool as a lightweight local utility rather than a general analytics or telemetry app.
 
 ## Run
@@ -40,6 +40,10 @@ Current flow:
 3. Call `account/rateLimits/read`.
 4. Listen for `account/rateLimits/updated` notifications and refresh the UI.
 
+## Claude connection
+
+The app reads the local Claude Code sign-in (`%USERPROFILE%\.claude\.credentials.json`) per poll and calls Anthropic's undocumented OAuth usage endpoint. The token is never stored, copied, or logged. See `docs/modules/claude_rate_limits.md` for the schema, required headers, and failure handling (stale cache, 429 backoff, 401 pause).
+
 ## UI behavior
 
 - Tray icon click: open/close popup.
@@ -50,7 +54,7 @@ Current flow:
 - Right-clicking the tray icon or opened popup shows the same menu:
   - `Refresh`
   - `Toggle`
-  - `Settings > Codex Connection > Reconnect`
+  - `Settings > Connections > Reconnect`
   - `Settings > Position`
   - `Settings > Time Display`
   - `Settings > Usage Rows > GPT-5.3 Spark`
@@ -90,6 +94,13 @@ The current app stores `settings.json` next to the running app output. If the fi
       "ShowSecondaryRows": false,
       "ShowCredits": false,
       "Command": "codex"
+    },
+    "claude": {
+      "Enabled": true,
+      "RefreshSeconds": 60,
+      "ShowSecondaryRows": false,
+      "ShowCredits": false,
+      "Command": "codex"
     }
   }
 }
@@ -104,3 +115,4 @@ The `Hotkey` setting currently exists for future UI support. Actual registration
 - `docs/PROJECT_MAP.md`: source file map by module.
 - `docs/MODERNIZATION_PLAN.md`: .NET/WinUI modernization plan.
 - `docs/modules/codex_rate_limits.md`: Codex app-server rate limit schema and mapping notes.
+- `docs/modules/claude_rate_limits.md`: Claude usage endpoint schema and mapping notes.

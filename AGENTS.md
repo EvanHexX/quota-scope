@@ -18,7 +18,8 @@ The product is multi-provider, limited to an approved provider whitelist: **Code
 - Popup UI: `app/UsagePopupForm.cs`
 - Provider abstraction: `app/Providers/IUsageProvider.cs`, `app/Providers/UsageModels.cs`
 - Codex app-server client: `app/Providers/Codex/CodexAppServerClient.cs`
-- Rate limit mapping: `app/Providers/Codex/RateLimitMapper.cs`
+- Codex rate limit mapping: `app/Providers/Codex/RateLimitMapper.cs`
+- Claude usage provider: `app/Providers/Claude/` (undocumented OAuth usage endpoint; token is read per poll and never stored or logged)
 - Project map: `docs/PROJECT_MAP.md`
 - Modernization plan: `docs/MODERNIZATION_PLAN.md`
 

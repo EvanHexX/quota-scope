@@ -9,9 +9,9 @@
 ![Privacy](https://img.shields.io/badge/privacy-local--only-10B981)
 ![Status](https://img.shields.io/badge/status-unofficial-6B7280)
 
-QuotaScope is a small Windows tray utility for checking Codex usage limits without keeping the Codex app, CLI, or dashboard view open.
+QuotaScope is a small Windows tray utility for checking Codex and Claude usage limits without keeping each provider's app, CLI, or dashboard view open.
 
-It runs locally, starts `codex app-server`, reads Codex rate limit data through stdio JSON-RPC, and shows the result in a compact tray popup.
+For Codex it starts `codex app-server` locally and reads rate limit data through stdio JSON-RPC. For Claude it reads the local Claude Code sign-in and polls Anthropic's usage endpoint. Results show in a compact tray popup.
 
 ## Screenshots
 
@@ -23,9 +23,11 @@ It runs locally, starts `codex app-server`, reads Codex rate limit data through 
 
 - Windows system tray utility
 - Compact usage popup
+- Codex and Claude (Pro/Max) usage in one popup
 - Payload-driven usage gauges: one row per rate-limit window the provider reports
-- Optional GPT-5.3-Codex-Spark usage rows
-- Optional credits balance row
+- Optional secondary rows (GPT-5.3-Codex-Spark, Claude per-model windows)
+- Optional credits rows (Codex credits balance, Claude extra usage)
+- Tray icon shows the lowest remaining percent across providers
 - Pinned popup mode
 - Global hotkey: `Ctrl+Alt+U`
 - Manual refresh and reconnect controls
@@ -35,18 +37,26 @@ It runs locally, starts `codex app-server`, reads Codex rate limit data through 
 
 ## How it works
 
+Codex:
+
 1. The app starts `codex app-server` as a child process.
 2. It initializes a stdio JSON-RPC session.
 3. It calls `account/rateLimits/read`.
 4. It listens for `account/rateLimits/updated` notifications.
-5. The tray popup updates when new rate limit data arrives.
 
-The app uses the local Codex runtime session and does not collect telemetry.
+Claude:
+
+1. The app reads the access token from the local Claude Code credentials file (`%USERPROFILE%\.claude\.credentials.json`) on each poll. The token is never stored, copied, or logged.
+2. It polls Anthropic's OAuth usage endpoint (the same data behind Claude Code's `/usage` command) at most once per 60 seconds.
+3. On failure it keeps showing the last successful data marked as stale.
+
+Each provider is isolated: one provider failing does not affect the other. The app does not collect telemetry.
 
 ## Requirements
 
 - Windows
 - Codex CLI / Codex app-server available through the `codex` command
+- Claude Code signed in on this machine (optional, only for Claude usage)
 - .NET 10 SDK for local development
 
 Current project target:
@@ -110,6 +120,13 @@ Example:
       "ShowSecondaryRows": false,
       "ShowCredits": false,
       "Command": "codex"
+    },
+    "claude": {
+      "Enabled": true,
+      "RefreshSeconds": 60,
+      "ShowSecondaryRows": false,
+      "ShowCredits": false,
+      "Command": "codex"
     }
   }
 }
@@ -119,16 +136,19 @@ Notes:
 
 - `TimeDisplayMode` can be `ClockTime` or `RemainingTime`.
 - Provider options live under `Providers`, one entry per provider.
-- `ShowSecondaryRows` enables secondary model rows (GPT-5.3-Codex-Spark).
-- `ShowCredits` enables the credits balance row.
+- `ShowSecondaryRows` enables secondary model rows (GPT-5.3-Codex-Spark, Claude per-model windows).
+- `ShowCredits` enables the credits rows.
+- `Command` is only used by the Codex provider.
+- Claude polling is clamped to at least 60 seconds regardless of `RefreshSeconds`.
 - The `Hotkey` setting exists in the settings file, but the current registered hotkey is fixed to `Ctrl+Alt+U`.
 
 ## Privacy
 
 QuotaScope is designed as a local utility.
 
-- It launches the local `codex app-server` process.
-- It communicates with that process over stdio JSON-RPC.
+- It launches the local `codex app-server` process and communicates over stdio JSON-RPC.
+- For Claude usage, it reads the local Claude Code credentials file and calls Anthropic's usage endpoint over HTTPS. This is the only point where the app talks to a remote service; it can be turned off by disabling the Claude provider.
+- The Claude access token is read per poll for the request only and is never stored, copied, or logged by the app.
 - It does not include telemetry, analytics, or remote logging.
 - It stores settings locally.
 
@@ -137,6 +157,8 @@ QuotaScope is designed as a local utility.
 - Windows-only.
 - The current UI is Windows Forms.
 - The app depends on Codex app-server behavior and available rate limit fields.
+- Claude usage relies on an undocumented Anthropic endpoint that may change or stop working without notice.
+- Claude usage requires being signed in to Claude Code on the same machine.
 - It is a local tray utility, not a cloud dashboard or analytics product.
 - Packaging and installer distribution are not finalized yet.
 
@@ -159,7 +181,7 @@ Next major UI direction:
 Provider scope:
 
 - The approved provider scope is Codex (OpenAI) and Claude (Anthropic).
-- The current implementation supports Codex only; Claude support is planned.
+- Both providers are implemented; no other providers are planned without explicit approval.
 
 > This project was previously named `Codex Usage Tray` and was renamed to `QuotaScope` on 2026-07-22.
 
@@ -175,3 +197,4 @@ Project notes live under `docs/`.
 - `docs/PROJECT_MAP.md`: module and file map
 - `docs/MODERNIZATION_PLAN.md`: .NET / WinUI modernization plan
 - `docs/modules/codex_rate_limits.md`: Codex app-server rate limit schema and mapping notes
+- `docs/modules/claude_rate_limits.md`: Claude usage endpoint schema and mapping notes
