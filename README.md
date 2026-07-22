@@ -13,6 +13,18 @@ QuotaScope is a small Windows tray utility for checking Codex and Claude usage l
 
 For Codex it starts `codex app-server` locally and reads rate limit data through stdio JSON-RPC. For Claude it reads the local Claude Code sign-in and polls Anthropic's usage endpoint. Results show in a compact tray popup.
 
+## Screenshots
+
+<img src="docs/images/quota-scope.png" alt="QuotaScope usage popup next to the settings window" width="900">
+
+| Popup at 90% UI scale | Glassmorphism at 150% UI scale |
+|---|---|
+| <img src="docs/images/quota-scope-90.png" alt="QuotaScope popup showing Codex and Claude usage" width="330"> | <img src="docs/images/quota-scope-150.png" alt="QuotaScope popup with glassmorphism showing the desktop through the panes" width="330"> |
+
+Layout is configurable per row — gauges, bars, ordering, and column count:
+
+<img src="docs/images/quota-scope-settings.png" alt="Appearance settings with mix and match shapes per row" width="640">
+
 ## Install
 
 1. Download `QuotaScope-win-x64.zip` from the [latest release](https://github.com/EvanHexX/quota-scope/releases/latest).

@@ -13,6 +13,18 @@ QuotaScope는 각 provider의 앱, CLI, 대시보드를 계속 열어두지 않�
 
 Codex는 로컬에서 `codex app-server`를 실행해 stdio JSON-RPC로 rate limit 데이터를 읽고, Claude는 로컬 Claude Code 로그인 정보를 이용해 Anthropic 사용량 endpoint를 폴링합니다. 결과는 작은 트레이 팝업에 함께 표시됩니다.
 
+## 스크린샷
+
+<img src="docs/images/quota-scope.png" alt="QuotaScope 사용량 팝업과 설정창" width="900">
+
+| UI 크기 90% 팝업 | 글래스모피즘 + UI 크기 150% |
+|---|---|
+| <img src="docs/images/quota-scope-90.png" alt="Codex와 Claude 사용량을 표시하는 QuotaScope 팝업" width="330"> | <img src="docs/images/quota-scope-150.png" alt="배경이 비치는 글래스모피즘 적용 팝업" width="330"> |
+
+레이아웃은 행 단위로 지정할 수 있습니다 — 게이지/막대, 순서, 열 수:
+
+<img src="docs/images/quota-scope-settings.png" alt="행별 모양을 지정하는 모양 설정 화면" width="640">
+
 ## 설치
 
 1. [최신 릴리스](https://github.com/EvanHexX/quota-scope/releases/latest)에서 `QuotaScope-win-x64.zip`을 내려받습니다.
