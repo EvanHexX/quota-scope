@@ -45,8 +45,7 @@ User-Agent: claude-code/<version>
 |---|---|
 | `five_hour` | primary, `5h` |
 | `seven_day` | primary, `7d` |
-| `seven_day_sonnet` | secondary, `7d Sonnet` |
-| `seven_day_opus` | secondary, `7d Opus` |
+| `seven_day_<model>` (sonnet/opus/fable 등) | secondary, `7d <Model>` — **키를 하드코딩하지 않고 `seven_day_` 접두어를 동적 매핑**하므로 새 모델 창이 추가돼도 코드 변경 없이 표시된다 |
 | `extra_usage` | `is_enabled == true`일 때만 secondary, `Credits` (utilization 게이지, 없으면 used/limit 텍스트) |
 
 - null인 필드는 row를 만들지 않는다.

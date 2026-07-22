@@ -16,8 +16,7 @@ internal static class ClaudeUsageMapper
 
         AddWindowRow(rows, root, "five_hour", "5h", isPrimary: true);
         AddWindowRow(rows, root, "seven_day", "7d", isPrimary: true);
-        AddWindowRow(rows, root, "seven_day_sonnet", "7d Sonnet", isPrimary: false);
-        AddWindowRow(rows, root, "seven_day_opus", "7d Opus", isPrimary: false);
+        AddPerModelRows(rows, root);
         AddExtraUsageRow(rows, root);
 
         return new ProviderUsage(
@@ -35,6 +34,30 @@ internal static class ClaudeUsageMapper
         var window = ParseWindow(GetObject(root, property));
         if (window is null) return;
         rows.Add(new UsageRow(label, window, isPrimary));
+    }
+
+    // Per-model weekly windows (seven_day_sonnet/opus/fable/...) are mapped
+    // generically so newly introduced models show up without a code change.
+    private const string PerModelPrefix = "seven_day_";
+
+    private static void AddPerModelRows(List<UsageRow> rows, JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object) return;
+        foreach (var property in root.EnumerateObject())
+        {
+            if (!property.Name.StartsWith(PerModelPrefix, StringComparison.Ordinal)) continue;
+            if (property.Value.ValueKind != JsonValueKind.Object) continue;
+            var window = ParseWindow(property.Value);
+            if (window is null) continue;
+            rows.Add(new UsageRow($"7d {ModelLabel(property.Name[PerModelPrefix.Length..])}", window, IsPrimary: false));
+        }
+    }
+
+    private static string ModelLabel(string rawName)
+    {
+        if (rawName.Length == 0) return rawName;
+        var pretty = rawName.Replace('_', ' ');
+        return char.ToUpperInvariant(pretty[0]) + pretty[1..];
     }
 
     private static void AddExtraUsageRow(List<UsageRow> rows, JsonElement root)
@@ -147,18 +170,20 @@ internal static class ClaudeUsageMapper
           ""seven_day"":        { ""utilization"": 23.5, ""resets_at"": ""2026-04-17T00:59:59+00:00"" },
           ""seven_day_opus"":   { ""utilization"": 50.0, ""resets_at"": ""2026-04-17T00:59:59+00:00"" },
           ""seven_day_sonnet"": { ""utilization"": 1.0,  ""resets_at"": ""2026-04-17T00:59:59+00:00"" },
+          ""seven_day_fable"":  { ""utilization"": 12.5, ""resets_at"": ""2026-04-17T00:59:59+00:00"" },
           ""extra_usage"":      { ""is_enabled"": true, ""monthly_limit"": 100, ""used_credits"": 25.5, ""utilization"": 25.5 }
         }";
 
         using var doc = JsonDocument.Parse(sample);
         var usage = FromJson(doc.RootElement);
-        return usage.Rows.Count == 5
+        return usage.Rows.Count == 6
             && NearlyEquals(usage.OverallUsedPercent, 37.5)
             && RowMatches(usage.Rows[0], "5h", 37.5, isPrimary: true)
             && RowMatches(usage.Rows[1], "7d", 23.5, isPrimary: true)
-            && RowMatches(usage.Rows[2], "7d Sonnet", 1, isPrimary: false)
-            && RowMatches(usage.Rows[3], "7d Opus", 50, isPrimary: false)
-            && RowMatches(usage.Rows[4], "Credits", 25.5, isPrimary: false);
+            && RowMatches(usage.Rows[2], "7d Opus", 50, isPrimary: false)
+            && RowMatches(usage.Rows[3], "7d Sonnet", 1, isPrimary: false)
+            && RowMatches(usage.Rows[4], "7d Fable", 12.5, isPrimary: false)
+            && RowMatches(usage.Rows[5], "Credits", 25.5, isPrimary: false);
     }
 
     private static bool RowMatches(UsageRow row, string label, double usedPercent, bool isPrimary)
