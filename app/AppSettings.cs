@@ -23,6 +23,8 @@ internal sealed class AppSettings
     public bool FollowSystemTheme { get; set; } = true;
     public string ThemeOverride { get; set; } = "Dark";
     public bool Autostart { get; set; } = false;
+    public string TrayIconStyle { get; set; } = "UsageArc";
+    public string GaugeMetric { get; set; } = "Used";
     public string PopupGraph { get; set; } = "half-circle";
     public string PopupPosition { get; set; } = "BottomRight";
     public string ShapeTheme { get; set; } = "Bars";

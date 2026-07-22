@@ -67,6 +67,12 @@ WinForms app is a separate follow-up task after sign-off.
   not implemented yet).
 - Fallback: if the small tray icon still reads poorly, drop the arc and use a
   fixed glyph with state color only.
+- Update (post-verification): visibility was judged good. Both channels are
+  now user options in Settings > Appearance: `TrayIconStyle`
+  (UsageArc | Glyph) and `GaugeMetric` (Used | Remaining, applied to popup
+  gauges/percentages and the tray arc fill; state colors always key off
+  usage). Hotkey load warnings are additionally surfaced as a tray
+  notification at startup, not only on the settings page.
 
 ## Measurements (fill in during final verification)
 

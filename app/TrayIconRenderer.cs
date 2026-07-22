@@ -61,11 +61,35 @@ internal static class TrayIconRenderer
         return overallUsedPercent >= warningAtUsed ? TrayIconState.Warning : TrayIconState.Normal;
     }
 
-    public static Icon CreateUsageIcon(double usedPercent, TrayIconState state, int sizePx)
+    // Fallback style when the arc reads poorly at small sizes: a plain filled
+    // dot carrying only the state color.
+    public static Icon CreateGlyphIcon(TrayIconState state, int sizePx)
     {
         try
         {
-            var quantized = Math.Clamp(Math.Round(usedPercent / 5d) * 5d, 0d, 100d);
+            using var bitmap = new Bitmap(sizePx, sizePx);
+            using var g = Graphics.FromImage(bitmap);
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.Clear(Color.Transparent);
+            var color = StateColor(state);
+            var inset = sizePx >= 24 ? 3f : 2f;
+            using var fill = new SolidBrush(color);
+            using var border = new Pen(Color.FromArgb(110, 20, 24, 34), sizePx >= 24 ? 1.6f : 1.2f);
+            g.FillEllipse(fill, inset, inset, sizePx - inset * 2, sizePx - inset * 2);
+            g.DrawEllipse(border, inset, inset, sizePx - inset * 2, sizePx - inset * 2);
+            return CreateIconFromBitmap(bitmap);
+        }
+        catch
+        {
+            return (Icon)SystemIcons.Application.Clone();
+        }
+    }
+
+    public static Icon CreateUsageIcon(double fillPercent, TrayIconState state, int sizePx)
+    {
+        try
+        {
+            var quantized = Math.Clamp(Math.Round(fillPercent / 5d) * 5d, 0d, 100d);
             using var bitmap = new Bitmap(sizePx, sizePx);
             using var g = Graphics.FromImage(bitmap);
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
@@ -81,12 +105,7 @@ internal static class TrayIconRenderer
             var inset = stroke / 2f + (sizePx >= 24 ? 2f : 1f);
             var rect = new RectangleF(inset, inset, sizePx - inset * 2, sizePx - inset * 2);
 
-            var color = state switch
-            {
-                TrayIconState.Critical => Color.FromArgb(235, 68, 56),
-                TrayIconState.Warning => Color.FromArgb(255, 179, 64),
-                _ => Color.FromArgb(73, 169, 255)
-            };
+            var color = StateColor(state);
 
             using var track = new Pen(Color.FromArgb(96, 178, 188, 205), stroke);
             g.DrawEllipse(track, rect.X, rect.Y, rect.Width, rect.Height);
@@ -107,6 +126,13 @@ internal static class TrayIconRenderer
             return (Icon)SystemIcons.Application.Clone();
         }
     }
+
+    private static Color StateColor(TrayIconState state) => state switch
+    {
+        TrayIconState.Critical => Color.FromArgb(235, 68, 56),
+        TrayIconState.Warning => Color.FromArgb(255, 179, 64),
+        _ => Color.FromArgb(73, 169, 255)
+    };
 
     private static void DrawAppMark(Graphics g, Color blue, Color violet)
     {
