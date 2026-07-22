@@ -286,6 +286,8 @@ internal sealed class UsagePopupWindow
         _islandRoot.Background = _settings.Glassmorphism
             ? new SolidColorBrush(Colors.Transparent)
             : Brush(Color.FromArgb(255, palette.Card.R, palette.Card.G, palette.Card.B));
+        _chromeBorderColor = palette.Card;
+        ApplyWindowChrome();
         _titleText.Text = Loc.T("Usage", "사용량");
 
         _rootBorder.Background = Brush(palette.Card);
@@ -734,6 +736,7 @@ internal sealed class UsagePopupWindow
     private const uint DwmwaColorNone = 0xFFFFFFFE;
 
     private bool _chromeFailureLogged;
+    private Color _chromeBorderColor = Color.FromArgb(255, 24, 26, 46);
 
     private const int GwlStyle = -16;
     private const int GwlExStyle = -20;
@@ -765,8 +768,10 @@ internal sealed class UsagePopupWindow
         // Windows 11 only; on Windows 10 these fail harmlessly.
         var preference = DwmwcpRound;
         var cornerResult = DwmSetWindowAttribute(_hwnd, DwmwaWindowCornerPreference, ref preference, sizeof(int));
-        var none = unchecked((int)DwmwaColorNone);
-        var borderResult = DwmSetWindowAttribute(_hwnd, DwmwaBorderColor, ref none, sizeof(int));
+        // DWMWA_COLOR_NONE is ignored in some environments, so instead the DWM
+        // border is painted in the card color: even when drawn, it is invisible.
+        var colorRef = _chromeBorderColor.R | (_chromeBorderColor.G << 8) | (_chromeBorderColor.B << 16);
+        var borderResult = DwmSetWindowAttribute(_hwnd, DwmwaBorderColor, ref colorRef, sizeof(int));
         if ((cornerResult != 0 || borderResult != 0) && !_chromeFailureLogged)
         {
             _chromeFailureLogged = true;
