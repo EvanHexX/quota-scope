@@ -10,6 +10,7 @@ using QuotaScope.Providers;
 using QuotaScope.Providers.Claude;
 using QuotaScope.Providers.Codex;
 using QuotaScope.WinUI.Tray;
+using QuotaScope.WinUI.Windows;
 
 namespace QuotaScope.WinUI;
 
@@ -24,6 +25,7 @@ internal sealed class TrayController : IDisposable
     private readonly ITrayIcon _trayIcon;
     private readonly DispatcherQueueTimer _timer;
     private CodexUsageProvider? _codexProvider;
+    private UsagePopupWindow? _popup;
     private bool _refreshing;
     private bool _disposed;
 
@@ -91,7 +93,23 @@ internal sealed class TrayController : IDisposable
 
     public void TogglePopup()
     {
-        // Popup window arrives in the next commit; the shell only maintains tray state.
+        var popup = GetPopup();
+        if (popup.Visible)
+        {
+            popup.Hide();
+            return;
+        }
+        popup.SetUsage(CurrentUsages());
+        popup.Show();
+    }
+
+    private UsagePopupWindow GetPopup()
+    {
+        if (_popup is null)
+        {
+            _popup = new UsagePopupWindow(_settings, BuildMenu);
+        }
+        return _popup;
     }
 
     private async Task RefreshAsync()
@@ -174,7 +192,7 @@ internal sealed class TrayController : IDisposable
         var low = overall <= _settings.WarningThresholdPercent;
         _trayIcon.SetTooltip(TruncateTrayText(BuildTrayText(usages)));
         _trayIcon.SetIcon(TrayIconRenderer.CreateUsageIcon((int)Math.Round(overall), low));
-        // Popup receives the list in commit 2.
+        _popup?.SetUsage(usages);
     }
 
     private IReadOnlyList<ProviderUsage> CurrentUsages()
@@ -219,6 +237,7 @@ internal sealed class TrayController : IDisposable
         if (_disposed) return;
         _disposed = true;
         _timer.Stop();
+        _popup?.Hide();
         _trayIcon.Dispose();
         foreach (var provider in _providers)
         {
