@@ -1,10 +1,15 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using QuotaScope.Providers;
+using QuotaScope.Providers.Claude;
+using QuotaScope.Providers.Codex;
 
-namespace CodexUsageTray;
+namespace QuotaScope;
 
 internal sealed class TrayApplicationContext : ApplicationContext
 {
@@ -12,21 +17,40 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly NotifyIcon _notifyIcon;
     private UsagePopupForm _popup;
     private readonly System.Windows.Forms.Timer _timer = new();
-    private readonly CodexAppServerClient _client;
+    private readonly List<IUsageProvider> _providers = new();
+    private readonly Dictionary<string, ProviderUsage> _usages = new(StringComparer.OrdinalIgnoreCase);
+    private CodexUsageProvider? _codexProvider;
     private readonly HotkeyWindow _hotkeyWindow;
-    private UsageViewModel _current = UsageViewModel.Offline("Waiting for Codex connection");
     private bool _refreshing;
 
     public TrayApplicationContext()
     {
         _popup = CreatePopup();
-        _client = new CodexAppServerClient(_settings);
-        _client.RateLimitsUpdated += UpdateUsage;
+
+        var codexSettings = _settings.GetProvider("codex");
+        if (codexSettings.Enabled)
+        {
+            _codexProvider = new CodexUsageProvider(codexSettings);
+            _providers.Add(_codexProvider);
+        }
+
+        var claudeSettings = _settings.GetProvider("claude");
+        if (claudeSettings.Enabled)
+        {
+            _providers.Add(new ClaudeUsageProvider(claudeSettings));
+        }
+
+        foreach (var provider in _providers)
+        {
+            _usages[provider.Id] = ProviderUsage.Offline(
+                provider.Id, provider.DisplayName, $"Waiting for {provider.DisplayName} connection", ProviderState.Unavailable);
+            provider.UsageUpdated += UpdateUsage;
+        }
 
         _notifyIcon = new NotifyIcon
         {
-            Text = "Checking Codex usage",
-            Icon = TrayIconRenderer.CreateUsageIcon(100, false),
+            Text = "Checking usage",
+            Icon = TrayIconRenderer.CreateUsageIcon(0, TrayIconState.Normal, TrayIconRenderer.GetNativeIconSize()),
             Visible = true,
             ContextMenuStrip = BuildMenu()
         };
@@ -39,7 +63,10 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _hotkeyWindow = new HotkeyWindow(TogglePopup);
         _hotkeyWindow.Register();
 
-        _timer.Interval = Math.Max(10, _settings.RefreshSeconds) * 1000;
+        var refreshSeconds = _providers.Count > 0
+            ? _providers.Min(p => _settings.GetProvider(p.Id).RefreshSeconds)
+            : 60;
+        _timer.Interval = Math.Max(10, refreshSeconds) * 1000;
         _timer.Tick += async (_, _) => await RefreshAsync().ConfigureAwait(false);
         _timer.Start();
         _ = RefreshAsync();
@@ -52,7 +79,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         menu.Items.Add("Toggle", null, (_, _) => TogglePopup());
 
         var settings = new ToolStripMenuItem("Settings");
-        settings.DropDownItems.Add(BuildCodexConnectionMenu());
+        settings.DropDownItems.Add(BuildConnectionsMenu());
         settings.DropDownItems.Add(BuildPositionMenu());
         settings.DropDownItems.Add(BuildTimeDisplayMenu());
         settings.DropDownItems.Add(BuildUsageRowsMenu());
@@ -65,12 +92,17 @@ internal sealed class TrayApplicationContext : ApplicationContext
         return menu;
     }
 
-    private ToolStripMenuItem BuildCodexConnectionMenu()
+    private ToolStripMenuItem BuildConnectionsMenu()
     {
-        var item = new ToolStripMenuItem("Codex Connection");
+        var item = new ToolStripMenuItem("Connections");
         item.DropDownItems.Add("Reconnect", null, async (_, _) => await ReconnectAsync().ConfigureAwait(false));
         item.DropDownItems.Add(new ToolStripSeparator());
-        item.DropDownItems.Add(new ToolStripMenuItem($"Command: {_client.ResolvedCommandText}") { Enabled = false });
+        var commandText = _codexProvider is null ? "disabled" : _codexProvider.ResolvedCommandText;
+        item.DropDownItems.Add(new ToolStripMenuItem($"Codex: {commandText}") { Enabled = false });
+        var claudeStatus = !_settings.GetProvider("claude").Enabled
+            ? "disabled"
+            : ClaudeCredentialReader.CredentialsFileExists() ? "credentials found" : "not signed in";
+        item.DropDownItems.Add(new ToolStripMenuItem($"Claude: {claudeStatus}") { Enabled = false });
         return item;
     }
 
@@ -117,14 +149,24 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private ToolStripMenuItem BuildUsageRowsMenu()
     {
         var item = new ToolStripMenuItem("Usage Rows");
-        var spark = new ToolStripMenuItem("GPT-5.3 Spark")
+        var codexSettings = _settings.GetProvider("codex");
+        AddUsageRowToggle(item, "GPT-5.3 Spark", codexSettings.ShowSecondaryRows,
+            () => codexSettings.ShowSecondaryRows = !codexSettings.ShowSecondaryRows);
+        AddUsageRowToggle(item, "Credits", codexSettings.ShowCredits,
+            () => codexSettings.ShowCredits = !codexSettings.ShowCredits);
+        return item;
+    }
+
+    private void AddUsageRowToggle(ToolStripMenuItem parent, string label, bool isChecked, Action toggle)
+    {
+        var item = new ToolStripMenuItem(label)
         {
-            Checked = _settings.ShowSparkUsage,
+            Checked = isChecked,
             CheckOnClick = false
         };
-        spark.Click += (_, _) =>
+        item.Click += (_, _) =>
         {
-            _settings.ShowSparkUsage = !_settings.ShowSparkUsage;
+            toggle();
             _settings.Save();
             var popup = GetPopup();
             popup.ApplySettings(_settings);
@@ -134,8 +176,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
                 PositionPopup(popup);
             }
         };
-        item.DropDownItems.Add(spark);
-        return item;
+        parent.DropDownItems.Add(item);
     }
 
     private ToolStripMenuItem BuildShapeThemeMenu()
@@ -207,10 +248,16 @@ internal sealed class TrayApplicationContext : ApplicationContext
         if (_popup.IsDisposed)
         {
             _popup = CreatePopup();
+            _popup.SetUsage(CurrentUsages());
         }
         _popup.ContextMenuStrip = _notifyIcon.ContextMenuStrip;
         _popup.ApplySettings(_settings);
         return _popup;
+    }
+
+    private IReadOnlyList<ProviderUsage> CurrentUsages()
+    {
+        return _providers.Select(p => _usages[p.Id]).ToList();
     }
 
     private async Task RefreshAsync()
@@ -219,13 +266,21 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _refreshing = true;
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-            var usage = await _client.ReadRateLimitsAsync(cts.Token).ConfigureAwait(false);
-            UpdateUsage(usage);
-        }
-        catch (Exception ex)
-        {
-            UpdateUsage(UsageViewModel.Offline(FormatConnectionError(ex)));
+            // One provider's failure must not affect the others.
+            foreach (var provider in _providers)
+            {
+                try
+                {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+                    var usage = await provider.ReadAsync(cts.Token).ConfigureAwait(false);
+                    UpdateUsage(usage);
+                }
+                catch (Exception ex)
+                {
+                    UpdateUsage(ProviderUsage.Offline(
+                        provider.Id, provider.DisplayName, FormatConnectionError(provider, ex), ProviderState.Unavailable));
+                }
+            }
         }
         finally
         {
@@ -239,14 +294,22 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _refreshing = true;
         try
         {
-            UpdateUsage(UsageViewModel.Offline("Connecting to Codex..."));
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            var usage = await _client.RestartAsync(cts.Token).ConfigureAwait(false);
-            UpdateUsage(usage);
-        }
-        catch (Exception ex)
-        {
-            UpdateUsage(UsageViewModel.Offline(FormatConnectionError(ex)));
+            foreach (var provider in _providers)
+            {
+                try
+                {
+                    UpdateUsage(ProviderUsage.Offline(
+                        provider.Id, provider.DisplayName, $"Connecting to {provider.DisplayName}...", ProviderState.Unavailable));
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                    var usage = await provider.ReconnectAsync(cts.Token).ConfigureAwait(false);
+                    UpdateUsage(usage);
+                }
+                catch (Exception ex)
+                {
+                    UpdateUsage(ProviderUsage.Offline(
+                        provider.Id, provider.DisplayName, FormatConnectionError(provider, ex), ProviderState.Unavailable));
+                }
+            }
         }
         finally
         {
@@ -254,14 +317,14 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
     }
 
-    private static string FormatConnectionError(Exception ex)
+    private static string FormatConnectionError(IUsageProvider provider, Exception ex)
     {
         return ex is OperationCanceledException
-            ? "Codex connection timed out. Use Settings > Codex Connection > Reconnect."
-            : "Codex connection required: " + ex.Message;
+            ? $"{provider.DisplayName} connection timed out. Use Settings > Connections > Reconnect."
+            : $"{provider.DisplayName} connection required: " + ex.Message;
     }
 
-    private void UpdateUsage(UsageViewModel usage)
+    private void UpdateUsage(ProviderUsage usage)
     {
         if (Application.MessageLoop && !_popup.IsDisposed && _popup.InvokeRequired)
         {
@@ -270,20 +333,43 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
 
         var popup = GetPopup();
-        _current = usage;
-        var low = usage.OverallRemainingPercent <= _settings.WarningThresholdPercent;
-        _notifyIcon.Text = _settings.ShowSparkUsage
-            ? $"Codex 5h {FormatPercent(usage.FiveHour)} / 1w {FormatPercent(usage.OneWeek)} / Spark 5h {FormatPercent(usage.SparkFiveHour)} / 1w {FormatPercent(usage.SparkOneWeek)}"
-            : $"Codex 5h {FormatPercent(usage.FiveHour)} / 1w {FormatPercent(usage.OneWeek)}";
+        _usages[usage.ProviderId] = usage;
+        var usages = CurrentUsages();
+
+        var overall = usages.Count > 0 ? usages.Max(u => u.OverallUsedPercent) : 0d;
+        var anyRateLimited = usages.Any(u => u.State == ProviderState.RateLimited);
+        var state = TrayIconRenderer.ComputeState(overall, _settings.WarningThresholdPercent, anyRateLimited);
+        _notifyIcon.Text = TruncateTrayText(BuildTrayText(usages));
         var oldIcon = _notifyIcon.Icon;
-        _notifyIcon.Icon = TrayIconRenderer.CreateUsageIcon(usage.OverallRemainingPercent, low);
+        _notifyIcon.Icon = TrayIconRenderer.CreateUsageIcon(overall, state, TrayIconRenderer.GetNativeIconSize());
         oldIcon?.Dispose();
-        popup.SetUsage(usage);
+        popup.SetUsage(usages);
     }
 
-    private static string FormatPercent(RateLimitWindow? window)
+    private string BuildTrayText(IReadOnlyList<ProviderUsage> usages)
     {
-        return window is null ? "--%" : $"{window.RemainingPercent}%";
+        if (usages.Count == 0) return "No providers enabled";
+
+        var parts = new List<string>();
+        foreach (var usage in usages)
+        {
+            var rows = usage.Rows.Where(r => r.IsPrimary && r.Window is not null).ToList();
+            parts.Add(rows.Count == 0
+                ? $"{usage.DisplayName} --"
+                : $"{usage.DisplayName} " + string.Join(" / ", rows.Select(r => $"{r.Label} {FormatPercent(r.Window!)}")));
+        }
+        return string.Join("  |  ", parts);
+    }
+
+    private static string TruncateTrayText(string text)
+    {
+        // NotifyIcon.Text throws over 127 characters.
+        return text.Length <= 127 ? text : text[..127];
+    }
+
+    private static string FormatPercent(RateLimitWindow window)
+    {
+        return $"{(int)Math.Round(window.UsedPercent)}%";
     }
 
     private void TogglePopup()
@@ -295,7 +381,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             return;
         }
 
-        popup.SetUsage(_current);
+        popup.SetUsage(CurrentUsages());
         PositionPopup(popup);
         try
         {
@@ -306,7 +392,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         {
             _popup = CreatePopup();
             _popup.ContextMenuStrip = _notifyIcon.ContextMenuStrip;
-            _popup.SetUsage(_current);
+            _popup.SetUsage(CurrentUsages());
             PositionPopup(_popup);
             _popup.Show();
             _popup.Activate();
@@ -364,7 +450,10 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _hotkeyWindow.Dispose();
         _notifyIcon.Visible = false;
         _notifyIcon.Dispose();
-        _client.Dispose();
+        foreach (var provider in _providers)
+        {
+            provider.Dispose();
+        }
         if (!_popup.IsDisposed)
         {
             _popup.Dispose();
@@ -372,8 +461,3 @@ internal sealed class TrayApplicationContext : ApplicationContext
         base.ExitThreadCore();
     }
 }
-
-
-
-
-

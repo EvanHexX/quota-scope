@@ -2,24 +2,24 @@
 
 ## Project identity
 
-This repository is `codex-usage-tray`.
+This repository is `quota-scope`.
 
-Codex Usage Tray is an unofficial Windows tray app for quickly checking Codex usage limits without opening the Codex app, CLI view, or web dashboard.
+QuotaScope is an unofficial Windows tray app for quickly checking AI coding assistant usage limits without opening each provider's app, CLI view, or web dashboard.
 
-Keep the product Codex-first unless the maintainer explicitly asks for a broader provider scope. The internal design may be provider-ready, but do not add Claude, Gemini, Cursor, OpenAI API billing, GitHub Actions quota, or other providers without an explicit task.
-
-Do not rename the product, repository, executable, namespace, or public branding unless explicitly requested.
+The product is multi-provider, limited to an approved provider whitelist: **Codex (OpenAI)** and **Claude (Anthropic)**. Do not add Gemini, Cursor, OpenAI API billing, GitHub Actions quota, or any other provider without a new explicit maintainer approval.
 
 ## Current implementation assumptions
 
-- Main app project: `app/CodexUsageTray.csproj`
+- Main app project: `app/QuotaScope.csproj`
 - Current UI stack: Windows Forms tray app
-- Current target framework: check `app/CodexUsageTray.csproj` before changing it
+- Current target framework: check `app/QuotaScope.csproj` before changing it
 - Entry point: `app/Program.cs`
 - Tray lifecycle/menu/hotkey wiring: `app/TrayApplicationContext.cs`
 - Popup UI: `app/UsagePopupForm.cs`
-- Codex app-server client: `app/CodexAppServerClient.cs`
-- Rate limit mapping: `app/RateLimitMapper.cs`
+- Provider abstraction: `app/Providers/IUsageProvider.cs`, `app/Providers/UsageModels.cs`
+- Codex app-server client: `app/Providers/Codex/CodexAppServerClient.cs`
+- Codex rate limit mapping: `app/Providers/Codex/RateLimitMapper.cs`
+- Claude usage provider: `app/Providers/Claude/` (undocumented OAuth usage endpoint; token is read per poll and never stored or logged)
 - Project map: `docs/PROJECT_MAP.md`
 - Modernization plan: `docs/MODERNIZATION_PLAN.md`
 
@@ -41,8 +41,8 @@ Prefer small, reviewable diffs. Do not perform broad refactors, UI framework rew
 Use the smallest relevant command first.
 
 ```powershell
-dotnet build app/CodexUsageTray.csproj
-dotnet run --project app/CodexUsageTray.csproj -- --self-test
+dotnet build app/QuotaScope.csproj
+dotnet run --project app/QuotaScope.csproj -- --self-test
 ```
 
 For UI, tray, hotkey, or popup changes, also report a manual Windows smoke-test checklist covering:
@@ -92,13 +92,13 @@ Settings should remain local. If settings storage changes before the first tagge
 
 ## Branding and trademark safety
 
-This is not an official OpenAI project.
+This is not an official OpenAI or Anthropic project.
 
-Do not use OpenAI logos, official product artwork, or wording that implies affiliation, endorsement, or sponsorship.
+Do not use OpenAI or Anthropic logos, official product artwork, or wording that implies affiliation, endorsement, or sponsorship.
 
 Preserve this disclaimer in public-facing documentation when applicable:
 
-> This project is not affiliated with, endorsed by, or sponsored by OpenAI. Codex is a product/service of OpenAI.
+> This project is not affiliated with, endorsed by, or sponsored by OpenAI or Anthropic. Codex is a product/service of OpenAI. Claude is a product/service of Anthropic.
 
 ## Documentation rules
 
