@@ -714,14 +714,17 @@ internal sealed class UsagePopupWindow
         var sections = BuildSections();
         var totalRows = sections.Sum(s => s.Rows.Count);
         var twoColumn = UsesTwoColumnLayout(sections);
+        // A forced single column is meant to be a narrow stack: match the width
+        // of one card in the two-column layout.
+        var forcedOneColumn = string.Equals(_settings.LayoutColumns, "OneColumn", StringComparison.OrdinalIgnoreCase);
         var singleGaugeOnly = totalRows == 1
             && !string.Equals(_settings.LayoutColumns, "TwoColumns", StringComparison.OrdinalIgnoreCase)
             && sections.All(s => s.Rows.All(r => RowShapes.Resolve(_settings, s.Usage.ProviderId, r) == RowShapes.Circle));
-        // Two columns need the wide popup; a lone gauge gets the compact width;
-        // anything else (bars present, or stacked gauges) uses one-column width.
+        // Two columns need the wide popup; a forced single column or a lone
+        // gauge gets the compact width; anything else uses one-column width.
         var widthDip = twoColumn
             ? BentoWidth
-            : singleGaugeOnly ? BentoSingleCardWidth : BarsWidth;
+            : forcedOneColumn || singleGaugeOnly ? BentoSingleCardWidth : BarsWidth;
         var uiScale = Math.Clamp(_settings.UiScale, 0.7, 1.6);
 
         var currentPosition = _appWindow.Position;
