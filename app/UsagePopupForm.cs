@@ -297,10 +297,12 @@ internal sealed class UsagePopupForm : Form
         {
             var col = i % 2;
             var rowIndex = i / 2;
+            // A trailing odd card spans the full width so the grid has no hole.
+            var isTrailingOdd = i == cards.Count - 1 && cards.Count % 2 == 1;
             var bounds = new Rectangle(
                 marginX + col * (cardWidth + gap),
                 BentoTop + rowIndex * (BentoCardHeight + BentoRowGap),
-                cardWidth,
+                isTrailingOdd ? ClientSize.Width - marginX * 2 : cardWidth,
                 BentoCardHeight);
             DrawBentoCard(g, palette, bounds, cards[i]);
         }
