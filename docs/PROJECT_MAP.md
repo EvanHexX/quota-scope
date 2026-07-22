@@ -24,6 +24,13 @@
 - Codex command resolution -> `app/Providers/Codex/CodexCommandResolver.cs`
 - module notes -> `docs/modules/codex_rate_limits.md`
 
+## Claude Rate Limits
+
+- Claude usage provider -> `app/Providers/Claude/ClaudeUsageProvider.cs`
+- Claude credential reading -> `app/Providers/Claude/ClaudeCredentialReader.cs`
+- Claude usage mapping -> `app/Providers/Claude/ClaudeUsageMapper.cs`
+- module notes -> `docs/modules/claude_rate_limits.md`
+
 ## Settings
 
 - settings model/load/save -> `app/AppSettings.cs`

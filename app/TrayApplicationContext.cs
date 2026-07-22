@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using QuotaScope.Providers;
+using QuotaScope.Providers.Claude;
 using QuotaScope.Providers.Codex;
 
 namespace QuotaScope;
@@ -31,6 +32,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
         {
             _codexProvider = new CodexUsageProvider(codexSettings);
             _providers.Add(_codexProvider);
+        }
+
+        var claudeSettings = _settings.GetProvider("claude");
+        if (claudeSettings.Enabled)
+        {
+            _providers.Add(new ClaudeUsageProvider(claudeSettings));
         }
 
         foreach (var provider in _providers)
@@ -72,7 +79,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         menu.Items.Add("Toggle", null, (_, _) => TogglePopup());
 
         var settings = new ToolStripMenuItem("Settings");
-        settings.DropDownItems.Add(BuildCodexConnectionMenu());
+        settings.DropDownItems.Add(BuildConnectionsMenu());
         settings.DropDownItems.Add(BuildPositionMenu());
         settings.DropDownItems.Add(BuildTimeDisplayMenu());
         settings.DropDownItems.Add(BuildUsageRowsMenu());
@@ -85,13 +92,17 @@ internal sealed class TrayApplicationContext : ApplicationContext
         return menu;
     }
 
-    private ToolStripMenuItem BuildCodexConnectionMenu()
+    private ToolStripMenuItem BuildConnectionsMenu()
     {
-        var item = new ToolStripMenuItem("Codex Connection");
+        var item = new ToolStripMenuItem("Connections");
         item.DropDownItems.Add("Reconnect", null, async (_, _) => await ReconnectAsync().ConfigureAwait(false));
         item.DropDownItems.Add(new ToolStripSeparator());
         var commandText = _codexProvider is null ? "disabled" : _codexProvider.ResolvedCommandText;
-        item.DropDownItems.Add(new ToolStripMenuItem($"Command: {commandText}") { Enabled = false });
+        item.DropDownItems.Add(new ToolStripMenuItem($"Codex: {commandText}") { Enabled = false });
+        var claudeStatus = !_settings.GetProvider("claude").Enabled
+            ? "disabled"
+            : ClaudeCredentialReader.CredentialsFileExists() ? "credentials found" : "not signed in";
+        item.DropDownItems.Add(new ToolStripMenuItem($"Claude: {claudeStatus}") { Enabled = false });
         return item;
     }
 
@@ -309,7 +320,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private static string FormatConnectionError(IUsageProvider provider, Exception ex)
     {
         return ex is OperationCanceledException
-            ? $"{provider.DisplayName} connection timed out. Use Settings > {provider.DisplayName} Connection > Reconnect."
+            ? $"{provider.DisplayName} connection timed out. Use Settings > Connections > Reconnect."
             : $"{provider.DisplayName} connection required: " + ex.Message;
     }
 

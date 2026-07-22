@@ -1,6 +1,6 @@
 # QuotaScope
 
-QuotaScope는 Codex 앱, CLI, 대시보드를 계속 열어두지 않아도 Codex app-server의 rate limit 상태를 빠르게 확인할 수 있는 작은 Windows 트레이 유틸리티입니다.
+QuotaScope는 각 provider의 앱, CLI, 대시보드를 계속 열어두지 않아도 Codex와 Claude의 사용량/rate limit 상태를 빠르게 확인할 수 있는 작은 Windows 트레이 유틸리티입니다.
 
 현재 릴리즈 목표는 가벼운 Windows Forms 버전입니다. WinForms 버전을 안정화해 릴리즈한 뒤, 이후 WinUI 3 구현으로 포팅할 계획입니다.
 
@@ -8,17 +8,18 @@ QuotaScope는 Codex 앱, CLI, 대시보드를 계속 열어두지 않아도 Code
 
 ## 무엇을 하는 앱인가
 
-QuotaScope는 로컬에서 `codex app-server`를 실행하고, stdio JSON-RPC를 통해 현재 Codex rate limit 데이터를 읽은 뒤, 그 결과를 작은 트레이 팝업에 표시합니다.
+Codex는 로컬에서 `codex app-server`를 실행해 stdio JSON-RPC로 rate limit 데이터를 읽고, Claude는 로컬 Claude Code 로그인 정보를 이용해 Anthropic 사용량 endpoint를 폴링합니다. 결과는 작은 트레이 팝업에 함께 표시됩니다.
 
-Codex를 자주 사용하는 사용자가 작업 중 남은 사용량과 reset 상태를 빠르게 확인하기 위한 도구입니다.
+AI 코딩 도구를 자주 사용하는 사용자가 작업 중 남은 사용량과 reset 상태를 빠르게 확인하기 위한 도구입니다.
 
 ## 주요 기능
 
 - Windows system tray 유틸리티
-- Codex 사용량 window를 보여주는 compact popup
+- Codex와 Claude(Pro/Max) 사용량을 하나의 compact popup에 표시
 - Payload 기반 사용량 gauge: provider가 보고하는 rate limit window마다 1행
-- 선택 가능한 GPT-5.3-Codex-Spark 사용량 행
-- 선택 가능한 credits 잔액 행
+- 선택 가능한 secondary 행 (GPT-5.3-Codex-Spark, Claude 모델별 window)
+- 선택 가능한 credits 행 (Codex 잔액, Claude extra usage)
+- 트레이 아이콘은 provider 전체 중 남은 사용량 최솟값 표시
 - Pinned popup mode
 - Global hotkey: `Ctrl+Alt+U`
 - 수동 refresh 및 reconnect control
@@ -41,18 +42,26 @@ Codex를 자주 사용하는 사용자가 작업 중 남은 사용량과 reset �
 
 ## 동작 방식
 
+Codex:
+
 1. 앱이 `codex app-server`를 child process로 실행합니다.
 2. stdio JSON-RPC session을 초기화합니다.
 3. `account/rateLimits/read`를 호출합니다.
 4. `account/rateLimits/updated` notification을 수신합니다.
-5. 새 rate limit 데이터가 들어오면 tray popup을 갱신합니다.
 
-이 앱은 로컬 Codex runtime session을 사용합니다. 별도의 OpenAI API key를 요구하거나 저장하지 않습니다.
+Claude:
+
+1. 매 폴링마다 로컬 Claude Code 자격증명 파일(`%USERPROFILE%\.claude\.credentials.json`)에서 access token을 읽습니다. 토큰은 저장/복사/로깅하지 않습니다.
+2. Anthropic OAuth 사용량 endpoint(Claude Code `/usage` 커맨드와 동일한 데이터)를 최소 60초 간격으로 폴링합니다.
+3. 실패 시 마지막 성공 데이터를 stale 상태로 계속 표시합니다.
+
+provider는 서로 격리되어 있어 한쪽 실패가 다른 쪽에 영향을 주지 않습니다. 별도의 OpenAI/Anthropic API key를 요구하거나 저장하지 않습니다.
 
 ## 요구사항
 
 - Windows
 - `codex` 명령으로 접근 가능한 Codex CLI / Codex app-server
+- 같은 머신에서 Claude Code 로그인 (선택, Claude 사용량 표시에만 필요)
 - 로컬 개발용 .NET 10 SDK
 
 현재 프로젝트 target:
@@ -110,6 +119,13 @@ settings.json
       "ShowSecondaryRows": false,
       "ShowCredits": false,
       "Command": "codex"
+    },
+    "claude": {
+      "Enabled": true,
+      "RefreshSeconds": 60,
+      "ShowSecondaryRows": false,
+      "ShowCredits": false,
+      "Command": "codex"
     }
   }
 }
@@ -119,8 +135,10 @@ settings.json
 
 - `TimeDisplayMode`는 `ClockTime` 또는 `RemainingTime`을 사용할 수 있습니다.
 - Provider별 옵션은 `Providers` 아래에 provider 단위로 저장됩니다.
-- `ShowSecondaryRows`를 켜면 secondary model 행(GPT-5.3-Codex-Spark)이 표시됩니다.
-- `ShowCredits`를 켜면 credits 잔액 행이 표시됩니다.
+- `ShowSecondaryRows`를 켜면 secondary model 행(GPT-5.3-Codex-Spark, Claude 모델별 window)이 표시됩니다.
+- `ShowCredits`를 켜면 credits 행이 표시됩니다.
+- `Command`는 Codex provider만 사용합니다.
+- Claude 폴링은 `RefreshSeconds` 값과 무관하게 최소 60초로 clamp됩니다.
 - `Hotkey` 설정은 파일에 존재하지만, 현재 실제 등록된 hotkey는 `Ctrl+Alt+U`로 고정되어 있습니다.
 
 ## 현재 제한사항
@@ -128,6 +146,8 @@ settings.json
 - Windows 전용입니다.
 - 현재 UI는 WinUI 3가 아니라 Windows Forms입니다.
 - Codex app-server의 동작과 제공되는 rate limit field에 의존합니다.
+- Claude 사용량은 미문서화 Anthropic endpoint에 의존하며, 예고 없이 변경되거나 중단될 수 있습니다.
+- Claude 사용량 표시는 같은 머신의 Claude Code 로그인이 필요합니다.
 - cloud dashboard나 analytics product가 아니라 local tray utility입니다.
 - 설정은 앱 output folder에 로컬 파일로 저장됩니다.
 
@@ -150,7 +170,7 @@ settings.json
 Provider 범위:
 
 - 승인된 provider 범위는 Codex(OpenAI)와 Claude(Anthropic)입니다.
-- 현재 구현은 Codex만 지원하며, Claude 지원은 예정되어 있습니다.
+- 두 provider 모두 구현되어 있습니다. 그 외 provider는 명시적 승인 없이 추가하지 않습니다.
 
 > 이 프로젝트의 이전 이름은 `Codex Usage Tray`이며, 2026-07-22에 `QuotaScope`로 이름을 변경했습니다.
 
@@ -166,6 +186,7 @@ Provider 범위:
 - `docs/PROJECT_MAP.md`: module과 실제 file path map
 - `docs/MODERNIZATION_PLAN.md`: .NET / WinUI modernization plan
 - `docs/modules/codex_rate_limits.md`: Codex app-server rate limit schema와 mapping notes
+- `docs/modules/claude_rate_limits.md`: Claude 사용량 endpoint schema와 mapping notes
 
 ## English README
 
