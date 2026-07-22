@@ -35,6 +35,7 @@ internal sealed class UsagePopupWindow
     private readonly AppSettings _settings;
     private readonly Border _rootBorder;
     private readonly Viewbox _scaleHost;
+    private readonly Grid _islandRoot;
     private readonly Grid _headerGrid;
     private readonly TextBlock _titleText;
     private readonly Button _pinButton;
@@ -122,7 +123,11 @@ internal sealed class UsagePopupWindow
         // size and is stretched to the (scaled) window, so content always
         // fills the window exactly — no white edges, no clipping.
         _scaleHost = new Viewbox { Stretch = Stretch.Fill, Child = _rootBorder };
-        _window.Content = _scaleHost;
+        // The island root is painted opaquely (except in glass mode) so no
+        // edge pixel can ever show the island's default light background.
+        _islandRoot = new Grid();
+        _islandRoot.Children.Add(_scaleHost);
+        _window.Content = _islandRoot;
         _window.Title = "Usage";
         _hwnd = WindowNative.GetWindowHandle(_window);
         _appWindow = _window.AppWindow;
@@ -278,6 +283,9 @@ internal sealed class UsagePopupWindow
             ? ElementTheme.Light
             : ElementTheme.Dark;
         ApplyBackdrop();
+        _islandRoot.Background = _settings.Glassmorphism
+            ? new SolidColorBrush(Colors.Transparent)
+            : Brush(Color.FromArgb(255, palette.Card.R, palette.Card.G, palette.Card.B));
         _titleText.Text = Loc.T("Usage", "사용량");
 
         _rootBorder.Background = Brush(palette.Card);
