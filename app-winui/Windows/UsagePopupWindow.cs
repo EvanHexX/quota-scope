@@ -81,8 +81,13 @@ internal sealed class UsagePopupWindow
         Grid.SetColumn(_pinButton, 1);
         _headerGrid.Children.Add(_titleText);
         _headerGrid.Children.Add(_pinButton);
-        // Header doubles as the drag handle, exactly like the WinForms caption trick.
+        // Header doubles as the drag handle: manual pointer-capture drag gives
+        // smooth continuous movement (the WM_NCLBUTTONDOWN trick stutters under
+        // WinUI's input stack).
         _headerGrid.PointerPressed += OnHeaderPointerPressed;
+        _headerGrid.PointerMoved += OnHeaderPointerMoved;
+        _headerGrid.PointerReleased += OnHeaderPointerReleased;
+        _headerGrid.PointerCaptureLost += (_, _) => _dragging = false;
 
         _headerDivider = new Border { Height = 1, Margin = new Thickness(2, 6, 2, 10) };
 
@@ -110,10 +115,7 @@ internal sealed class UsagePopupWindow
             }
         };
 
-        var menu = menuFactory();
-        menu.Opening += (_, _) => _menuOpen = true;
-        menu.Closed += (_, _) => _menuOpen = false;
-        _rootBorder.ContextFlyout = menu;
+        SetMenu(menuFactory());
 
         _window.Content = _rootBorder;
         _window.Title = "Usage";
@@ -133,7 +135,7 @@ internal sealed class UsagePopupWindow
             e.Cancel = true;
             Hide();
         };
-        ApplyRoundedCorners();
+        ApplyWindowChrome();
 
         _window.Activated += (_, e) =>
         {
@@ -208,20 +210,68 @@ internal sealed class UsagePopupWindow
         SettingsChanged?.Invoke();
     }
 
+    private bool _dragging;
+    private NativePoint _dragStartCursor;
+    private PointInt32 _dragStartWindow;
+
     private void OnHeaderPointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        var point = e.GetCurrentPoint(null);
+        var point = e.GetCurrentPoint(_headerGrid);
         if (!point.Properties.IsLeftButtonPressed) return;
-        ReleaseCapture();
-        SendMessage(_hwnd, WmNclbuttondown, (IntPtr)Htcaption, IntPtr.Zero);
+        GetCursorPos(out _dragStartCursor);
+        _dragStartWindow = _appWindow.Position;
+        _dragging = true;
+        _headerGrid.CapturePointer(e.Pointer);
+        e.Handled = true;
+    }
+
+    private void OnHeaderPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_dragging) return;
+        GetCursorPos(out var cursor);
+        _appWindow.Move(new PointInt32(
+            _dragStartWindow.X + (cursor.X - _dragStartCursor.X),
+            _dragStartWindow.Y + (cursor.Y - _dragStartCursor.Y)));
+    }
+
+    private void OnHeaderPointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        _dragging = false;
+        _headerGrid.ReleasePointerCapture(e.Pointer);
     }
 
     // ----- content -----
 
+    private string ResolveTheme()
+    {
+        if (_settings.FollowSystemTheme)
+        {
+            return Application.Current.RequestedTheme == ApplicationTheme.Light ? "Light" : "Dark";
+        }
+        return _settings.ThemeOverride;
+    }
+
+    public void SetMenu(MenuFlyout menu)
+    {
+        menu.Opening += (_, _) => _menuOpen = true;
+        menu.Closed += (_, _) => _menuOpen = false;
+        _rootBorder.ContextFlyout = menu;
+    }
+
     private void Rebuild()
     {
-        var palette = PopupPalette.FromTheme(_settings.ColorTheme);
+        var theme = ResolveTheme();
+        var palette = PopupPalette.FromSettings(theme, _settings.Glassmorphism);
+        _rootBorder.RequestedTheme = string.Equals(theme, "Light", StringComparison.OrdinalIgnoreCase)
+            ? ElementTheme.Light
+            : ElementTheme.Dark;
         ApplyBackdrop();
+
+        var uiScale = Math.Clamp(_settings.UiScale, 0.7, 1.6);
+        _rootBorder.RenderTransform = Math.Abs(uiScale - 1.0) < 0.001
+            ? null
+            : new ScaleTransform { ScaleX = uiScale, ScaleY = uiScale };
+        _titleText.Text = Loc.T("Usage", "사용량");
 
         _rootBorder.Background = Brush(palette.Card);
         _rootBorder.BorderBrush = Brush(palette.Border);
@@ -237,7 +287,7 @@ internal sealed class UsagePopupWindow
         {
             _sectionsPanel.Children.Add(new TextBlock
             {
-                Text = "Waiting for connection",
+                Text = Loc.T("Waiting for connection", "연결 대기 중"),
                 FontFamily = UiFont,
                 FontSize = 12,
                 Foreground = Brush(palette.Muted),
@@ -533,7 +583,7 @@ internal sealed class UsagePopupWindow
 
     private void ApplyBackdrop()
     {
-        var isGlass = string.Equals(_settings.ColorTheme, "Glassmorphism", StringComparison.OrdinalIgnoreCase);
+        var isGlass = _settings.Glassmorphism;
         var key = isGlass ? "acrylic" : "mica";
         if (_appliedBackdropTheme == key) return;
         _appliedBackdropTheme = key;
@@ -557,6 +607,7 @@ internal sealed class UsagePopupWindow
         var widthDip = usesBento
             ? (totalCards == 1 ? BentoSingleCardWidth : BentoWidth)
             : BarsWidth;
+        var uiScale = Math.Clamp(_settings.UiScale, 0.7, 1.6);
 
         GetCursorPos(out var cursor);
         var area = DisplayArea.GetFromPoint(new PointInt32(cursor.X, cursor.Y), DisplayAreaFallback.Nearest);
@@ -566,13 +617,14 @@ internal sealed class UsagePopupWindow
         _appWindow.Move(new PointInt32(work.X + 8, work.Y + 8));
         var scale = GetDpiForWindow(_hwnd) / 96.0;
 
-        // Measure content at the target width so the window height always fits.
+        // Measure content at the base width; the UI scale is applied as a render
+        // transform, so the window is sized to base * uiScale.
         _rootBorder.Width = widthDip;
         _rootBorder.Measure(new global::Windows.Foundation.Size(widthDip, double.PositiveInfinity));
         var heightDip = Math.Ceiling(_rootBorder.DesiredSize.Height);
 
-        var width = (int)Math.Round(widthDip * scale);
-        var height = (int)Math.Round(heightDip * scale);
+        var width = (int)Math.Round(widthDip * uiScale * scale);
+        var height = (int)Math.Round(heightDip * uiScale * scale);
         var margin = (int)Math.Round(16 * scale);
 
         var position = _settings.PopupPosition ?? "BottomRight";
@@ -659,16 +711,19 @@ internal sealed class UsagePopupWindow
 
     // ----- interop -----
 
-    private const int WmNclbuttondown = 0x00A1;
-    private const int Htcaption = 2;
     private const int DwmwaWindowCornerPreference = 33;
     private const int DwmwcpRound = 2;
+    private const int DwmwaBorderColor = 34;
+    private const uint DwmwaColorNone = 0xFFFFFFFE;
 
-    private void ApplyRoundedCorners()
+    private void ApplyWindowChrome()
     {
+        // Windows 11 only; on Windows 10 these fail harmlessly.
         var preference = DwmwcpRound;
-        // Windows 11 only; on Windows 10 this fails harmlessly (square corners).
         _ = DwmSetWindowAttribute(_hwnd, DwmwaWindowCornerPreference, ref preference, sizeof(int));
+        // Remove the system's 1px window border line around the borderless popup.
+        var none = unchecked((int)DwmwaColorNone);
+        _ = DwmSetWindowAttribute(_hwnd, DwmwaBorderColor, ref none, sizeof(int));
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -683,12 +738,6 @@ internal sealed class UsagePopupWindow
 
     [DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(IntPtr hwnd);
-
-    [DllImport("user32.dll")]
-    private static extern bool ReleaseCapture();
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
