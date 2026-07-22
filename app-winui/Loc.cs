@@ -52,6 +52,8 @@ internal static partial class Loc
             "TopLeft" => "Top left",
             "BottomLeft" => "Bottom left",
             "NearCursor" => "Near cursor",
+            "OneColumn" => "One column",
+            "TwoColumns" => "Two columns",
             _ => value
         };
 
@@ -78,6 +80,9 @@ internal static partial class Loc
             "BottomLeft" => "왼쪽 아래",
             "Center" => "가운데",
             "NearCursor" => "커서 근처",
+            "Auto" => "자동",
+            "OneColumn" => "1열",
+            "TwoColumns" => "2열",
             _ => value
         };
     }
