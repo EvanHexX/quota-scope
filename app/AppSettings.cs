@@ -1,22 +1,53 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
-namespace CodexUsageTray;
+namespace QuotaScope;
+
+internal sealed class ProviderSettings
+{
+    public bool Enabled { get; set; } = true;
+    public int RefreshSeconds { get; set; } = 60;
+    public bool ShowSecondaryRows { get; set; } = false;
+    public bool ShowCredits { get; set; } = false;
+    public string Command { get; set; } = "codex";
+}
 
 internal sealed class AppSettings
 {
     public string Hotkey { get; set; } = "Ctrl+Alt+U";
-    public int RefreshSeconds { get; set; } = 60;
+    public string HotkeyRefreshAll { get; set; } = "";
+    public string HotkeyTogglePin { get; set; } = "";
     public int WarningThresholdPercent { get; set; } = 20;
+    public bool FollowSystemTheme { get; set; } = true;
+    public string ThemeOverride { get; set; } = "Dark";
+    public bool Autostart { get; set; } = false;
+    public string TrayIconStyle { get; set; } = "UsageArc";
+    public string GaugeMetric { get; set; } = "Used";
+    public string Language { get; set; } = "System";
+    public double UiScale { get; set; } = 1.0;
+    public bool Glassmorphism { get; set; } = false;
     public string PopupGraph { get; set; } = "half-circle";
-    public string CodexCommand { get; set; } = "codex";
     public string PopupPosition { get; set; } = "BottomRight";
     public string ShapeTheme { get; set; } = "Bars";
     public string ColorTheme { get; set; } = "DarkBluePurple";
     public string TimeDisplayMode { get; set; } = "ClockTime";
     public bool IsPinned { get; set; } = false;
-    public bool ShowSparkUsage { get; set; } = false;
+    public Dictionary<string, ProviderSettings> Providers { get; set; } = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["codex"] = new ProviderSettings()
+    };
+
+    public ProviderSettings GetProvider(string id)
+    {
+        if (!Providers.TryGetValue(id, out var provider))
+        {
+            provider = new ProviderSettings();
+            Providers[id] = provider;
+        }
+        return provider;
+    }
 
     public static string SettingsPath => Path.Combine(AppContext.BaseDirectory, "settings.json");
 
@@ -29,8 +60,9 @@ internal sealed class AppSettings
 
         try
         {
-            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath));
-            return settings ?? new AppSettings();
+            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath)) ?? new AppSettings();
+            settings.GetProvider("codex");
+            return settings;
         }
         catch
         {
@@ -44,5 +76,3 @@ internal sealed class AppSettings
         File.WriteAllText(SettingsPath, json);
     }
 }
-
-

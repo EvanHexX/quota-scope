@@ -5,11 +5,11 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CodexUsageTray;
+namespace QuotaScope.Providers.Codex;
 
 internal sealed class CodexAppServerClient : IDisposable
 {
-    private readonly AppSettings _settings;
+    private readonly ProviderSettings _settings;
     private readonly ConcurrentDictionary<int, TaskCompletionSource<JsonElement>> _pending = new();
     private readonly SemaphoreSlim _startLock = new(1, 1);
     private Process? _process;
@@ -18,22 +18,22 @@ internal sealed class CodexAppServerClient : IDisposable
     private CancellationTokenSource? _readerCts;
     private string? _lastError;
 
-    public string ResolvedCommandText => CodexCommandResolver.Resolve(_settings.CodexCommand).DisplayText;
+    public string ResolvedCommandText => CodexCommandResolver.Resolve(_settings.Command).DisplayText;
 
-    public event Action<UsageViewModel>? RateLimitsUpdated;
+    public event Action<ProviderUsage>? RateLimitsUpdated;
 
-    public CodexAppServerClient(AppSettings settings)
+    public CodexAppServerClient(ProviderSettings settings)
     {
         _settings = settings;
     }
 
-    public async Task<UsageViewModel> ReadRateLimitsAsync(CancellationToken cancellationToken)
+    public async Task<ProviderUsage> ReadRateLimitsAsync(CancellationToken cancellationToken)
     {
         await EnsureStartedAsync(cancellationToken).ConfigureAwait(false);
         return await ReadRateLimitsWithoutRestartAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<UsageViewModel> RestartAsync(CancellationToken cancellationToken)
+    public async Task<ProviderUsage> RestartAsync(CancellationToken cancellationToken)
     {
         await _startLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -49,7 +49,7 @@ internal sealed class CodexAppServerClient : IDisposable
         return await ReadRateLimitsWithoutRestartAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<UsageViewModel> ReadRateLimitsWithoutRestartAsync(CancellationToken cancellationToken)
+    private async Task<ProviderUsage> ReadRateLimitsWithoutRestartAsync(CancellationToken cancellationToken)
     {
         var result = await SendRequestAsync("account/rateLimits/read", null, cancellationToken).ConfigureAwait(false);
         return RateLimitMapper.FromJsonResult(result);
@@ -76,7 +76,7 @@ internal sealed class CodexAppServerClient : IDisposable
     private async Task StartProcessAsync(CancellationToken cancellationToken)
     {
         _lastError = null;
-        var command = CodexCommandResolver.Resolve(_settings.CodexCommand);
+        var command = CodexCommandResolver.Resolve(_settings.Command);
         var psi = new ProcessStartInfo
         {
             FileName = command.FileName,
@@ -95,7 +95,7 @@ internal sealed class CodexAppServerClient : IDisposable
 
         var initializeParams = new
         {
-            clientInfo = new { name = "codex-usage-tray", title = "Codex Usage Tray", version = "0.1.0" },
+            clientInfo = new { name = "quota-scope", title = "QuotaScope", version = "0.1.0" },
             capabilities = new
             {
                 experimentalApi = true,

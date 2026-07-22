@@ -1,19 +1,29 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Text;
+using System.Linq;
 using System.Windows.Forms;
+using QuotaScope.Providers;
 
-namespace CodexUsageTray;
+namespace QuotaScope;
 
 internal sealed class UsagePopupForm : Form
 {
     private const int WmNchittest = 0x0084;
     private const int Htcaption = 2;
+    private const int BarRowHeight = 54;
+    private const int BarRowSpacing = 68;
+    private const int HeaderBottom = 78;
+    private const int SectionHeaderHeight = 34;
+    private const int SectionDividerGap = 14;
+    private const int BentoCardHeight = 230;
+    private const int BentoRowGap = 14;
+    private const int BentoSectionBottomGap = 10;
     private static readonly Color TransparentCanvas = Color.FromArgb(1, 2, 3);
     private static readonly string UiFontFamily = ResolveUiFontFamily();
     private readonly List<Rectangle> _timeToggleBounds = new();
-    private UsageViewModel _usage = UsageViewModel.Offline("Waiting for Codex connection");
+    private IReadOnlyList<ProviderUsage> _usages = Array.Empty<ProviderUsage>();
     private AppSettings _settings;
 
     public event Action? SettingsChanged;
@@ -32,7 +42,7 @@ internal sealed class UsagePopupForm : Form
         TransparencyKey = TransparentCanvas;
         ForeColor = Color.FromArgb(244, 247, 255);
         Font = new Font(UiFontFamily, 10f, FontStyle.Regular, GraphicsUnit.Point);
-        Text = "Codex Usage";
+        Text = "Usage";
         Icon = TrayIconRenderer.CreateAppIcon();
         DoubleBuffered = true;
         KeyPreview = true;
@@ -49,21 +59,67 @@ internal sealed class UsagePopupForm : Form
         Invalidate();
     }
 
+    public void SetUsage(IReadOnlyList<ProviderUsage> usages)
+    {
+        _usages = usages;
+        ApplyThemeSize();
+        Invalidate();
+    }
+
+    private List<(ProviderUsage Usage, List<UsageRow> Rows)> BuildSections()
+    {
+        var sections = new List<(ProviderUsage, List<UsageRow>)>();
+        foreach (var usage in _usages)
+        {
+            var provider = _settings.GetProvider(usage.ProviderId);
+            var rows = usage.Rows.Where(row => IsRowVisible(row, provider)).ToList();
+            sections.Add((usage, rows));
+        }
+        return sections;
+    }
+
+    private static bool IsRowVisible(UsageRow row, ProviderSettings provider)
+    {
+        if (row.IsPrimary) return true;
+        return row.Window is not null ? provider.ShowSecondaryRows : provider.ShowCredits;
+    }
+
     private void ApplyThemeSize()
     {
+        var sections = BuildSections();
         var usesBento = string.Equals(_settings.ShapeTheme, "BentoCircles", StringComparison.OrdinalIgnoreCase);
-        var targetSize = usesBento
-            ? new Size(452, _settings.ShowSparkUsage ? 582 : 338)
-            : new Size(408, _settings.ShowSparkUsage ? 372 : 236);
+        Size targetSize;
+        if (usesBento)
+        {
+            var totalCards = sections.Sum(s => s.Rows.Count);
+            // Single card overall: shrink the popup to one-card width.
+            var width = totalCards == 1 ? 240 : 452;
+            var height = HeaderBottom;
+            for (var i = 0; i < sections.Count; i++)
+            {
+                var cardRows = (sections[i].Rows.Count + 1) / 2;
+                height += (i > 0 ? SectionDividerGap : 0) + SectionHeaderHeight;
+                if (cardRows > 0)
+                {
+                    height += cardRows * BentoCardHeight + (cardRows - 1) * BentoRowGap + BentoSectionBottomGap;
+                }
+            }
+            if (sections.Count == 0) height = 300;
+            targetSize = new Size(width, height + 10);
+        }
+        else
+        {
+            var height = HeaderBottom;
+            for (var i = 0; i < sections.Count; i++)
+            {
+                height += (i > 0 ? SectionDividerGap : 0) + SectionHeaderHeight + sections[i].Rows.Count * BarRowSpacing;
+            }
+            if (sections.Count == 0) height = 236;
+            targetSize = new Size(408, height + 4);
+        }
 
         MinimumSize = targetSize;
         ClientSize = targetSize;
-    }
-
-    public void SetUsage(UsageViewModel usage)
-    {
-        _usage = usage;
-        Invalidate();
     }
 
     protected override void WndProc(ref Message m)
@@ -103,8 +159,11 @@ internal sealed class UsagePopupForm : Form
         using var titleFont = new Font(UiFontFamily, 13f, FontStyle.Bold, GraphicsUnit.Point);
         using var statusFont = new Font(UiFontFamily, 8.8f, FontStyle.Regular, GraphicsUnit.Point);
 
-        DrawText(g, "Codex Usage", titleFont, palette.Text, new Rectangle(22, 18, ClientSize.Width - 74, 24), TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
-        DrawText(g, _usage.StatusText, statusFont, palette.Muted, new Rectangle(22, 43, ClientSize.Width - 74, 22), TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+        DrawText(g, "Usage", titleFont, palette.Text, new Rectangle(22, 18, ClientSize.Width - 74, 24), TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+        if (_usages.Count == 0)
+        {
+            DrawText(g, "Waiting for connection", statusFont, palette.Muted, new Rectangle(22, 43, ClientSize.Width - 74, 22), TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+        }
         DrawPinIcon(g, palette, GetPinBounds(), _settings.IsPinned);
 
         if (string.Equals(_settings.ShapeTheme, "BentoCircles", StringComparison.OrdinalIgnoreCase))
@@ -194,80 +253,129 @@ internal sealed class UsagePopupForm : Form
     {
         using var labelFont = new Font(UiFontFamily, 11f, FontStyle.Bold, GraphicsUnit.Point);
         using var metaFont = new Font(UiFontFamily, 10f, FontStyle.Regular, GraphicsUnit.Point);
-        DrawBarRow(g, palette, new Rectangle(22, 86, ClientSize.Width - 44, 54), "5h", _usage.FiveHour, labelFont, metaFont);
-        DrawBarRow(g, palette, new Rectangle(22, 154, ClientSize.Width - 44, 54), "1w", _usage.OneWeek, labelFont, metaFont);
-        if (_settings.ShowSparkUsage)
+
+        var sections = BuildSections();
+        var y = HeaderBottom;
+        for (var i = 0; i < sections.Count; i++)
         {
-            DrawBarRow(g, palette, new Rectangle(22, 222, ClientSize.Width - 44, 54), "Spark 5h", _usage.SparkFiveHour, labelFont, metaFont);
-            DrawBarRow(g, palette, new Rectangle(22, 290, ClientSize.Width - 44, 54), "Spark 1w", _usage.SparkOneWeek, labelFont, metaFont);
+            var (usage, rows) = sections[i];
+            y = DrawSectionHeader(g, palette, usage, y, i > 0);
+            foreach (var row in rows)
+            {
+                DrawBarRow(g, palette, new Rectangle(22, y, ClientSize.Width - 44, BarRowHeight), row, labelFont, metaFont);
+                y += BarRowSpacing;
+            }
         }
     }
 
-    private void DrawBarRow(Graphics g, PopupPalette palette, Rectangle bounds, string label, RateLimitWindow? window, Font labelFont, Font metaFont)
+    // Every provider gets its own labeled section so providers are easy to tell apart.
+    private int DrawSectionHeader(Graphics g, PopupPalette palette, ProviderUsage usage, int y, bool withDivider)
     {
-        var percent = window?.RemainingPercent;
-        var timeText = FormatWindowTime(window);
+        if (withDivider)
+        {
+            using var divider = new Pen(Color.FromArgb(90, palette.Border), 1);
+            g.DrawLine(divider, 24, y + 6, ClientSize.Width - 24, y + 6);
+            y += SectionDividerGap;
+        }
+
+        using var nameFont = new Font(UiFontFamily, 10.5f, FontStyle.Bold, GraphicsUnit.Point);
+        using var statusFont = new Font(UiFontFamily, 8.8f, FontStyle.Regular, GraphicsUnit.Point);
+        var nameWidth = Math.Min(140, ClientSize.Width / 3);
+        DrawText(g, usage.DisplayName, nameFont, palette.AccentBlue, new Rectangle(22, y + 2, nameWidth, 20), TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+        DrawText(g, usage.StatusText, statusFont, palette.Muted, new Rectangle(22 + nameWidth, y + 4, ClientSize.Width - 44 - nameWidth, 18), TextFormatFlags.Right | TextFormatFlags.EndEllipsis);
+        return y + SectionHeaderHeight;
+    }
+
+    private void DrawBarRow(Graphics g, PopupPalette palette, Rectangle bounds, UsageRow row, Font labelFont, Font metaFont)
+    {
         using var cardBrush = new SolidBrush(palette.Row);
         using var cardBorder = new Pen(palette.Border, 1);
         g.FillRoundedRectangle(cardBrush, bounds, 11);
         g.DrawRoundedRectangle(cardBorder, bounds, 11);
 
-        var labelWidth = label.StartsWith("Spark", StringComparison.OrdinalIgnoreCase) ? 118 : 86;
-        DrawText(g, label, labelFont, palette.Text, new Rectangle(bounds.X + 14, bounds.Y + 10, labelWidth, 22), TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
-        var rightText = percent.HasValue ? $"{percent.Value}%  {timeText}" : $"--%  {timeText}";
+        var labelWidth = row.Label.Length > 6 ? 118 : 86;
+        DrawText(g, row.Label, labelFont, palette.Text, new Rectangle(bounds.X + 14, bounds.Y + 10, labelWidth, 22), TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
         var rightX = bounds.X + labelWidth + 28;
         var rightBounds = new Rectangle(rightX, bounds.Y + 11, bounds.Right - rightX - 14, 22);
-        _timeToggleBounds.Add(rightBounds);
-        DrawText(g, rightText, metaFont, palette.Muted, rightBounds, TextFormatFlags.Right | TextFormatFlags.EndEllipsis);
-        DrawBar(g, palette, new Rectangle(bounds.X + 14, bounds.Y + 36, bounds.Width - 28, 8), percent ?? 0);
+
+        if (row.Window is { } window)
+        {
+            var rightText = $"{FormatPercent(window)}  {FormatWindowTime(window)}";
+            _timeToggleBounds.Add(rightBounds);
+            DrawText(g, rightText, metaFont, palette.Muted, rightBounds, TextFormatFlags.Right | TextFormatFlags.EndEllipsis);
+            DrawBar(g, palette, new Rectangle(bounds.X + 14, bounds.Y + 36, bounds.Width - 28, 8), RoundPercent(window));
+        }
+        else
+        {
+            DrawText(g, row.DetailText ?? "--", metaFont, palette.Muted, rightBounds, TextFormatFlags.Right | TextFormatFlags.EndEllipsis);
+        }
     }
 
     private void DrawBentoCircles(Graphics g, PopupPalette palette)
     {
         const int marginX = 22;
-        const int top = 84;
         const int gap = 16;
-        const int rowGap = 14;
-        const int bottom = 24;
         var cardWidth = (ClientSize.Width - (marginX * 2) - gap) / 2;
-        var cardHeight = _settings.ShowSparkUsage
-            ? (ClientSize.Height - top - bottom - rowGap) / 2
-            : ClientSize.Height - top - bottom;
 
-        DrawCircleCard(g, palette, new Rectangle(marginX, top, cardWidth, cardHeight), "5h", _usage.FiveHour);
-        DrawCircleCard(g, palette, new Rectangle(marginX + cardWidth + gap, top, cardWidth, cardHeight), "1w", _usage.OneWeek);
-        if (_settings.ShowSparkUsage)
+        var sections = BuildSections();
+        var y = HeaderBottom;
+        for (var s = 0; s < sections.Count; s++)
         {
-            var secondRowTop = top + cardHeight + rowGap;
-            DrawCircleCard(g, palette, new Rectangle(marginX, secondRowTop, cardWidth, cardHeight), "Spark 5h", _usage.SparkFiveHour);
-            DrawCircleCard(g, palette, new Rectangle(marginX + cardWidth + gap, secondRowTop, cardWidth, cardHeight), "Spark 1w", _usage.SparkOneWeek);
+            var (usage, rows) = sections[s];
+            y = DrawSectionHeader(g, palette, usage, y, s > 0);
+            for (var i = 0; i < rows.Count; i++)
+            {
+                var col = i % 2;
+                var rowIndex = i / 2;
+                // A trailing odd card spans the full width so the grid has no hole.
+                var isTrailingOdd = i == rows.Count - 1 && rows.Count % 2 == 1;
+                var bounds = new Rectangle(
+                    marginX + col * (cardWidth + gap),
+                    y + rowIndex * (BentoCardHeight + BentoRowGap),
+                    isTrailingOdd ? ClientSize.Width - marginX * 2 : cardWidth,
+                    BentoCardHeight);
+                DrawBentoCard(g, palette, bounds, rows[i]);
+            }
+
+            var cardRows = (rows.Count + 1) / 2;
+            if (cardRows > 0)
+            {
+                y += cardRows * BentoCardHeight + (cardRows - 1) * BentoRowGap + BentoSectionBottomGap;
+            }
         }
     }
 
-    private void DrawCircleCard(Graphics g, PopupPalette palette, Rectangle bounds, string label, RateLimitWindow? window)
+    private void DrawBentoCard(Graphics g, PopupPalette palette, Rectangle bounds, UsageRow row)
     {
         using var cardBrush = new SolidBrush(palette.Row);
         using var cardBorder = new Pen(palette.Border, 1);
         g.FillRoundedRectangle(cardBrush, bounds, 14);
         g.DrawRoundedRectangle(cardBorder, bounds, 14);
 
-        var percent = window?.RemainingPercent ?? 0;
         using var labelFont = new Font(UiFontFamily, 10.2f, FontStyle.Bold, GraphicsUnit.Point);
         using var percentFont = new Font(UiFontFamily, 19f, FontStyle.Bold, GraphicsUnit.Point);
         using var metaFont = new Font(UiFontFamily, 9.2f, FontStyle.Regular, GraphicsUnit.Point);
 
-        DrawText(g, label, labelFont, palette.Text, new Rectangle(bounds.X + 16, bounds.Y + 14, bounds.Width - 32, 22), TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        DrawText(g, row.Label, labelFont, palette.Text, new Rectangle(bounds.X + 16, bounds.Y + 14, bounds.Width - 32, 22), TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 
-        var circleSize = Math.Min(126, Math.Min(bounds.Width - 54, bounds.Height - 92));
-        circleSize = Math.Max(96, circleSize);
-        var circle = new Rectangle(bounds.X + (bounds.Width - circleSize) / 2, bounds.Y + 50, circleSize, circleSize);
-        DrawCircleGauge(g, palette, circle, percent);
+        if (row.Window is { } window)
+        {
+            var percent = RoundPercent(window);
+            var circleSize = Math.Min(126, Math.Min(bounds.Width - 54, bounds.Height - 92));
+            circleSize = Math.Max(96, circleSize);
+            var circle = new Rectangle(bounds.X + (bounds.Width - circleSize) / 2, bounds.Y + 50, circleSize, circleSize);
+            DrawCircleGauge(g, palette, circle, percent);
 
-        DrawText(g, $"{percent}%", percentFont, palette.Text, new Rectangle(circle.X, circle.Y + (circle.Height - 40) / 2, circle.Width, 40), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-        var metaY = Math.Min(bounds.Bottom - 34, circle.Bottom + 14);
-        var metaBounds = new Rectangle(bounds.X + 16, metaY, bounds.Width - 32, 20);
-        _timeToggleBounds.Add(metaBounds);
-        DrawText(g, FormatWindowTime(window), metaFont, palette.Muted, metaBounds, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            DrawText(g, $"{percent}%", percentFont, palette.Text, new Rectangle(circle.X, circle.Y + (circle.Height - 40) / 2, circle.Width, 40), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            var metaY = Math.Min(bounds.Bottom - 34, circle.Bottom + 14);
+            var metaBounds = new Rectangle(bounds.X + 16, metaY, bounds.Width - 32, 20);
+            _timeToggleBounds.Add(metaBounds);
+            DrawText(g, FormatWindowTime(window), metaFont, palette.Muted, metaBounds, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        }
+        else
+        {
+            DrawText(g, row.DetailText ?? "--", percentFont, palette.Text, new Rectangle(bounds.X + 16, bounds.Y + 50, bounds.Width - 32, bounds.Height - 100), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        }
     }
 
     private static void DrawBar(Graphics g, PopupPalette palette, Rectangle bounds, int percent)
@@ -290,16 +398,27 @@ internal sealed class UsagePopupForm : Form
         g.DrawArc(progress, bounds, -90, 360 * Math.Clamp(percent, 0, 100) / 100f);
     }
 
-    private static Color BlendAccent(PopupPalette palette, int percent)
+    private static Color BlendAccent(PopupPalette palette, int usedPercent)
     {
-        if (percent <= 20) return Color.FromArgb(255, 126, 91);
-        if (percent <= 50) return Color.FromArgb(132, 124, 255);
+        if (usedPercent >= 80) return Color.FromArgb(255, 126, 91);
+        if (usedPercent >= 50) return Color.FromArgb(132, 124, 255);
         return palette.AccentBlue;
     }
 
     private static void DrawText(Graphics g, string value, Font font, Color color, Rectangle bounds, TextFormatFlags flags)
     {
         TextRenderer.DrawText(g, value, font, bounds, color, flags | TextFormatFlags.GlyphOverhangPadding);
+    }
+
+    // Gauges fill with usage: 0% = untouched, full bar/ring = exhausted.
+    private static int RoundPercent(RateLimitWindow window)
+    {
+        return (int)Math.Round(Math.Clamp(window.UsedPercent, 0d, 100d));
+    }
+
+    private static string FormatPercent(RateLimitWindow window)
+    {
+        return $"{RoundPercent(window)}%";
     }
 
     private string FormatWindowTime(RateLimitWindow? window)

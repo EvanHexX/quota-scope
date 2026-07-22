@@ -12,10 +12,10 @@ Last updated: 2026-06-21
 
 ## Current technical status
 
-- Current app project: `app/CodexUsageTray.csproj`
+- Current app project: `app/QuotaScope.csproj`
 - Current target framework: `net10.0-windows`
 - Current UI framework: Windows Forms
-- Local verification: `dotnet build app/CodexUsageTray.csproj` and `dotnet run --project app/CodexUsageTray.csproj -- --self-test` pass with .NET SDK 10.0.301.
+- Local verification: `dotnet build app/QuotaScope.csproj` and `dotnet run --project app/QuotaScope.csproj -- --self-test` pass with .NET SDK 10.0.301.
 - Recommended near-term direction: keep the app on the supported modern .NET LTS target while preserving Windows Forms.
 - Recommended WinUI 3 direction: TODO/prototype later in a separate branch; do not rewrite the main app before the first stable public release.
 
@@ -33,7 +33,7 @@ Ask Codex to add CI without changing app behavior:
 
 ```text
 Read AGENTS.md and docs/MODERNIZATION_PLAN.md first.
-Add a GitHub Actions workflow that builds app/CodexUsageTray.csproj on windows-latest with .NET 10.
+Add a GitHub Actions workflow that builds app/QuotaScope.csproj on windows-latest with .NET 10.
 Run the existing self-test in CI.
 Do not add packaging or WinUI 3 migration in this task.
 ```
