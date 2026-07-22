@@ -96,6 +96,28 @@ WinForms app is a separate follow-up task after sign-off.
 - The corner and border attributes are re-applied after backdrop changes and on
   show/activation because window state transitions can restore DWM defaults.
 
+## Popup layout modes
+
+- `ShapeTheme` is `Bars`, `BentoCircles`, or `MixMatch`. Mix & match stores a
+  per-row override in `RowShapes` (`"<providerId>|<row label>"` ->
+  `Circle` | `Bars`, gauge by default) and the Appearance page lists every row
+  the enabled providers report.
+- Layout rule shared by all three modes: bar rows always span the full content
+  width; gauges pair two per line only when some provider section has at least
+  two gauges, otherwise everything stacks in a single column. The popup is wide
+  (452 dip) for the two-column case, compact (240 dip) for a single lone gauge,
+  and one-column width (408 dip) otherwise — so bars are one column wide in a
+  single-column layout and two columns wide in a two-column layout.
+
+## Localization
+
+- `Loc` provides `T(en, ko)` plus `RowLabel` (duration tokens: `5h` -> `5시간`,
+  `7d` -> `7일`, `1w` -> `1주`; model names stay as-is) and `Option` for
+  settings values that are persisted as stable English keys.
+- Language changes apply live: the tray menu is rebuilt, and the settings
+  window retitles itself, relabels its navigation items, and rebuilds the
+  visible page instead of requiring a reopen.
+
 ## Tray icon design decisions (maintainer, 2026-07-22)
 
 - Remove the numeric text from the tray icon. The signal is limited to two
