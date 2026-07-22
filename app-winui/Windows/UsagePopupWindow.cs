@@ -155,6 +155,7 @@ internal sealed class UsagePopupWindow
             e.Cancel = true;
             Hide();
         };
+        InstallNcCalcSizeSubclass();
         ApplyWindowChrome();
 
         _window.Activated += (_, e) =>
@@ -804,6 +805,37 @@ internal sealed class UsagePopupWindow
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+    // The classic borderless-window technique: claiming the whole window rect
+    // as client area in WM_NCCALCSIZE removes the non-client top strip that
+    // keeps rendering as a white line despite every DWM/style-based attempt
+    // (see docs of microsoft-ui-xaml #8947 lineage; WinUIEx does the same).
+    private const uint WmNcCalcSize = 0x0083;
+    private SubclassProc? _subclassProc;
+
+    private delegate IntPtr SubclassProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, IntPtr idSubclass, IntPtr refData);
+
+    private void InstallNcCalcSizeSubclass()
+    {
+        _subclassProc = OnSubclassMessage; // rooted for the window's lifetime
+        SetWindowSubclass(_hwnd, _subclassProc, IntPtr.Zero, IntPtr.Zero);
+        SetWindowPos(_hwnd, IntPtr.Zero, 0, 0, 0, 0, SwpFlags); // re-evaluate the frame
+    }
+
+    private IntPtr OnSubclassMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, IntPtr idSubclass, IntPtr refData)
+    {
+        if (msg == WmNcCalcSize && wParam != IntPtr.Zero)
+        {
+            return IntPtr.Zero; // client area == full window rect
+        }
+        return DefSubclassProc(hwnd, msg, wParam, lParam);
+    }
+
+    [DllImport("comctl32.dll")]
+    private static extern bool SetWindowSubclass(IntPtr hwnd, SubclassProc callback, IntPtr idSubclass, IntPtr refData);
+
+    [DllImport("comctl32.dll")]
+    private static extern IntPtr DefSubclassProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
     private static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
