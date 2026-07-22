@@ -64,12 +64,13 @@ internal sealed class AcrylicBackdropHost : IDisposable
             };
             _configuration.Theme = darkTheme ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light;
 
-            if (_controller is null)
-            {
-                _controller = new DesktopAcrylicController();
-                _controller.AddSystemBackdropTarget(_window.As<ICompositionSupportsSystemBackdrop>());
-                _controller.SetSystemBackdropConfiguration(_configuration);
-            }
+            // Always rebuild the controller: hiding the window can invalidate
+            // the backdrop target, and re-setting properties on the stale
+            // controller then leaves the (transparent) window painting black.
+            Detach();
+            _controller = new DesktopAcrylicController();
+            _controller.AddSystemBackdropTarget(_window.As<ICompositionSupportsSystemBackdrop>());
+            _controller.SetSystemBackdropConfiguration(_configuration);
 
             try
             {

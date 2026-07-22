@@ -208,7 +208,7 @@ internal sealed class SettingsWindow
         };
 
         var position = MakeCombo(
-            new[] { "BottomRight", "TopRight", "TopLeft", "BottomLeft", "Center", "NearCursor" },
+            new[] { "BottomRight", "TopRight", "TopLeft", "BottomLeft", "Center", "NearCursor", "LastPosition" },
             _settings.PopupPosition,
             value => { _settings.PopupPosition = value; Save(SettingsChange.General); });
 

@@ -237,8 +237,19 @@ internal sealed class UsagePopupWindow
 
     public void Hide()
     {
+        SaveLastPosition();
         _appWindow.Hide();
         Visible = false;
+    }
+
+    // Feeds the "Last position" popup placement mode.
+    private void SaveLastPosition()
+    {
+        var position = _appWindow.Position;
+        if (_settings.LastPopupX == position.X && _settings.LastPopupY == position.Y) return;
+        _settings.LastPopupX = position.X;
+        _settings.LastPopupY = position.Y;
+        _settings.Save();
     }
 
     public void TogglePin()
@@ -298,13 +309,15 @@ internal sealed class UsagePopupWindow
     private void EndDrag()
     {
         _dragging = false;
-        if (!_resizePendingAfterDrag) return;
-
-        _resizePendingAfterDrag = false;
-        if (Visible)
+        if (_resizePendingAfterDrag)
         {
-            PositionAndSize(preservePosition: true);
+            _resizePendingAfterDrag = false;
+            if (Visible)
+            {
+                PositionAndSize(preservePosition: true);
+            }
         }
+        SaveLastPosition();
     }
 
     private static bool IsDescendantOf(DependencyObject? source, DependencyObject ancestor)
@@ -794,16 +807,23 @@ internal sealed class UsagePopupWindow
             : forcedOneColumn || singleGaugeOnly ? BentoSingleCardWidth : BarsWidth;
         var uiScale = Math.Clamp(_settings.UiScale, 0.7, 1.6);
 
+        var configuredPosition = _settings.PopupPosition ?? "BottomRight";
+        // A visible popup must not chase the cursor on every refresh; re-anchor
+        // to the cursor only while showing it.
+        var keepPlace = preservePosition
+            || (Visible && configuredPosition.Equals("NearCursor", StringComparison.OrdinalIgnoreCase));
+
         var currentPosition = _appWindow.Position;
         GetCursorPos(out var cursor);
-        var areaAnchor = preservePosition
+        var areaAnchor = keepPlace
             ? new PointInt32(currentPosition.X, currentPosition.Y)
             : new PointInt32(cursor.X, cursor.Y);
         var area = DisplayArea.GetFromPoint(areaAnchor, DisplayAreaFallback.Nearest);
         var work = area.WorkArea;
 
         // Land on the target monitor first so GetDpiForWindow reports its scale.
-        if (!preservePosition)
+        // Skipped while visible: the intermediate move is a visible flicker.
+        if (!keepPlace && !Visible)
         {
             _appWindow.Move(new PointInt32(work.X + 8, work.Y + 8));
         }
@@ -823,18 +843,29 @@ internal sealed class UsagePopupWindow
 
         int x;
         int y;
-        if (preservePosition)
+        if (keepPlace)
         {
             x = Math.Min(Math.Max(currentPosition.X, work.X), Math.Max(work.X, work.X + work.Width - width));
             y = Math.Min(Math.Max(currentPosition.Y, work.Y), Math.Max(work.Y, work.Y + work.Height - height));
         }
         else
         {
-            var position = _settings.PopupPosition ?? "BottomRight";
+            var position = configuredPosition;
             x = work.X + work.Width - width - margin;
             y = work.Y + work.Height - height - margin;
 
-            if (position.Equals("TopRight", StringComparison.OrdinalIgnoreCase))
+            if (position.Equals("LastPosition", StringComparison.OrdinalIgnoreCase)
+                && _settings.LastPopupX != int.MinValue && _settings.LastPopupY != int.MinValue)
+            {
+                // Re-resolve the work area around the remembered spot so the
+                // popup returns to the monitor it was last used on.
+                var lastArea = DisplayArea.GetFromPoint(
+                    new PointInt32(_settings.LastPopupX, _settings.LastPopupY), DisplayAreaFallback.Nearest);
+                work = lastArea.WorkArea;
+                x = _settings.LastPopupX;
+                y = _settings.LastPopupY;
+            }
+            else if (position.Equals("TopRight", StringComparison.OrdinalIgnoreCase))
             {
                 x = work.X + work.Width - width - margin;
                 y = work.Y + margin;
