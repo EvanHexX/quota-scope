@@ -16,8 +16,9 @@ The product is multi-provider, limited to an approved provider whitelist: **Code
 - Entry point: `app/Program.cs`
 - Tray lifecycle/menu/hotkey wiring: `app/TrayApplicationContext.cs`
 - Popup UI: `app/UsagePopupForm.cs`
-- Codex app-server client: `app/CodexAppServerClient.cs`
-- Rate limit mapping: `app/RateLimitMapper.cs`
+- Provider abstraction: `app/Providers/IUsageProvider.cs`, `app/Providers/UsageModels.cs`
+- Codex app-server client: `app/Providers/Codex/CodexAppServerClient.cs`
+- Rate limit mapping: `app/Providers/Codex/RateLimitMapper.cs`
 - Project map: `docs/PROJECT_MAP.md`
 - Modernization plan: `docs/MODERNIZATION_PLAN.md`
 

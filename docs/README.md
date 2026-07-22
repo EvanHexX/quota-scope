@@ -54,14 +54,15 @@ Current flow:
   - `Settings > Position`
   - `Settings > Time Display`
   - `Settings > Usage Rows > GPT-5.3 Spark`
+  - `Settings > Usage Rows > Credits`
   - `Settings > Shape Theme`
   - `Settings > Color Theme`
   - `Exit`
 - The popup is a titlebarless dark/glass-style window.
 - Color themes currently include `DarkBluePurple`, `MidnightBlack`, `Nebula`, and `Glassmorphism`.
 - The outer canvas uses a transparency key.
-- Default usage rows are `5h` and `1w`.
-- `Spark 5h` and `Spark 1w` are optional rows.
+- Usage rows are payload-driven: one row per rate-limit window the provider reports, labeled from the window duration (300 mins -> `5h`, 10080 mins -> `1w`).
+- `Spark <window>` rows (GPT-5.3-Codex-Spark) and the `Credits` balance row are optional.
 - User-visible popup labels and connection status messages are written in English.
 - Clicking the time text toggles between `Clock Time` and `Remaining Time` display.
 - `Bento Circles` uses a taller circular gauge card layout. If Spark rows are enabled, it uses a 2x2 circle layout.
@@ -74,23 +75,29 @@ The current app stores `settings.json` next to the running app output. If the fi
 
 ```json
 {
-  "hotkey": "Ctrl+Alt+U",
-  "refreshSeconds": 60,
-  "warningThresholdPercent": 20,
-  "popupGraph": "half-circle",
-  "codexCommand": "codex",
-  "popupPosition": "BottomRight",
-  "shapeTheme": "Bars",
-  "colorTheme": "DarkBluePurple",
-  "timeDisplayMode": "ClockTime",
-  "isPinned": false,
-  "showSparkUsage": false
+  "Hotkey": "Ctrl+Alt+U",
+  "WarningThresholdPercent": 20,
+  "PopupGraph": "half-circle",
+  "PopupPosition": "BottomRight",
+  "ShapeTheme": "Bars",
+  "ColorTheme": "DarkBluePurple",
+  "TimeDisplayMode": "ClockTime",
+  "IsPinned": false,
+  "Providers": {
+    "codex": {
+      "Enabled": true,
+      "RefreshSeconds": 60,
+      "ShowSecondaryRows": false,
+      "ShowCredits": false,
+      "Command": "codex"
+    }
+  }
 }
 ```
 
-`timeDisplayMode` can be `ClockTime` or `RemainingTime`.
+`TimeDisplayMode` can be `ClockTime` or `RemainingTime`. Per-provider display options (`ShowSecondaryRows`, `ShowCredits`) select which optional rows are shown.
 
-The `hotkey` setting currently exists for future UI support. Actual registration is fixed to `Ctrl+Alt+U`.
+The `Hotkey` setting currently exists for future UI support. Actual registration is fixed to `Ctrl+Alt+U`.
 
 ## Related docs
 

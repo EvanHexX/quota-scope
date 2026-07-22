@@ -16,8 +16,9 @@ Codex를 자주 사용하는 사용자가 작업 중 남은 사용량과 reset �
 
 - Windows system tray 유틸리티
 - Codex 사용량 window를 보여주는 compact popup
-- 5시간 / 1주 사용량 gauge
-- 선택 가능한 Spark 사용량 gauge
+- Payload 기반 사용량 gauge: provider가 보고하는 rate limit window마다 1행
+- 선택 가능한 GPT-5.3-Codex-Spark 사용량 행
+- 선택 가능한 credits 잔액 행
 - Pinned popup mode
 - Global hotkey: `Ctrl+Alt+U`
 - 수동 refresh 및 reconnect control
@@ -29,20 +30,12 @@ Codex를 자주 사용하는 사용자가 작업 중 남은 사용량과 reset �
 
 현재 WinForms UI는 원형 사용량 card를 가진 compact dark tray popup입니다.
 
-기본 표시 항목:
-
-- `5h`
-- `1w`
+표시 행은 payload 기반으로 동적으로 생성됩니다. provider가 보고하는 rate limit window만 행이 되며, 라벨은 window 길이에서 유도됩니다 (예: 300분 -> `5h`, 10080분 -> `1w`).
 
 선택 표시 항목:
 
-- `Spark 5h`
-- `Spark 1w`
-
-일반적으로 다음 두 layout을 사용합니다.
-
-- Codex 기본 사용량만 표시: 2개 card
-- Codex + Spark 사용량 표시: 4개 card
+- `Spark <window>` (GPT-5.3-Codex-Spark)
+- `Credits` (잔액)
 
 현재 UI는 의도적으로 단순하게 유지합니다. WinUI 3 포팅 전 기능 기준선으로 사용하기 위한 버전입니다.
 
@@ -102,25 +95,33 @@ settings.json
 
 ```json
 {
-  "hotkey": "Ctrl+Alt+U",
-  "refreshSeconds": 60,
-  "warningThresholdPercent": 20,
-  "popupGraph": "half-circle",
-  "codexCommand": "codex",
-  "popupPosition": "BottomRight",
-  "shapeTheme": "Bars",
-  "colorTheme": "DarkBluePurple",
-  "timeDisplayMode": "ClockTime",
-  "isPinned": false,
-  "showSparkUsage": false
+  "Hotkey": "Ctrl+Alt+U",
+  "WarningThresholdPercent": 20,
+  "PopupGraph": "half-circle",
+  "PopupPosition": "BottomRight",
+  "ShapeTheme": "Bars",
+  "ColorTheme": "DarkBluePurple",
+  "TimeDisplayMode": "ClockTime",
+  "IsPinned": false,
+  "Providers": {
+    "codex": {
+      "Enabled": true,
+      "RefreshSeconds": 60,
+      "ShowSecondaryRows": false,
+      "ShowCredits": false,
+      "Command": "codex"
+    }
+  }
 }
 ```
 
 참고:
 
-- `timeDisplayMode`는 `ClockTime` 또는 `RemainingTime`을 사용할 수 있습니다.
-- `showSparkUsage`를 켜면 Spark rows가 표시됩니다.
-- `hotkey` 설정은 파일에 존재하지만, 현재 실제 등록된 hotkey는 `Ctrl+Alt+U`로 고정되어 있습니다.
+- `TimeDisplayMode`는 `ClockTime` 또는 `RemainingTime`을 사용할 수 있습니다.
+- Provider별 옵션은 `Providers` 아래에 provider 단위로 저장됩니다.
+- `ShowSecondaryRows`를 켜면 secondary model 행(GPT-5.3-Codex-Spark)이 표시됩니다.
+- `ShowCredits`를 켜면 credits 잔액 행이 표시됩니다.
+- `Hotkey` 설정은 파일에 존재하지만, 현재 실제 등록된 hotkey는 `Ctrl+Alt+U`로 고정되어 있습니다.
 
 ## 현재 제한사항
 
