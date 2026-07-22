@@ -367,7 +367,7 @@ internal sealed class UsagePopupWindow
             return;
         }
 
-        var usesBento = string.Equals(_settings.ShapeTheme, "BentoCircles", StringComparison.OrdinalIgnoreCase);
+        var twoColumn = UsesTwoColumnLayout(sections);
         for (var i = 0; i < sections.Count; i++)
         {
             var (usage, rows) = sections[i];
@@ -382,19 +382,85 @@ internal sealed class UsagePopupWindow
             }
 
             _sectionsPanel.Children.Add(BuildSectionHeader(usage, palette));
+            AddSectionRows(usage.ProviderId, rows, palette, twoColumn);
+        }
+    }
 
-            if (usesBento)
+    // Two columns only pay off when some section actually has a pair of gauges
+    // to place side by side; otherwise everything stacks in one column and bar
+    // rows get the single-column width.
+    private bool UsesTwoColumnLayout(List<(ProviderUsage Usage, List<UsageRow> Rows)> sections)
+    {
+        foreach (var (usage, rows) in sections)
+        {
+            var circles = 0;
+            foreach (var row in rows)
             {
-                AddBentoRows(rows, palette);
-            }
-            else
-            {
-                foreach (var row in rows)
+                if (RowShapes.Resolve(_settings, usage.ProviderId, row) == RowShapes.Circle && ++circles >= 2)
                 {
-                    _sectionsPanel.Children.Add(BuildBarRow(row, palette));
+                    return true;
                 }
             }
         }
+        return false;
+    }
+
+    private void AddSectionRows(string providerId, List<UsageRow> rows, PopupPalette palette, bool twoColumn)
+    {
+        // Consecutive gauges pair up; a bar row always spans the full content
+        // width and flushes any pending gauge first.
+        UsageRow? pendingCircle = null;
+
+        void FlushPending()
+        {
+            if (pendingCircle is null) return;
+            _sectionsPanel.Children.Add(BuildCardRow(BuildBentoCard(pendingCircle, palette), null, palette));
+            pendingCircle = null;
+        }
+
+        foreach (var row in rows)
+        {
+            if (RowShapes.Resolve(_settings, providerId, row) == RowShapes.Bars)
+            {
+                FlushPending();
+                _sectionsPanel.Children.Add(BuildBarRow(row, palette));
+                continue;
+            }
+
+            if (!twoColumn)
+            {
+                _sectionsPanel.Children.Add(BuildCardRow(BuildBentoCard(row, palette), null, palette));
+                continue;
+            }
+
+            if (pendingCircle is null)
+            {
+                pendingCircle = row;
+                continue;
+            }
+
+            _sectionsPanel.Children.Add(BuildCardRow(
+                BuildBentoCard(pendingCircle, palette), BuildBentoCard(row, palette), palette));
+            pendingCircle = null;
+        }
+
+        FlushPending();
+    }
+
+    private static Grid BuildCardRow(FrameworkElement left, FrameworkElement? right, PopupPalette palette)
+    {
+        var rowGrid = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+        rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        Grid.SetColumn(left, 0);
+        rowGrid.Children.Add(left);
+        if (right is not null)
+        {
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            Grid.SetColumn(right, 2);
+            rowGrid.Children.Add(right);
+        }
+        return rowGrid;
     }
 
     private List<(ProviderUsage Usage, List<UsageRow> Rows)> BuildSections()
@@ -471,12 +537,12 @@ internal sealed class UsagePopupWindow
 
         var label = new TextBlock
         {
-            Text = row.Label,
+            Text = Loc.RowLabel(row.Label),
             FontFamily = UiFont,
             FontSize = 13.5,
             FontWeight = FontWeights.Bold,
             Foreground = Brush(palette.Text),
-            MinWidth = row.Label.Length > 6 ? 104 : 72
+            MinWidth = Loc.RowLabel(row.Label).Length > 6 ? 104 : 72
         };
         Grid.SetRow(label, 0);
         Grid.SetColumn(label, 0);
@@ -533,36 +599,6 @@ internal sealed class UsagePopupWindow
         };
     }
 
-    private void AddBentoRows(List<UsageRow> rows, PopupPalette palette)
-    {
-        for (var i = 0; i < rows.Count; i += 2)
-        {
-            var isPair = i + 1 < rows.Count;
-            var rowGrid = new Grid { Margin = new Thickness(0, 0, 0, 12) };
-            if (isPair)
-            {
-                rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
-                rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                var left = BuildBentoCard(rows[i], palette);
-                var rightCard = BuildBentoCard(rows[i + 1], palette);
-                Grid.SetColumn(left, 0);
-                Grid.SetColumn(rightCard, 2);
-                rowGrid.Children.Add(left);
-                rowGrid.Children.Add(rightCard);
-            }
-            else
-            {
-                // Trailing odd card spans the full width so the grid has no hole.
-                rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                var card = BuildBentoCard(rows[i], palette);
-                Grid.SetColumn(card, 0);
-                rowGrid.Children.Add(card);
-            }
-            _sectionsPanel.Children.Add(rowGrid);
-        }
-    }
-
     private FrameworkElement BuildBentoCard(UsageRow row, PopupPalette palette)
     {
         var grid = new Grid { Margin = new Thickness(14, 12, 14, 12) };
@@ -572,7 +608,7 @@ internal sealed class UsagePopupWindow
 
         var label = new TextBlock
         {
-            Text = row.Label,
+            Text = Loc.RowLabel(row.Label),
             FontFamily = UiFont,
             FontSize = 12.5,
             FontWeight = FontWeights.Bold,
@@ -673,11 +709,15 @@ internal sealed class UsagePopupWindow
     private void PositionAndSize(bool preservePosition = false)
     {
         var sections = BuildSections();
-        var usesBento = string.Equals(_settings.ShapeTheme, "BentoCircles", StringComparison.OrdinalIgnoreCase);
-        var totalCards = sections.Sum(s => s.Rows.Count);
-        var widthDip = usesBento
-            ? (totalCards == 1 ? BentoSingleCardWidth : BentoWidth)
-            : BarsWidth;
+        var totalRows = sections.Sum(s => s.Rows.Count);
+        var twoColumn = UsesTwoColumnLayout(sections);
+        var singleGaugeOnly = totalRows == 1
+            && sections.All(s => s.Rows.All(r => RowShapes.Resolve(_settings, s.Usage.ProviderId, r) == RowShapes.Circle));
+        // Two columns need the wide popup; a lone gauge gets the compact width;
+        // anything else (bars present, or stacked gauges) uses one-column width.
+        var widthDip = twoColumn
+            ? BentoWidth
+            : singleGaugeOnly ? BentoSingleCardWidth : BarsWidth;
         var uiScale = Math.Clamp(_settings.UiScale, 0.7, 1.6);
 
         var currentPosition = _appWindow.Position;

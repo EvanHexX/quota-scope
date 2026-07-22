@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
@@ -30,20 +32,25 @@ internal sealed class SettingsWindow
     private readonly Func<string> _codexResolvedCommand;
     private readonly Action _requestReconnect;
     private readonly IHotkeyConfigurator _hotkeys;
+    private readonly Func<IReadOnlyList<UsageRowRef>> _currentRows;
     private readonly NavigationView _nav;
+    private bool _appliedKorean;
 
     public SettingsWindow(
         AppSettings settings,
         Action<SettingsChange> onChanged,
         Func<string> codexResolvedCommand,
         Action requestReconnect,
-        IHotkeyConfigurator hotkeys)
+        IHotkeyConfigurator hotkeys,
+        Func<IReadOnlyList<UsageRowRef>> currentRows)
     {
         _settings = settings;
         _onChanged = onChanged;
         _codexResolvedCommand = codexResolvedCommand;
         _requestReconnect = requestReconnect;
         _hotkeys = hotkeys;
+        _currentRows = currentRows;
+        _appliedKorean = Loc.IsKorean;
 
         _nav = new NavigationView
         {
@@ -101,30 +108,53 @@ internal sealed class SettingsWindow
 
     public void Activate()
     {
-        // Rebuild the current page so reopened settings reflect external changes
-        // (e.g. pin toggled from the popup).
-        if (_nav.SelectedItem is NavigationViewItem item && item.Tag is string tag)
-        {
-            _nav.Content = BuildPage(tag);
-        }
+        // Rebuild so reopened settings reflect external changes (e.g. pin
+        // toggled from the popup) and the current language.
+        RelocalizeIfNeeded();
+        RefreshCurrentPage();
         _window.AppWindow.Show(true);
         _window.Activate();
     }
 
+    private void RefreshCurrentPage()
+    {
+        if (_nav.SelectedItem is NavigationViewItem item && item.Tag is string tag)
+        {
+            _nav.Content = BuildPage(tag);
+        }
+    }
+
+    // Language changes apply live: retitle the window and the navigation items,
+    // then rebuild the visible page.
+    private void RelocalizeIfNeeded()
+    {
+        if (_appliedKorean == Loc.IsKorean) return;
+        _appliedKorean = Loc.IsKorean;
+        _window.Title = Loc.T("QuotaScope Settings", "QuotaScope 설정");
+        foreach (var menuItem in _nav.MenuItems)
+        {
+            if (menuItem is NavigationViewItem { Tag: string tag } navItem)
+            {
+                navItem.Content = NavItemText(tag);
+            }
+        }
+    }
+
+    private static string NavItemText(string tag) => tag switch
+    {
+        "General" => Loc.T("General", "일반"),
+        "Providers" => Loc.T("Providers", "프로바이더"),
+        "Appearance" => Loc.T("Appearance", "모양"),
+        "Hotkeys" => Loc.T("Hotkeys", "단축키"),
+        "About" => Loc.T("About", "정보"),
+        _ => tag
+    };
+
     private void AddNavItem(string tag, string glyph)
     {
-        var display = tag switch
-        {
-            "General" => Loc.T("General", "일반"),
-            "Providers" => Loc.T("Providers", "프로바이더"),
-            "Appearance" => Loc.T("Appearance", "모양"),
-            "Hotkeys" => Loc.T("Hotkeys", "단축키"),
-            "About" => Loc.T("About", "정보"),
-            _ => tag
-        };
         _nav.MenuItems.Add(new NavigationViewItem
         {
-            Content = display,
+            Content = NavItemText(tag),
             Tag = tag,
             Icon = new FontIcon { Glyph = glyph }
         });
@@ -142,7 +172,14 @@ internal sealed class SettingsWindow
     private void Save(SettingsChange kind)
     {
         _settings.Save();
+        // TrayController applies the language before anything else, so the
+        // window can relocalize itself right after.
         _onChanged(kind);
+        if (_appliedKorean != Loc.IsKorean)
+        {
+            RelocalizeIfNeeded();
+            RefreshCurrentPage();
+        }
     }
 
     // ----- pages -----
@@ -304,9 +341,15 @@ internal sealed class SettingsWindow
     private UIElement BuildAppearancePage()
     {
         var shape = MakeCombo(
-            new[] { "Bars", "BentoCircles" },
+            new[] { "Bars", "BentoCircles", "MixMatch" },
             _settings.ShapeTheme,
-            value => { _settings.ShapeTheme = value; Save(SettingsChange.Appearance); });
+            value =>
+            {
+                _settings.ShapeTheme = value;
+                Save(SettingsChange.Appearance);
+                // Show/hide the per-row list that only applies to mix & match.
+                RefreshCurrentPage();
+            });
 
         var themeCombo = MakeCombo(
             new[] { "Dark", "Light", "Midnight" },
@@ -352,14 +395,96 @@ internal sealed class SettingsWindow
                 }
             });
 
-        return Page(Loc.T("Appearance", "모양"),
-            Row(Loc.T("Shape theme", "게이지 모양"), Loc.T("Bars or bento circle cards in the popup.", "팝업의 바 또는 벤토 원형 카드."), shape),
-            Row(Loc.T("UI scale", "UI 크기"), Loc.T("Overall popup size.", "팝업 전체 크기를 조절합니다."), uiScale),
+        var rows = new List<FrameworkElement>
+        {
+            Row(Loc.T("Shape theme", "게이지 모양"),
+                Loc.T("Bars, gauges, or mix & match per row.", "막대, 게이지, 또는 행별 믹스 & 매치."), shape)
+        };
+        if (string.Equals(_settings.ShapeTheme, "MixMatch", StringComparison.OrdinalIgnoreCase))
+        {
+            rows.Add(BuildMixMatchList());
+        }
+        rows.Add(Row(Loc.T("UI scale", "UI 크기"), Loc.T("Overall popup size.", "팝업 전체 크기를 조절합니다."), uiScale));
+        rows.AddRange(new[]
+        {
             Row(Loc.T("Follow system theme", "시스템 테마 따르기"), Loc.T("Light/dark follows Windows.", "Windows의 라이트/다크를 따릅니다."), followSystem),
-            Row(Loc.T("Theme", "테마"), Loc.T("Dark, Light, or Midnight (pure black). Applies to popup and settings.", "Dark, Light, Midnight(순수 검정). 팝업과 설정창에 적용됩니다."), themeCombo),
+            Row(Loc.T("Theme", "테마"), Loc.T("Dark, Light, or Midnight (pure black). Applies to popup and settings.", "다크, 라이트, 미드나잇(순수 검정). 팝업과 설정창에 적용됩니다."), themeCombo),
             Row(Loc.T("Glassmorphism", "글래스모피즘"), Loc.T("Translucent cards with an acrylic backdrop.", "아크릴 배경과 반투명 카드 효과."), glass),
             Row(Loc.T("Tray icon style", "트레이 아이콘 스타일"), Loc.T("Usage arc, or a plain dot carrying only the state color.", "사용률 호 또는 상태 색상만 담은 점."), trayStyle),
-            Row(Loc.T("Gauge metric", "게이지 지표"), Loc.T("Whether gauges and percentages show used or remaining capacity.", "게이지와 퍼센트가 사용량/남은 양 중 무엇을 표시할지."), gaugeMetric));
+            Row(Loc.T("Gauge metric", "게이지 지표"), Loc.T("Whether gauges and percentages show used or remaining capacity.", "게이지와 퍼센트가 사용량/잔여량 중 무엇을 표시할지."), gaugeMetric)
+        });
+        return Page(Loc.T("Appearance", "모양"), rows.ToArray());
+    }
+
+    // Mix & match: one shape selector per known row. Bars always span the full
+    // content width; gauges pair up two per line when at least one provider has
+    // two of them, otherwise everything stacks in a single column.
+    private FrameworkElement BuildMixMatchList()
+    {
+        var panel = new StackPanel { Spacing = 8, Padding = new Thickness(16, 12, 16, 14) };
+        panel.Children.Add(new TextBlock
+        {
+            Text = Loc.T("Shape per row", "행별 모양"),
+            FontSize = 14
+        });
+        panel.Children.Add(MutedText(Loc.T(
+            "Bars take the full popup width; gauges sit two per line when possible.",
+            "막대는 팝업 전체 폭을 쓰고, 게이지는 가능하면 한 줄에 두 개씩 배치됩니다.")));
+
+        var rows = _currentRows();
+        if (rows.Count == 0)
+        {
+            panel.Children.Add(MutedText(Loc.T(
+                "No rows yet. Open the popup once so providers report their rows.",
+                "아직 표시할 행이 없습니다. 팝업을 한 번 열어 프로바이더 행을 받아오세요.")));
+        }
+
+        foreach (var rowRef in rows)
+        {
+            var key = RowShapes.Key(rowRef.ProviderId, rowRef.Label);
+            var current = _settings.RowShapes.TryGetValue(key, out var stored) ? stored : RowShapes.Circle;
+            var combo = MakeCombo(
+                new[] { RowShapes.Circle, RowShapes.Bars },
+                current,
+                value =>
+                {
+                    _settings.RowShapes[key] = value;
+                    Save(SettingsChange.Appearance);
+                },
+                width: 140);
+
+            var line = new Grid { MinHeight = 40 };
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var label = new TextBlock
+            {
+                Text = $"{rowRef.ProviderName} · {Loc.RowLabel(rowRef.Label)}",
+                FontSize = 13,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            combo.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(label, 0);
+            Grid.SetColumn(combo, 1);
+            line.Children.Add(label);
+            line.Children.Add(combo);
+            panel.Children.Add(line);
+        }
+
+        var card = new Border
+        {
+            Child = panel,
+            CornerRadius = new CornerRadius(6),
+            BorderThickness = new Thickness(1)
+        };
+        if (Application.Current.Resources.TryGetValue("CardBackgroundFillColorDefaultBrush", out var bg) && bg is Brush bgBrush)
+        {
+            card.Background = bgBrush;
+        }
+        if (Application.Current.Resources.TryGetValue("CardStrokeColorDefaultBrush", out var stroke) && stroke is Brush strokeBrush)
+        {
+            card.BorderBrush = strokeBrush;
+        }
+        return card;
     }
 
     private UIElement BuildHotkeysPage()
@@ -501,18 +626,20 @@ internal sealed class SettingsWindow
         TextWrapping = TextWrapping.Wrap
     };
 
-    private static ComboBox MakeCombo(string[] values, string? current, Action<string> apply)
+    // Values stay stable English keys in settings.json; only the display text
+    // is localized.
+    private static ComboBox MakeCombo(string[] values, string? current, Action<string> apply, double width = 180)
     {
-        var combo = new ComboBox { Width = 180 };
+        var combo = new ComboBox { Width = width };
         foreach (var value in values)
         {
-            combo.Items.Add(value);
+            combo.Items.Add(new ComboBoxItem { Content = Loc.Option(value), Tag = value });
         }
         var index = Array.FindIndex(values, v => string.Equals(v, current, StringComparison.OrdinalIgnoreCase));
         combo.SelectedIndex = index >= 0 ? index : 0;
         combo.SelectionChanged += (_, _) =>
         {
-            if (combo.SelectedItem is string value)
+            if (combo.SelectedItem is ComboBoxItem { Tag: string value })
             {
                 apply(value);
             }

@@ -184,7 +184,8 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
             OnSettingsChanged,
             () => _codexProvider?.ResolvedCommandText ?? "disabled",
             () => _ = ReconnectAsync(),
-            this);
+            this,
+            CurrentRowRefs);
         _settingsWindow.Activate();
     }
 
@@ -489,6 +490,15 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
         _trayIcon.SetTooltip(TruncateTrayText(BuildTrayText(usages)));
         _trayIcon.SetIcon(icon);
         _popup?.SetUsage(usages);
+    }
+
+    // Every row the enabled providers currently report, for the mix & match
+    // shape picker (including rows hidden by row-visibility toggles).
+    private IReadOnlyList<UsageRowRef> CurrentRowRefs()
+    {
+        return CurrentUsages()
+            .SelectMany(usage => usage.Rows.Select(row => new UsageRowRef(usage.ProviderId, usage.DisplayName, row.Label)))
+            .ToList();
     }
 
     private IReadOnlyList<ProviderUsage> CurrentUsages()

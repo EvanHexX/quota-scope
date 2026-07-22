@@ -23,6 +23,9 @@ internal sealed class AppSettings
     public bool FollowSystemTheme { get; set; } = true;
     public string ThemeOverride { get; set; } = "Dark";
     public bool Autostart { get; set; } = false;
+    // Per-row shape overrides used when ShapeTheme is "MixMatch".
+    // Key: "<providerId>|<row label>", value: "Circle" | "Bars".
+    public Dictionary<string, string> RowShapes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public string TrayIconStyle { get; set; } = "UsageArc";
     public string GaugeMetric { get; set; } = "Used";
     public string Language { get; set; } = "System";
