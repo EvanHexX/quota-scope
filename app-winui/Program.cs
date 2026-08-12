@@ -20,6 +20,7 @@ internal static class Program
         {
             return RateLimitMapper.RunSelfTest()
                 && ClaudeUsageMapper.RunSelfTest()
+                && ClaudeSessionRenewer.RunSelfTest()
                 && HotkeyDefinition.RunSelfTest() ? 0 : 1;
         }
 

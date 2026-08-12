@@ -21,9 +21,26 @@ User-Agent: claude-code/<version>
 
 - Windows: `%USERPROFILE%\.claude\.credentials.json` → `claudeAiOauth.accessToken`
 - 앱은 토큰을 **저장/복사/로깅하지 않는다**. 매 폴링마다 파일을 읽어 요청에 쓰고 버린다.
-- 토큰 refresh는 Claude Code가 담당한다. 앱은 refresh를 시도하지 않는다.
+- 토큰 refresh는 Claude Code가 담당한다. 앱은 refresh grant를 직접 호출하지 않고, 자격증명 파일에 쓰지도 않는다.
+- access token TTL은 **8시간**이다 (`claudeAiOauth.expiresAt`, epoch ms). Claude Code를 그동안 한 번도 실행하지 않으면 토큰이 만료되어 401이 난다.
 - 401 이후에는 자격증명 파일의 수정 시각이 바뀔 때까지(=Claude Code가 재로그인/refresh로 파일을 다시 쓸 때까지) 폴링을 일시 중단한다.
 - WinUI 앱에서 로그인이 필요한 상태로 재연결을 실행하면 `cmd /k claude /login` 터미널을 자동으로 띄운다. 사용자는 브라우저 로그인만 완료하면 되고, 파일 변화 감지로 폴링이 자동 재개된다.
+
+## Session Auto-Renew
+
+만료 8시간마다 수동 재연결을 요구하지 않기 위해, 앱은 **갱신을 Claude Code에 위임**한다. 앱이 refresh token을 쓰거나 저장하는 일은 없다.
+
+- `expiresAt`까지 **15분 이하**로 남으면(`ClaudeSessionRenewer.RenewLeadTime`) `claude auth status`를 헤드리스로 1회 실행한다. read-only 명령이라 **사용량을 소모하지 않는다**. 갱신이 일어나면 Claude Code가 자격증명 파일을 다시 쓰고, 파일 감시가 그 결과를 반영한다.
+- 401을 이미 받은 뒤(앱이 절전/휴면으로 만료 시점을 지나친 경우)에도 같은 nudge를 시도한 뒤 `Unauthenticated`로 일시 중단한다.
+- 자격증명 파일이 안 바뀐 nudge는 실패로 보고 쿨다운을 2m → 10m → 30m로 늘린다. 연속 5회 실패하면 파일이 바뀔 때까지(수동 로그인/재연결) 프로세스 실행을 멈춘다.
+- `claude` 실행 파일은 `%USERPROFILE%\.local\bin\claude.exe` 등 알려진 설치 경로를 먼저 찾고, 없으면 `cmd.exe /c claude ...`로 PATH shim을 탄다.
+- `claude auth status` 출력에는 계정 식별 정보가 들어 있으므로 **읽어서 버리기만 하고 어디에도 기록하지 않는다**. 자식 프로세스는 창 없이 실행하며 30초 후 강제 종료한다.
+- per-provider 설정 `AutoRenewSession`(기본 `true`)으로 끌 수 있다. 끄면 종전 동작 그대로 만료 후 수동 재연결이 필요하다.
+
+## Session Visibility
+
+- 자격증명 파일에 `FileSystemWatcher`를 걸어, Claude Code가 파일을 다시 쓰면 다음 폴링을 기다리지 않고 즉시 재조회 후 `UsageUpdated`로 밀어 올린다 (2초 디바운스, 중복 이벤트 1건으로 병합). watcher를 못 걸어도 기존 폴링 복구 경로가 그대로 동작한다.
+- 정상 상태의 `StatusText`는 세션 상태를 반영한다: 갱신 중이면 `Renewing Claude session`, 만료가 임박하면 `Session expires in 12m`, 그 외에는 `Claude rate limit`. 임박 기준은 auto-renew가 켜져 있으면 15분, 꺼져 있으면 60분이다.
 
 ## Response
 
@@ -77,6 +94,8 @@ User-Agent: claude-code/<version>
 
 ## Files
 
-- `app/Providers/Claude/ClaudeUsageProvider.cs`: 폴링/캐시/백오프/상태 머신
-- `app/Providers/Claude/ClaudeCredentialReader.cs`: 자격증명 파일 읽기 (토큰 비보존)
+- `app/Providers/Claude/ClaudeUsageProvider.cs`: 폴링/캐시/백오프/상태 머신 + 자격증명 파일 감시
+- `app/Providers/Claude/ClaudeCredentialReader.cs`: 자격증명 파일 읽기 (토큰 비보존, `expiresAt` 조회)
+- `app/Providers/Claude/ClaudeSessionRenewer.cs`: 세션 자동 갱신 nudge/쿨다운 + `RunSelfTest()`
+- `app/Providers/Claude/ClaudeCommandResolver.cs`: `claude` CLI 경로 해석
 - `app/Providers/Claude/ClaudeUsageMapper.cs`: 응답 → `ProviderUsage` 매핑 + `RunSelfTest()`
