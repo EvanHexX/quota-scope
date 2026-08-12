@@ -62,6 +62,17 @@ cmd /c codex app-server generate-json-schema --experimental --out E:\Business\ou
 - 신규 field: `credits`(잔액 문자열), `individualLimit`, `spendControlReached`, top-level `rateLimitResetCredits`.
 - 따라서 primary=짧은 window / secondary=긴 window라는 기존 가정은 더 이상 유효하지 않다. window 의미는 `windowDurationMins`로만 판별해야 한다.
 
+## Handshake (codex-cli 0.146.0-alpha.3.1, 2026-07-25 실측)
+
+app-server가 LSP/MCP식 2단계 핸드셰이크를 요구하도록 바뀌었다:
+
+1. client -> `initialize` request
+2. server -> `initialize` response
+3. **client -> `initialized` notification** (`{"method":"initialized"}`, id 없음)
+4. 이후에야 `account/rateLimits/read` 등 다른 request가 처리된다.
+
+3단계를 생략하면 server는 `account/rateLimits/read`를 **조용히 무시**한다 (error 응답도 없음). QuotaScope 입장에서는 15초 timeout -> `Codex connection required` / `connection timed out`으로 보인다. 0.145.x까지는 `initialized` 없이도 동작했으나 0.146부터 필수다. `CodexAppServerClient.StartProcessAsync`가 initialize 응답 직후 `initialized` notification을 보낸다. `ClientNotification` schema에 `initialized`가 유일한 notification으로 정의되어 있다.
+
 ## Mapping
 
 - 전 계층 수치는 `usedPercent`로 통일한다 (0 = 미사용, 100 = 소진). remaining 값은 어디에도 존재하지 않는다.
