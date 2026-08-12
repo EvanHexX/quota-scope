@@ -39,7 +39,7 @@ The build is self-contained: no .NET or Windows App SDK runtime install is requi
 - Codex and Claude (Pro/Max) usage side by side, in labeled per-provider sections
 - Payload-driven rows: one row per rate-limit window the provider reports, so new windows (for example a per-model weekly limit) appear without an app update
 - Optional secondary rows (GPT-5.3-Codex-Spark, Claude per-model windows) and credits rows
-- Tray icon signals overall usage with an arc fill (5% steps) and a 3-level state color; exact numbers live in the tooltip and popup
+- Tray icon signals overall usage with an arc fill (5% steps) and a 3-level state color; the hover tooltip lists how much quota is left per window, and full numbers live in the popup
 - Optional tray notification when usage crosses the warning threshold
 - Layout: bars, gauges, or mix & match with a per-row shape and a forced one/two column mode
 - Themes: Dark, Light, Midnight, optional system-theme following, and glassmorphism with four strength levels
@@ -61,7 +61,8 @@ Claude:
 
 1. The app reads the access token from the local Claude Code credentials file (`%USERPROFILE%\.claude\.credentials.json`) on each poll. The token is never stored, copied, or logged.
 2. It polls Anthropic's OAuth usage endpoint (the same data behind Claude Code's `/usage` command) at most once per 60 seconds.
-3. On failure it keeps showing the last successful data marked as stale.
+3. Claude Code access tokens last 8 hours. Shortly before one expires the app runs `claude auth status` in the background so Claude Code refreshes its own token; the app never performs the refresh itself and never writes to the credentials file. That command is read-only and consumes no usage.
+4. On failure it keeps showing the last successful data marked as stale.
 
 Each provider is isolated: one provider failing does not affect the other. The app does not collect telemetry.
 
@@ -89,7 +90,7 @@ When Claude needs a sign-in, `Reconnect` opens a terminal running the Claude Cod
 Everything is configured in the settings window (tray icon → `Settings…`), applied immediately, and stored in `settings.json` next to the executable.
 
 - **General**: language, start with Windows, popup position (including "last position"), time display, warning threshold, threshold notification
-- **Providers**: per-provider enable, refresh interval, secondary rows, credits row, Codex command, Claude credential status, reconnect
+- **Providers**: per-provider enable, refresh interval, secondary rows, credits row, Codex command, Claude credential status, Claude session auto-renew, reconnect
 - **Appearance**: shape theme (bars / gauges / mix & match), per-row shapes and column count, UI scale, theme, glassmorphism and its strength, tray icon style, gauge metric
 - **Hotkeys**: toggle popup, refresh all, toggle pin — press a combination to bind; conflicts are reported inline and never saved silently
 - **About**: version, disclaimer, repository link
@@ -97,6 +98,7 @@ Everything is configured in the settings window (tray icon → `Settings…`), a
 Notes:
 
 - Claude polling is clamped to at least 60 seconds regardless of the configured interval.
+- Claude session auto-renew is on by default. Turn it off to keep the app from launching `claude` in the background; usage then stops when the 8-hour token expires until you sign in or reconnect.
 - Gauges and percentages follow the gauge metric setting (used or remaining); state colors always key off usage.
 
 ## Privacy

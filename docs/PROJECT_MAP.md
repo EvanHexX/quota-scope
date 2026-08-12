@@ -28,6 +28,8 @@
 
 - Claude usage provider -> `app/Providers/Claude/ClaudeUsageProvider.cs`
 - Claude credential reading -> `app/Providers/Claude/ClaudeCredentialReader.cs`
+- Claude session auto-renew -> `app/Providers/Claude/ClaudeSessionRenewer.cs`
+- Claude command resolution -> `app/Providers/Claude/ClaudeCommandResolver.cs`
 - Claude usage mapping -> `app/Providers/Claude/ClaudeUsageMapper.cs`
 - module notes -> `docs/modules/claude_rate_limits.md`
 

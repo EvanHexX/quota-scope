@@ -12,6 +12,9 @@ internal sealed class ProviderSettings
     public bool ShowSecondaryRows { get; set; } = false;
     public bool ShowCredits { get; set; } = false;
     public string Command { get; set; } = "codex";
+    // Claude only: nudge Claude Code to refresh its own OAuth token before the
+    // 8-hour access token expires, instead of going dark until a manual sign-in.
+    public bool AutoRenewSession { get; set; } = true;
 }
 
 internal sealed class AppSettings
