@@ -517,7 +517,7 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
             parts.Add(rows.Count == 0
                 ? $"{usage.DisplayName} --"
                 : $"{usage.DisplayName} " + string.Join(" / ", rows.Select(r =>
-                    $"{Loc.RowLabel(usage.ProviderId, r.Label)} {FormatPercent(r.Window!)}")));
+                    $"{Loc.RowLabel(usage.ProviderId, r.Label)} {FormatRemaining(r.Window!)}")));
         }
         return string.Join("  |  ", parts);
     }
@@ -528,9 +528,12 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
         return text.Length <= 127 ? text : text[..127];
     }
 
-    private static string FormatPercent(RateLimitWindow window)
+    // The model is usedPercent; the tooltip reports what is left, so it is
+    // spelled out ("left" / "남음") to keep it unambiguous next to the arc.
+    private static string FormatRemaining(RateLimitWindow window)
     {
-        return $"{(int)Math.Round(window.UsedPercent)}%";
+        var remaining = 100 - (int)Math.Round(Math.Clamp(window.UsedPercent, 0d, 100d));
+        return Loc.T($"{remaining}% left", $"{remaining}% 남음");
     }
 
     private void ExitApplication()
