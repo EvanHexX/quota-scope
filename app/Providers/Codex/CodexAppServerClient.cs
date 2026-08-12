@@ -103,7 +103,32 @@ internal sealed class CodexAppServerClient : IDisposable
             }
         };
         await SendRequestAsync("initialize", initializeParams, cancellationToken).ConfigureAwait(false);
+
+        // codex app-server (>= 0.146) gates every subsequent request until the client
+        // acknowledges the handshake with an `initialized` notification. Without it the
+        // server silently drops `account/rateLimits/read`, which surfaces as a timeout /
+        // "Codex connection required" in the popup.
+        await SendNotificationAsync("initialized", null, cancellationToken).ConfigureAwait(false);
         _initialized = true;
+    }
+
+    private async Task SendNotificationAsync(string method, object? parameters, CancellationToken cancellationToken)
+    {
+        if (_process?.StandardInput is null) throw new InvalidOperationException("Codex app-server is not running.");
+
+        var notification = parameters is null
+            ? JsonSerializer.Serialize(new { method })
+            : JsonSerializer.Serialize(new { method, @params = parameters });
+
+        try
+        {
+            await _process.StandardInput.WriteLineAsync(notification.AsMemory(), cancellationToken).ConfigureAwait(false);
+            await _process.StandardInput.FlushAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException)
+        {
+            throw CreateProcessFailure(method, ex);
+        }
     }
 
     private async Task<JsonElement> SendRequestAsync(string method, object? parameters, CancellationToken cancellationToken)
