@@ -157,7 +157,8 @@ WinForms app is a separate follow-up task after sign-off.
   models). Gauges and the tray arc fill with usage; state colors key off the
   warning threshold in used terms.
 - Exact numbers live in the tooltip and popup. The tooltip is a per-provider
-  5h/7d summary.
+  5h/7d summary, and it reports remaining quota ("37% left" / "37% 남음"),
+  not usage — the popup and the arc keep following `GaugeMetric`.
 - Toast on threshold: implemented. A tray notification fires once per
   escalation (Normal -> Warning -> Critical; recovery resets silently),
   controlled by Settings > General > Threshold notification
