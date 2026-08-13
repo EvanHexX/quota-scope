@@ -8,12 +8,20 @@ namespace QuotaScope.Providers.Claude;
 // Claude Code owns OAuth refresh; QuotaScope only nudges it. The access token
 // lives 8 hours, so an unattended tray app goes dark once Claude Code has not
 // run for that long. Shortly before expiry (and again after a 401) this runs
-// `claude auth status` headless - a read-only command that costs no quota - and
+// `claude mcp list` headless - a read-only command that costs no quota - and
 // lets Claude Code rewrite the credentials file itself. No token material is
 // read, stored, or logged here, and the command output is discarded because it
-// carries account identity.
+// describes the user's configured servers.
 internal sealed class ClaudeSessionRenewer
 {
+    // Which command renews is a property of the CLI, not a documented contract:
+    // it has to be one that needs a live token. Measured 2026-08-13 against
+    // claude 2.x with a token five hours past expiry - `auth status` reports
+    // loggedIn straight from the stored refresh token and never rewrites the
+    // file, while `mcp list` refreshes it (~2.2s). If a future CLI stops
+    // renewing here, the failure path below degrades to the manual sign-in.
+    private const string RenewalCommand = "mcp list";
+
     // Start nudging this long before expiry so a renewal lands before the
     // first 401 rather than after it.
     public static readonly TimeSpan RenewLeadTime = TimeSpan.FromMinutes(15);
@@ -94,7 +102,7 @@ internal sealed class ClaudeSessionRenewer
         var renewed = false;
         try
         {
-            renewed = RunAuthStatus()
+            renewed = RunRenewalCommand()
                 && ClaudeCredentialReader.GetCredentialsFileStampUtc() != _attemptStampUtc;
         }
         catch
@@ -118,9 +126,9 @@ internal sealed class ClaudeSessionRenewer
         }
     }
 
-    private static bool RunAuthStatus()
+    private static bool RunRenewalCommand()
     {
-        var spec = ClaudeCommandResolver.Resolve("auth status");
+        var spec = ClaudeCommandResolver.Resolve(RenewalCommand);
         var startInfo = new ProcessStartInfo
         {
             FileName = spec.FileName,
@@ -138,8 +146,8 @@ internal sealed class ClaudeSessionRenewer
         using var process = Process.Start(startInfo);
         if (process is null) return false;
 
-        // Drain both pipes without keeping the payload: `auth status` prints the
-        // signed-in account, which must not be logged anywhere.
+        // Drain both pipes without keeping the payload: the output describes the
+        // user's configured servers and must not be logged anywhere.
         process.OutputDataReceived += static (_, _) => { };
         process.ErrorDataReceived += static (_, _) => { };
         process.BeginOutputReadLine();

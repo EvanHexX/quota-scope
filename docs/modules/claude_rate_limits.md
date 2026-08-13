@@ -30,7 +30,16 @@ User-Agent: claude-code/<version>
 
 만료 8시간마다 수동 재연결을 요구하지 않기 위해, 앱은 **갱신을 Claude Code에 위임**한다. 앱이 refresh token을 쓰거나 저장하는 일은 없다.
 
-- `expiresAt`까지 **15분 이하**로 남으면(`ClaudeSessionRenewer.RenewLeadTime`) `claude auth status`를 헤드리스로 1회 실행한다. read-only 명령이라 **사용량을 소모하지 않는다**. 갱신이 일어나면 Claude Code가 자격증명 파일을 다시 쓰고, 파일 감시가 그 결과를 반영한다.
+- `expiresAt`까지 **15분 이하**로 남으면(`ClaudeSessionRenewer.RenewLeadTime`) `claude mcp list`를 헤드리스로 1회 실행한다. read-only 명령이라 **사용량을 소모하지 않는다**(실측 ~2.2초). 갱신이 일어나면 Claude Code가 자격증명 파일을 다시 쓰고, 파일 감시가 그 결과를 반영한다.
+
+> **어떤 명령이 갱신을 유발하는가 (2026-08-13 실측, claude 2.x)**
+> 만료 5시간 경과 토큰으로 측정한 결과:
+> - `claude auth status` → **갱신 안 함.** 저장된 refresh token 유효성만 보고 `loggedIn: true`를 출력할 뿐 파일을 다시 쓰지 않는다. 이때 `.credentials.json`의 access token은 usage endpoint에서 401을 받는다.
+> - `claude mcp list` → **갱신함.** `expiresAt`이 실행 시각 +8h로 이동하고 파일이 다시 쓰인다.
+>
+> refresh token은 회전하지 않는다: 갱신 전후 `refreshTokenExpiresAt`이 동일한 절대 시각을 유지하므로(2026-09-06 10:38), 반복 갱신이 refresh token 수명을 갉아먹지 않는다.
+>
+> 이는 문서화된 계약이 아니라 CLI 구현 특성이다. 향후 CLI가 여기서 갱신을 멈추면 아래 실패 경로(쿨다운 → 5회 후 중단 → 수동 로그인 안내)로 degrade한다.
 - 401을 이미 받은 뒤(앱이 절전/휴면으로 만료 시점을 지나친 경우)에도 같은 nudge를 시도한 뒤 `Unauthenticated`로 일시 중단한다.
 - 자격증명 파일이 안 바뀐 nudge는 실패로 보고 쿨다운을 2m → 10m → 30m로 늘린다. 연속 5회 실패하면 파일이 바뀔 때까지(수동 로그인/재연결) 프로세스 실행을 멈춘다.
 - `claude` 실행 파일은 `%USERPROFILE%\.local\bin\claude.exe` 등 알려진 설치 경로를 먼저 찾고, 없으면 `cmd.exe /c claude ...`로 PATH shim을 탄다.

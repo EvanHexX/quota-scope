@@ -61,7 +61,7 @@ Claude:
 
 1. 매 폴링마다 로컬 Claude Code 자격증명 파일(`%USERPROFILE%\.claude\.credentials.json`)에서 access token을 읽습니다. 토큰은 저장/복사/로깅하지 않습니다.
 2. Anthropic OAuth 사용량 endpoint(Claude Code `/usage` 커맨드와 동일한 데이터)를 최소 60초 간격으로 폴링합니다.
-3. Claude Code access token의 수명은 8시간입니다. 만료 직전에 백그라운드로 `claude auth status`를 실행해 Claude Code가 스스로 토큰을 갱신하게 합니다. 앱이 직접 refresh를 수행하거나 자격증명 파일에 쓰는 일은 없습니다. 이 명령은 read-only라 사용량을 소모하지 않습니다.
+3. Claude Code access token의 수명은 8시간입니다. 만료 직전에 백그라운드로 `claude mcp list`를 실행해 Claude Code가 스스로 토큰을 갱신하게 합니다. 앱이 직접 refresh를 수행하거나 자격증명 파일에 쓰는 일은 없습니다. 이 명령은 read-only라 사용량을 소모하지 않습니다.
 4. 실패 시 마지막 성공 데이터를 stale 상태로 계속 표시합니다.
 
 provider는 서로 격리되어 있어 한쪽 실패가 다른 쪽에 영향을 주지 않습니다. 텔레메트리는 수집하지 않습니다.
