@@ -61,7 +61,7 @@ Claude:
 
 1. The app reads the access token from the local Claude Code credentials file (`%USERPROFILE%\.claude\.credentials.json`) on each poll. The token is never stored, copied, or logged.
 2. It polls Anthropic's OAuth usage endpoint (the same data behind Claude Code's `/usage` command) at most once per 60 seconds.
-3. Claude Code access tokens last 8 hours. Shortly before one expires the app runs `claude auth status` in the background so Claude Code refreshes its own token; the app never performs the refresh itself and never writes to the credentials file. That command is read-only and consumes no usage.
+3. Claude Code access tokens last 8 hours. Shortly before one expires the app runs `claude mcp list` in the background so Claude Code refreshes its own token; the app never performs the refresh itself and never writes to the credentials file. That command is read-only and consumes no usage.
 4. On failure it keeps showing the last successful data marked as stale.
 
 Each provider is isolated: one provider failing does not affect the other. The app does not collect telemetry.

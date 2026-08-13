@@ -294,8 +294,8 @@ internal sealed class SettingsWindow
             Row(Loc.T("Per-model rows", "모델별 행"), Loc.T("7d Sonnet / 7d Opus windows.", "7d Sonnet / 7d Opus window."), SecondaryToggle(claude)),
             Row(creditsLabel, Loc.T("Extra usage, when enabled on the account.", "계정에 활성화된 경우 extra usage를 표시합니다."), CreditsToggle(claude)),
             Row(Loc.T("Auto-renew session", "세션 자동 갱신"),
-                Loc.T("Runs 'claude auth status' before the 8-hour token expires so Claude Code refreshes it. Costs no usage.",
-                      "8시간짜리 토큰이 만료되기 전에 'claude auth status'를 실행해 Claude Code가 갱신하도록 합니다. 사용량은 소모되지 않습니다."),
+                Loc.T("Runs 'claude mcp list' before the 8-hour token expires so Claude Code refreshes it. Costs no usage.",
+                      "8시간짜리 토큰이 만료되기 전에 'claude mcp list'를 실행해 Claude Code가 갱신하도록 합니다. 사용량은 소모되지 않습니다."),
                 AutoRenewToggle(claude)),
             claudeStatus,
             reconnect);
