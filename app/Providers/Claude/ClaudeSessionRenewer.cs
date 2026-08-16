@@ -37,6 +37,12 @@ internal sealed class ClaudeSessionRenewer
     // wait for the credentials file to change (a manual sign-in calls Reset).
     public const int MaxConsecutiveFailures = 5;
 
+    // A nudge sent while the token is still valid may legitimately do nothing:
+    // Claude Code decides for itself whether a live token is close enough to
+    // expiry to be worth refreshing, and its threshold is not ours to know.
+    // Retry those on a flat interval instead of the escalating one.
+    public static readonly TimeSpan ProactiveRetry = TimeSpan.FromMinutes(2);
+
     private static readonly TimeSpan ProcessTimeout = TimeSpan.FromSeconds(30);
 
     private readonly object _sync = new();
@@ -44,6 +50,7 @@ internal sealed class ClaudeSessionRenewer
     private DateTime _attemptStampUtc;
     private int _consecutiveFailures;
     private bool _running;
+    private bool _attemptIsRecovery;
 
     public bool IsRenewing
     {
@@ -80,12 +87,19 @@ internal sealed class ClaudeSessionRenewer
     // Fire-and-forget: the credentials-file watcher (or the next poll) picks up
     // the result, so polling never blocks on the child process. Returns whether
     // an attempt was actually started.
-    public bool RequestRenewal()
+    //
+    // `recovery` means the token is already dead (past expiry, or the endpoint
+    // answered 401), so a nudge that changes nothing really is a failure. Only
+    // those drive the escalating backoff and the give-up counter - counting
+    // proactive no-ops would exhaust the budget before the token even expired
+    // and leave the app stranded through the outage it exists to prevent.
+    public bool RequestRenewal(bool recovery)
     {
         lock (_sync)
         {
             if (_running || DateTimeOffset.Now < _nextAttemptAt) return false;
             _running = true;
+            _attemptIsRecovery = recovery;
             _attemptStampUtc = ClaudeCredentialReader.GetCredentialsFileStampUtc();
         }
 
@@ -115,14 +129,28 @@ internal sealed class ClaudeSessionRenewer
         }
     }
 
+    // Delay before the next attempt, given how the last one ended. `failures` is
+    // the running count *after* this attempt. Null means "stop until the
+    // credentials file changes".
+    public static TimeSpan? NextDelayAfter(bool renewed, bool recovery, int failures)
+    {
+        if (renewed) return TimeSpan.Zero;
+        // Token was still valid, so a no-op proves nothing about the trigger.
+        if (!recovery) return ProactiveRetry;
+        return CooldownAfter(failures);
+    }
+
     private void CompleteAttempt(bool renewed)
     {
         lock (_sync)
         {
             _running = false;
-            _consecutiveFailures = renewed ? 0 : _consecutiveFailures + 1;
-            var cooldown = CooldownAfter(_consecutiveFailures);
-            _nextAttemptAt = cooldown is null ? DateTimeOffset.MaxValue : DateTimeOffset.Now + cooldown.Value;
+            var recovery = _attemptIsRecovery;
+            if (renewed) _consecutiveFailures = 0;
+            else if (recovery) _consecutiveFailures++;
+
+            var delay = NextDelayAfter(renewed, recovery, _consecutiveFailures);
+            _nextAttemptAt = delay is null ? DateTimeOffset.MaxValue : DateTimeOffset.Now + delay.Value;
         }
     }
 
@@ -193,6 +221,20 @@ internal sealed class ClaudeSessionRenewer
             && CooldownAfter(4) == Cooldowns[^1]
             && CooldownAfter(MaxConsecutiveFailures) is null;
 
-        return expiryChecks && cooldownChecks;
+        // A proactive no-op must neither escalate nor ever give up: the token is
+        // still alive, so the trigger has not been shown to be broken.
+        var proactiveChecks =
+            NextDelayAfter(renewed: false, recovery: false, failures: 0) == ProactiveRetry
+            && NextDelayAfter(renewed: false, recovery: false, failures: MaxConsecutiveFailures) == ProactiveRetry
+            && NextDelayAfter(renewed: true, recovery: false, failures: 0) == TimeSpan.Zero;
+
+        // A recovery no-op is a real failure and escalates to the give-up point.
+        var recoveryChecks =
+            NextDelayAfter(renewed: false, recovery: true, failures: 1) == Cooldowns[0]
+            && NextDelayAfter(renewed: false, recovery: true, failures: 3) == Cooldowns[2]
+            && NextDelayAfter(renewed: false, recovery: true, failures: MaxConsecutiveFailures) is null
+            && NextDelayAfter(renewed: true, recovery: true, failures: 4) == TimeSpan.Zero;
+
+        return expiryChecks && cooldownChecks && proactiveChecks && recoveryChecks;
     }
 }

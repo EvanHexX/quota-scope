@@ -88,10 +88,11 @@ internal sealed class ClaudeUsageProvider : IUsageProvider
         var expiresAt = ClaudeCredentialReader.TryReadExpiresAt();
 
         // Proactive renewal: hand the refresh back to Claude Code before the
-        // token dies, so polling never has to fall into the 401 pause.
+        // token dies, so polling never has to fall into the 401 pause. Past the
+        // expiry stamp the nudge is no longer speculative.
         if (_autoRenew && ClaudeSessionRenewer.IsExpiring(expiresAt, now))
         {
-            _renewer.RequestRenewal();
+            _renewer.RequestRenewal(recovery: expiresAt is null || expiresAt <= now);
         }
 
         if (_authPaused && !force)
@@ -101,7 +102,7 @@ internal sealed class ClaudeUsageProvider : IUsageProvider
             {
                 if (_autoRenew)
                 {
-                    _renewer.RequestRenewal();
+                    _renewer.RequestRenewal(recovery: true);
                 }
                 // Re-emit rather than replay the cached message, so a renewal
                 // that started (or gave up) is reflected while still paused.
@@ -138,7 +139,7 @@ internal sealed class ClaudeUsageProvider : IUsageProvider
                 // asleep, clock jump); ask Claude Code to renew right away.
                 if (_autoRenew)
                 {
-                    _renewer.RequestRenewal();
+                    _renewer.RequestRenewal(recovery: true);
                 }
                 return PauseForAuth();
             }
