@@ -21,7 +21,7 @@ For Codex it starts `codex app-server` locally and reads rate limit data through
 |---|---|
 | <img src="docs/images/quota-scope-90.png" alt="QuotaScope popup showing Codex and Claude usage" width="330"> | <img src="docs/images/quota-scope-150.png" alt="QuotaScope popup with glassmorphism showing the desktop through the panes" width="330"> |
 
-Layout is configurable per row — gauges, bars, ordering, and column count:
+Layout is configurable per row — which rows show, gauges, bars, ordering, and column count:
 
 <img src="docs/images/quota-scope-settings.png" alt="Appearance settings with mix and match shapes per row" width="640">
 
@@ -38,7 +38,8 @@ The build is self-contained: no .NET or Windows App SDK runtime install is requi
 - Windows system tray utility with a compact usage popup
 - Codex and Claude (Pro/Max) usage side by side, in labeled per-provider sections
 - Payload-driven rows: one row per rate-limit window the provider reports, so new windows (for example a per-model weekly limit) appear without an app update
-- Optional secondary rows (GPT-5.3-Codex-Spark, Claude per-model windows) and credits rows
+- Pick the rows you want with a checkbox per row, with each provider keeping at least one
+- Optional secondary rows (GPT-5.3-Codex-Spark 5h and weekly, Claude per-model windows) and credits rows
 - Tray icon signals overall usage with an arc fill (5% steps) and a 3-level state color; the hover tooltip lists how much quota is left per window, and full numbers live in the popup
 - Optional tray notification when usage crosses the warning threshold
 - Layout: bars, gauges, or mix & match with a per-row shape and a forced one/two column mode

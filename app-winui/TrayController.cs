@@ -497,7 +497,8 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
     private IReadOnlyList<UsageRowRef> CurrentRowRefs()
     {
         return CurrentUsages()
-            .SelectMany(usage => usage.Rows.Select(row => new UsageRowRef(usage.ProviderId, usage.DisplayName, row.Label)))
+            .SelectMany(usage => usage.Rows.Select(row =>
+                new UsageRowRef(usage.ProviderId, usage.DisplayName, row.Label, row.IsPrimary, row.Window is not null)))
             .ToList();
     }
 
@@ -513,7 +514,13 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
         var parts = new List<string>();
         foreach (var usage in usages)
         {
-            var rows = usage.Rows.Where(r => r.IsPrimary && r.Window is not null).ToList();
+            // Same rows in the same order the popup shows, so hiding or
+            // reordering a row carries over to the tooltip.
+            var rows = RowShapes.Order(
+                _settings,
+                usage.ProviderId,
+                usage.Rows.Where(r => r.Window is not null && RowShapes.IsVisible(_settings, usage.ProviderId, r)),
+                r => r.Label);
             parts.Add(rows.Count == 0
                 ? $"{usage.DisplayName} --"
                 : $"{usage.DisplayName} " + string.Join(" / ", rows.Select(r =>

@@ -488,19 +488,12 @@ internal sealed class UsagePopupWindow
         var sections = new List<(ProviderUsage, List<UsageRow>)>();
         foreach (var usage in _usages)
         {
-            var provider = _settings.GetProvider(usage.ProviderId);
-            var visible = usage.Rows.Where(row => IsRowVisible(row, provider));
+            var visible = usage.Rows.Where(row => RowShapes.IsVisible(_settings, usage.ProviderId, row));
             // User-defined order decides which gauges end up adjacent, and
             // therefore which ones pair into a two-column line.
             sections.Add((usage, RowShapes.Order(_settings, usage.ProviderId, visible, row => row.Label)));
         }
         return sections;
-    }
-
-    private static bool IsRowVisible(UsageRow row, ProviderSettings provider)
-    {
-        if (row.IsPrimary) return true;
-        return row.Window is not null ? provider.ShowSecondaryRows : provider.ShowCredits;
     }
 
     private Grid BuildSectionHeader(ProviderUsage usage, PopupPalette palette)

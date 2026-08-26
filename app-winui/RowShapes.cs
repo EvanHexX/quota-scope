@@ -5,8 +5,10 @@ using QuotaScope.Providers;
 
 namespace QuotaScope.WinUI;
 
-// A row the user can assign a shape to, surfaced by the settings window.
-internal sealed record UsageRowRef(string ProviderId, string ProviderName, string Label);
+// A row the user can show, order, and assign a shape to, surfaced by the
+// settings window. IsPrimary/HasWindow carry the provider's own defaults so
+// settings can resolve visibility for a row it has never seen before.
+internal sealed record UsageRowRef(string ProviderId, string ProviderName, string Label, bool IsPrimary, bool HasWindow);
 
 internal static class RowShapes
 {
@@ -33,6 +35,54 @@ internal static class RowShapes
             .ThenBy(item => item.index)
             .Select(item => item.row)
             .ToList();
+    }
+
+    // Row visibility. The settings row list writes an explicit choice per row;
+    // rows without one fall back to the provider defaults, i.e. the windows the
+    // provider marks primary are shown and model/credit rows follow the
+    // provider's own toggles.
+    public static bool IsVisible(AppSettings settings, string providerId, string label, bool isPrimary, bool hasWindow)
+    {
+        if (settings.RowVisibility.TryGetValue(Key(providerId, label), out var visible)) return visible;
+        if (isPrimary) return true;
+        var provider = settings.GetProvider(providerId);
+        return hasWindow ? provider.ShowSecondaryRows : provider.ShowCredits;
+    }
+
+    public static bool IsVisible(AppSettings settings, string providerId, UsageRow row) =>
+        IsVisible(settings, providerId, row.Label, row.IsPrimary, row.Window is not null);
+
+    public static bool IsVisible(AppSettings settings, UsageRowRef row) =>
+        IsVisible(settings, row.ProviderId, row.Label, row.IsPrimary, row.HasWindow);
+
+    // Pure-logic self-test for row visibility: provider defaults first, then an
+    // explicit per-row choice overriding them in both directions.
+    public static bool RunSelfTest()
+    {
+        var settings = new AppSettings();
+        var codex = settings.GetProvider("codex");
+        var window = new RateLimitWindow(10d, null, 300);
+        var main = new UsageRow("5h", window, IsPrimary: true);
+        var spark5h = new UsageRow("Spark 5h", window, IsPrimary: false);
+        var sparkWeekly = new UsageRow("Spark 7d", window, IsPrimary: false);
+        var credits = new UsageRow("Credits", null, IsPrimary: false, "12");
+
+        codex.ShowSecondaryRows = false;
+        codex.ShowCredits = false;
+        if (!IsVisible(settings, "codex", main)) return false;
+        if (IsVisible(settings, "codex", spark5h) || IsVisible(settings, "codex", credits)) return false;
+
+        codex.ShowSecondaryRows = true;
+        codex.ShowCredits = true;
+        if (!IsVisible(settings, "codex", spark5h) || !IsVisible(settings, "codex", credits)) return false;
+
+        settings.RowVisibility[Key("codex", main.Label)] = false;
+        settings.RowVisibility[Key("codex", spark5h.Label)] = false;
+        if (IsVisible(settings, "codex", main) || IsVisible(settings, "codex", spark5h)) return false;
+
+        codex.ShowSecondaryRows = false;
+        settings.RowVisibility[Key("codex", sparkWeekly.Label)] = true;
+        return IsVisible(settings, "codex", sparkWeekly);
     }
 
     public static string Resolve(AppSettings settings, string providerId, UsageRow row)

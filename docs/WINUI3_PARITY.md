@@ -100,8 +100,17 @@ WinForms app is a separate follow-up task after sign-off.
 
 - `ShapeTheme` is `Bars`, `BentoCircles`, or `MixMatch`. Mix & match stores a
   per-row override in `RowShapes` (`"<providerId>|<row label>"` ->
-  `Circle` | `Bars`, gauge by default) and the Appearance page lists every row
-  the enabled providers report.
+  `Circle` | `Bars`, gauge by default).
+- The Appearance page lists every row the enabled providers report, hidden ones
+  included, with a checkbox per row. Checking or clearing it writes
+  `RowVisibility` (same key as `RowShapes`); rows without an entry fall back to
+  the provider defaults, i.e. windows the provider marks primary are shown and
+  model/credit rows follow `ShowSecondaryRows`/`ShowCredits`. The list is the
+  only row-visibility control in the WinUI settings; the shape picker column is
+  the part that is mix & match only.
+- The last checked row of a provider locks (its checkbox disables) so a section
+  can never render as a bare header with nothing under it. The popup and the
+  tray tooltip read the same visibility and order.
 - Layout rule shared by all three modes: bar rows always span the full content
   width; gauges pair two per line only when some provider section has at least
   two gauges, otherwise everything stacks in a single column. The popup is wide
@@ -142,6 +151,10 @@ WinForms app is a separate follow-up task after sign-off.
 - `Loc` provides `T(en, ko)` plus `RowLabel` (duration tokens: `5h` -> `5시간`,
   `7d` -> `7일`, `1w` -> `1주`; model names stay as-is) and `Option` for
   settings values that are persisted as stable English keys.
+- Codex Spark reports its own windows, so `Spark 5h` and `Spark 7d` render as
+  `Spark · 5h` / `Spark · Weekly` (`Spark · 5시간` / `Spark · 주간`). They used
+  to collapse to a bare `Spark`, which made the two windows indistinguishable
+  in the popup, the tooltip, and the settings row list.
 - Language changes apply live: the tray menu is rebuilt, and the settings
   window retitles itself, relabels its navigation items, and rebuilds the
   visible page instead of requiring a reopen.
