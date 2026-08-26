@@ -279,26 +279,24 @@ internal sealed class SettingsWindow
 
         var enabledLabel = Loc.T("Enabled", "사용");
         var refreshLabel = Loc.T("Refresh interval (seconds)", "갱신 주기 (초)");
-        var creditsLabel = Loc.T("Credits row", "크레딧 행");
         return Page(Loc.T("Providers", "프로바이더"),
             SectionLabel("Codex"),
             Row(enabledLabel, Loc.T("Changes apply without restart.", "재시작 없이 반영됩니다."), ProviderToggle(codex, SettingsChange.Providers)),
             Row(refreshLabel, Loc.T("Minimum 10 seconds.", "최소 10초."), RefreshBox(codex, 10)),
-            Row(Loc.T("GPT-5.3-Codex-Spark rows", "GPT-5.3-Codex-Spark 행"), null, SecondaryToggle(codex)),
-            Row(creditsLabel, Loc.T("Shows the credits balance.", "크레딧 잔액을 표시합니다."), CreditsToggle(codex)),
             Row(Loc.T("Codex command", "Codex 명령"), Loc.T("Command or full path used to start codex app-server.", "codex app-server 실행에 쓰는 명령 또는 전체 경로."), codexCommand),
             codexResolved,
             SectionLabel("Claude"),
             Row(enabledLabel, null, ProviderToggle(claude, SettingsChange.Providers)),
             Row(refreshLabel, Loc.T("Clamped to a 60-second minimum.", "최소 60초로 제한됩니다."), RefreshBox(claude, 60)),
-            Row(Loc.T("Per-model rows", "모델별 행"), Loc.T("7d Sonnet / 7d Opus windows.", "7d Sonnet / 7d Opus window."), SecondaryToggle(claude)),
-            Row(creditsLabel, Loc.T("Extra usage, when enabled on the account.", "계정에 활성화된 경우 extra usage를 표시합니다."), CreditsToggle(claude)),
             Row(Loc.T("Auto-renew session", "세션 자동 갱신"),
                 Loc.T("Runs 'claude mcp list' before the 8-hour token expires so Claude Code refreshes it. Costs no usage.",
                       "8시간짜리 토큰이 만료되기 전에 'claude mcp list'를 실행해 Claude Code가 갱신하도록 합니다. 사용량은 소모되지 않습니다."),
                 AutoRenewToggle(claude)),
             claudeStatus,
-            reconnect);
+            reconnect,
+            MutedText(Loc.T(
+                "Which rows each provider shows - model windows, credits - is picked per row under Appearance.",
+                "프로바이더별로 어떤 행(모델별 window, 크레딧)을 표시할지는 모양 탭에서 행마다 선택합니다.")));
     }
 
     private ToggleSwitch ProviderToggle(ProviderSettings provider, SettingsChange kind)
@@ -328,25 +326,11 @@ internal sealed class SettingsWindow
         return box;
     }
 
-    private ToggleSwitch SecondaryToggle(ProviderSettings provider)
-    {
-        var toggle = new ToggleSwitch { IsOn = provider.ShowSecondaryRows };
-        toggle.Toggled += (_, _) => { provider.ShowSecondaryRows = toggle.IsOn; Save(SettingsChange.General); };
-        return toggle;
-    }
-
     // Providers rebuild on change: the renewal schedule lives inside the provider.
     private ToggleSwitch AutoRenewToggle(ProviderSettings provider)
     {
         var toggle = new ToggleSwitch { IsOn = provider.AutoRenewSession };
         toggle.Toggled += (_, _) => { provider.AutoRenewSession = toggle.IsOn; Save(SettingsChange.Providers); };
-        return toggle;
-    }
-
-    private ToggleSwitch CreditsToggle(ProviderSettings provider)
-    {
-        var toggle = new ToggleSwitch { IsOn = provider.ShowCredits };
-        toggle.Toggled += (_, _) => { provider.ShowCredits = toggle.IsOn; Save(SettingsChange.General); };
         return toggle;
     }
 
@@ -429,8 +413,10 @@ internal sealed class SettingsWindow
                 Loc.T("Auto uses two columns only when a provider has two gauges.",
                       "자동은 한 프로바이더에 게이지가 2개 이상일 때만 2열로 배치합니다."),
                 columns));
-            rows.Add(BuildMixMatchList());
         }
+        // Visibility and order apply to every shape theme; only the per-row
+        // shape picker is specific to mix & match.
+        rows.Add(BuildRowList());
         rows.Add(Row(Loc.T("UI scale", "UI 크기"), Loc.T("Overall popup size.", "팝업 전체 크기를 조절합니다."), uiScale));
         rows.AddRange(new[]
         {
@@ -466,28 +452,18 @@ internal sealed class SettingsWindow
         return Page(Loc.T("Appearance", "모양"), rows.ToArray());
     }
 
-    private FrameworkElement BuildMixMatchRow(IReadOnlyList<UsageRowRef> providerRows, int index)
+    // One row line: show/hide checkbox, label, order buttons, and - in mix &
+    // match only - the shape picker.
+    private FrameworkElement BuildRowLine(IReadOnlyList<UsageRowRef> providerRows, int index, CheckBox show, bool mixMatch)
     {
         var rowRef = providerRows[index];
-        var key = RowShapes.Key(rowRef.ProviderId, rowRef.Label);
-        var current = _settings.RowShapes.TryGetValue(key, out var stored) ? stored : RowShapes.Circle;
-        var combo = MakeCombo(
-            new[] { RowShapes.Circle, RowShapes.Bars },
-            current,
-            value =>
-            {
-                _settings.RowShapes[key] = value;
-                Save(SettingsChange.Appearance);
-            },
-            width: 130);
-        combo.VerticalAlignment = VerticalAlignment.Center;
 
         var up = MoveButton("", Loc.T("Move up", "위로"), index > 0, () => MoveRow(providerRows, index, -1));
         var down = MoveButton("", Loc.T("Move down", "아래로"), index < providerRows.Count - 1, () => MoveRow(providerRows, index, 1));
 
         var line = new Grid { MinHeight = 40 };
-        line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
@@ -498,15 +474,57 @@ internal sealed class SettingsWindow
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis
         };
-        Grid.SetColumn(label, 0);
-        Grid.SetColumn(up, 1);
-        Grid.SetColumn(down, 2);
-        Grid.SetColumn(combo, 3);
+        Grid.SetColumn(show, 0);
+        Grid.SetColumn(label, 1);
+        Grid.SetColumn(up, 2);
+        Grid.SetColumn(down, 3);
+        line.Children.Add(show);
         line.Children.Add(label);
         line.Children.Add(up);
         line.Children.Add(down);
-        line.Children.Add(combo);
+
+        if (mixMatch)
+        {
+            var key = RowShapes.Key(rowRef.ProviderId, rowRef.Label);
+            var current = _settings.RowShapes.TryGetValue(key, out var stored) ? stored : RowShapes.Circle;
+            var combo = MakeCombo(
+                new[] { RowShapes.Circle, RowShapes.Bars },
+                current,
+                value =>
+                {
+                    _settings.RowShapes[key] = value;
+                    Save(SettingsChange.Appearance);
+                },
+                width: 130);
+            combo.VerticalAlignment = VerticalAlignment.Center;
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(combo, 4);
+            line.Children.Add(combo);
+        }
+
         return line;
+    }
+
+    // Writes the row's visibility choice; onChanged re-locks the last visible
+    // row of the provider so a section can never end up empty.
+    private CheckBox BuildVisibilityCheck(UsageRowRef rowRef, Action onChanged)
+    {
+        var check = new CheckBox
+        {
+            IsChecked = RowShapes.IsVisible(_settings, rowRef),
+            MinWidth = 0,
+            Margin = new Thickness(0, 0, 10, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        void Apply()
+        {
+            _settings.RowVisibility[RowShapes.Key(rowRef.ProviderId, rowRef.Label)] = check.IsChecked == true;
+            Save(SettingsChange.Appearance);
+            onChanged();
+        }
+        check.Checked += (_, _) => Apply();
+        check.Unchecked += (_, _) => Apply();
+        return check;
     }
 
     private static Button MoveButton(string glyph, string tooltip, bool enabled, Action onClick)
@@ -542,20 +560,28 @@ internal sealed class SettingsWindow
         RefreshCurrentPage();
     }
 
-    // Mix & match: one shape selector per known row. Bars always span the full
-    // content width; gauges pair up two per line when at least one provider has
-    // two of them, otherwise everything stacks in a single column.
-    private FrameworkElement BuildMixMatchList()
+    // Every row the providers report: check the ones to show, order them, and
+    // in mix & match pick a shape each. Bars always span the full content
+    // width; gauges pair up two per line when at least one provider has two of
+    // them, otherwise everything stacks in a single column.
+    private FrameworkElement BuildRowList()
     {
+        var mixMatch = string.Equals(_settings.ShapeTheme, "MixMatch", StringComparison.OrdinalIgnoreCase);
         var panel = new StackPanel { Spacing = 8, Padding = new Thickness(16, 12, 16, 14) };
         panel.Children.Add(new TextBlock
         {
-            Text = Loc.T("Shape per row", "행별 모양"),
+            Text = mixMatch ? Loc.T("Rows and shapes", "행별 표시와 모양") : Loc.T("Rows to show", "표시할 행"),
             FontSize = 14
         });
         panel.Children.Add(MutedText(Loc.T(
-            "Bars take the full popup width; gauges sit two per line when they are next to each other, so reorder rows to pair the gauges you want side by side.",
-            "막대는 팝업 전체 폭을 쓰고, 게이지는 서로 이웃할 때만 한 줄에 두 개씩 배치됩니다. 나란히 두고 싶은 게이지는 순서를 옮겨 붙여 주세요.")));
+            "Clear a checkbox to drop that row from the popup and the tray tooltip. Every provider keeps at least one row, so its last checked row cannot be cleared.",
+            "체크를 해제하면 해당 행이 팝업과 트레이 툴팁에서 빠집니다. 프로바이더마다 최소 한 행은 남아야 해서, 마지막으로 체크된 행은 해제할 수 없습니다.")));
+        if (mixMatch)
+        {
+            panel.Children.Add(MutedText(Loc.T(
+                "Bars take the full popup width; gauges sit two per line when they are next to each other, so reorder rows to pair the gauges you want side by side.",
+                "막대는 팝업 전체 폭을 쓰고, 게이지는 서로 이웃할 때만 한 줄에 두 개씩 배치됩니다. 나란히 두고 싶은 게이지는 순서를 옮겨 붙여 주세요.")));
+        }
 
         var rows = _currentRows();
         if (rows.Count == 0)
@@ -579,9 +605,29 @@ internal sealed class SettingsWindow
                 Margin = new Thickness(0, 6, 0, 0)
             });
 
+            var checks = new List<CheckBox>();
+            // Minimum one row per provider: when a single box is left checked,
+            // it locks so the section can never render as a bare header.
+            void LockLastVisible()
+            {
+                var shown = checks.Count(check => check.IsChecked == true);
+                foreach (var check in checks)
+                {
+                    check.IsEnabled = shown > 1 || check.IsChecked != true;
+                }
+            }
+
+            var lines = new List<FrameworkElement>();
             for (var index = 0; index < providerRows.Count; index++)
             {
-                panel.Children.Add(BuildMixMatchRow(providerRows, index));
+                var check = BuildVisibilityCheck(providerRows[index], LockLastVisible);
+                checks.Add(check);
+                lines.Add(BuildRowLine(providerRows, index, check, mixMatch));
+            }
+            LockLastVisible();
+            foreach (var line in lines)
+            {
+                panel.Children.Add(line);
             }
         }
 

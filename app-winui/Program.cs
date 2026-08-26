@@ -21,7 +21,9 @@ internal static class Program
             return RateLimitMapper.RunSelfTest()
                 && ClaudeUsageMapper.RunSelfTest()
                 && ClaudeSessionRenewer.RunSelfTest()
-                && HotkeyDefinition.RunSelfTest() ? 0 : 1;
+                && HotkeyDefinition.RunSelfTest()
+                && RowShapes.RunSelfTest()
+                && Loc.RunSelfTest() ? 0 : 1;
         }
 
         using var mutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out var isFirstInstance);

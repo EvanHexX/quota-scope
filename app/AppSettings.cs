@@ -34,6 +34,9 @@ internal sealed class AppSettings
     // Display order overrides, same key as RowShapes; unlisted rows keep the
     // order the provider reported them in.
     public Dictionary<string, int> RowOrder { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    // Per-row visibility, same key as RowShapes. A row the user has never
+    // touched is absent and falls back to the provider row defaults.
+    public Dictionary<string, bool> RowVisibility { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public string TrayIconStyle { get; set; } = "UsageArc";
     public string GaugeMetric { get; set; } = "Used";
     public string Language { get; set; } = "System";

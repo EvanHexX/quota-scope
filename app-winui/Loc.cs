@@ -33,7 +33,12 @@ internal static partial class Loc
 
         if (providerId.Equals("codex", StringComparison.OrdinalIgnoreCase))
         {
-            if (label.StartsWith("Spark ", StringComparison.OrdinalIgnoreCase)) return "Spark";
+            // Spark reports its own 5h and weekly windows; both used to collapse
+            // to a bare "Spark", so name the window next to the model.
+            if (label.StartsWith("Spark ", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Spark · " + WindowLabel(label["Spark ".Length..]);
+            }
             if (label is "7d" or "1w") return T("General", "일반");
             return DurationLabel(label);
         }
@@ -50,6 +55,14 @@ internal static partial class Loc
             return DurationLabel(label);
         }
 
+        return DurationLabel(label);
+    }
+
+    // Weekly windows read better spelled out than as "7d"; anything shorter
+    // keeps its duration ("5h" / "5시간").
+    private static string WindowLabel(string label)
+    {
+        if (label is "7d" or "1w") return T("Weekly", "주간");
         return DurationLabel(label);
     }
 
@@ -153,6 +166,22 @@ internal static partial class Loc
             "VeryStrong" => "매우 강하게",
             _ => value
         };
+    }
+
+    // Row labels are what the popup, the tray tooltip, and the settings row
+    // list all read, so each window a provider reports has to come out distinct.
+    // Leaves the language set: the self-test path exits right after.
+    public static bool RunSelfTest()
+    {
+        SetLanguage("English");
+        if (RowLabel("codex", "Spark 5h") != "Spark · 5h") return false;
+        if (RowLabel("codex", "Spark 7d") != "Spark · Weekly") return false;
+        if (RowLabel("codex", "5h") != "5h" || RowLabel("codex", "7d") != "General") return false;
+
+        SetLanguage("Korean");
+        if (RowLabel("codex", "Spark 5h") != "Spark · 5시간") return false;
+        if (RowLabel("codex", "Spark 7d") != "Spark · 주간") return false;
+        return RowLabel("codex", "Spark 5h") != RowLabel("codex", "Spark 7d");
     }
 
     [GeneratedRegex(@"(\d+)([hdw])\b")]
