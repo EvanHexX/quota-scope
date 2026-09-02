@@ -301,6 +301,9 @@ internal sealed class ClaudeUsageProvider : IUsageProvider
             _watcher.Dispose();
             _watcher = null;
         }
+        // Reaps a nudge that is still running, so exiting the tray app cannot
+        // strand a `claude` process holding its executable open.
+        _renewer.Dispose();
         _http.Dispose();
         _gate.Dispose();
     }

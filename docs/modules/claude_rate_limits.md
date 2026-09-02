@@ -46,7 +46,9 @@ User-Agent: claude-code/<version>
   - **복구 nudge**(만료 시각 경과 또는 401 수신) no-op → 실패로 세고 쿨다운 2m → 10m → 30m. 연속 5회면 파일이 바뀔 때까지 중단.
   - 이 구분이 없으면 선제 nudge가 만료 전 15분 동안 실패 카운터를 소진해, 정작 401이 난 순간 30분 쿨다운에 걸려 있게 된다.
 - `claude` 실행 파일은 `%USERPROFILE%\.local\bin\claude.exe` 등 알려진 설치 경로를 먼저 찾고, 없으면 `cmd.exe /c claude ...`로 PATH shim을 탄다.
-- `claude auth status` 출력에는 계정 식별 정보가 들어 있으므로 **읽어서 버리기만 하고 어디에도 기록하지 않는다**. 자식 프로세스는 창 없이 실행하며 30초 후 강제 종료한다.
+- **자식 프로세스 수명**: nudge는 `claude` CLI를 1회 실행하고 끝난다. 실측(2026-09-02) 결과 직계 자식 1개, exit 0, ~3초, 종료 10초 후 잔존 `claude`/`node` 프로세스 **0개** — MCP 서버를 띄우거나 백그라운드에 남기지 않는다. 다만 앱이 nudge 진행 중에 종료되면 대기 스레드가 프로세스와 함께 죽어 30초 타임아웃 kill이 실행되지 않으므로, `ClaudeSessionRenewer.Dispose()`가 진행 중인 자식을 `Kill(entireProcessTree)`로 회수한다. `ClaudeUsageProvider.Dispose()`가 이를 호출한다. 이게 없으면 멈춘 `claude`가 285MB 실행 파일을 잠근 채 남아 이후 CLI 업데이트를 막을 수 있다.
+- 이 경로는 Windows 서비스나 svchost와 무관하다. QuotaScope는 서비스를 등록하지 않고, nudge는 `%USERPROFILE%\.local\bin\claude.exe`(CLI 네이티브 설치)만 실행한다. Claude **데스크톱 앱**은 별개 MSIX 패키지이며 자체 auto-start 서비스(`CoworkVMService`)를 갖는데, 이는 QuotaScope와 아무 관련이 없다.
+- `claude mcp list` 출력에는 사용자가 설정한 서버 목록이 들어 있으므로 **읽어서 버리기만 하고 어디에도 기록하지 않는다**. 자식 프로세스는 창 없이 실행하며 30초 후 강제 종료한다.
 - per-provider 설정 `AutoRenewSession`(기본 `true`)으로 끌 수 있다. 끄면 종전 동작 그대로 만료 후 수동 재연결이 필요하다.
 
 ## Session Visibility
