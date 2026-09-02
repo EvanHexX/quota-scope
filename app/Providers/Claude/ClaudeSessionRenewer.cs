@@ -12,7 +12,7 @@ namespace QuotaScope.Providers.Claude;
 // lets Claude Code rewrite the credentials file itself. No token material is
 // read, stored, or logged here, and the command output is discarded because it
 // describes the user's configured servers.
-internal sealed class ClaudeSessionRenewer
+internal sealed class ClaudeSessionRenewer : IDisposable
 {
     // Which command renews is a property of the CLI, not a documented contract:
     // it has to be one that needs a live token. Measured 2026-08-13 against
@@ -51,6 +51,8 @@ internal sealed class ClaudeSessionRenewer
     private int _consecutiveFailures;
     private bool _running;
     private bool _attemptIsRecovery;
+    private Process? _current;
+    private bool _disposed;
 
     public bool IsRenewing
     {
@@ -79,6 +81,7 @@ internal sealed class ClaudeSessionRenewer
     {
         lock (_sync)
         {
+            if (_disposed) return;
             _consecutiveFailures = 0;
             _nextAttemptAt = DateTimeOffset.MinValue;
         }
@@ -97,7 +100,7 @@ internal sealed class ClaudeSessionRenewer
     {
         lock (_sync)
         {
-            if (_running || DateTimeOffset.Now < _nextAttemptAt) return false;
+            if (_disposed || _running || DateTimeOffset.Now < _nextAttemptAt) return false;
             _running = true;
             _attemptIsRecovery = recovery;
             _attemptStampUtc = ClaudeCredentialReader.GetCredentialsFileStampUtc();
@@ -154,7 +157,7 @@ internal sealed class ClaudeSessionRenewer
         }
     }
 
-    private static bool RunRenewalCommand()
+    private bool RunRenewalCommand()
     {
         var spec = ClaudeCommandResolver.Resolve(RenewalCommand);
         var startInfo = new ProcessStartInfo
@@ -174,27 +177,68 @@ internal sealed class ClaudeSessionRenewer
         using var process = Process.Start(startInfo);
         if (process is null) return false;
 
-        // Drain both pipes without keeping the payload: the output describes the
-        // user's configured servers and must not be logged anywhere.
-        process.OutputDataReceived += static (_, _) => { };
-        process.ErrorDataReceived += static (_, _) => { };
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        process.StandardInput.Close();
-
-        if (!process.WaitForExit((int)ProcessTimeout.TotalMilliseconds))
+        lock (_sync)
         {
-            try
+            // Shutdown raced the launch; do not leave the child behind.
+            if (_disposed)
             {
-                process.Kill(entireProcessTree: true);
+                KillQuietly(process);
+                return false;
             }
-            catch
-            {
-                // Already gone.
-            }
-            return false;
+            _current = process;
         }
-        return process.ExitCode == 0;
+
+        try
+        {
+            // Drain both pipes without keeping the payload: the output describes
+            // the user's configured servers and must not be logged anywhere.
+            process.OutputDataReceived += static (_, _) => { };
+            process.ErrorDataReceived += static (_, _) => { };
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+            process.StandardInput.Close();
+
+            if (!process.WaitForExit((int)ProcessTimeout.TotalMilliseconds))
+            {
+                KillQuietly(process);
+                return false;
+            }
+            return process.ExitCode == 0;
+        }
+        finally
+        {
+            lock (_sync) { _current = null; }
+        }
+    }
+
+    private static void KillQuietly(Process process)
+    {
+        try
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+        }
+        catch
+        {
+            // Already gone, or it exited between the check and the kill.
+        }
+    }
+
+    // The tray app can exit mid-nudge, and once it does nothing else would ever
+    // reap the CLI it launched: the worker thread waiting on the child dies with
+    // the process, so the timeout kill above never runs. A stranded `claude`
+    // keeps its executable locked, which is enough to make a later CLI update
+    // fail until the machine is restarted.
+    public void Dispose()
+    {
+        Process? current;
+        lock (_sync)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _nextAttemptAt = DateTimeOffset.MaxValue;
+            current = _current;
+        }
+        if (current is not null) KillQuietly(current);
     }
 
     private static string SafeWorkingDirectory()
