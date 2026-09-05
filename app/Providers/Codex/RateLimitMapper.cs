@@ -21,17 +21,18 @@ internal static class RateLimitMapper
     public const string ProviderId = "codex";
     public const string ProviderDisplayName = "Codex";
 
-    public static ProviderUsage FromJsonResult(JsonElement result)
+    public static ProviderUsage FromJsonResult(JsonElement result, double creditsFullAmount)
     {
         var mainSnapshotElement = result.TryGetProperty("rateLimits", out var direct)
             ? direct
             : result;
         var mainSnapshot = ParseSnapshot(mainSnapshotElement);
         var sparkSnapshot = TryFindSparkSnapshot(result);
-        return ToProviderUsage(mainSnapshot, sparkSnapshot);
+        return ToProviderUsage(mainSnapshot, creditsFullAmount, sparkSnapshot);
     }
 
-    public static ProviderUsage ToProviderUsage(RateLimitSnapshot snapshot, RateLimitSnapshot? sparkSnapshot = null)
+    public static ProviderUsage ToProviderUsage(
+        RateLimitSnapshot snapshot, double creditsFullAmount, RateLimitSnapshot? sparkSnapshot = null)
     {
         var rows = new List<UsageRow>();
 
@@ -46,7 +47,7 @@ internal static class RateLimitMapper
 
         if (snapshot.Credits is { HasCredits: true } credits)
         {
-            rows.Add(new UsageRow("Credits", null, IsPrimary: false, FormatCredits(credits)));
+            rows.Add(BuildCreditsRow(credits, creditsFullAmount));
         }
 
         return new ProviderUsage(
@@ -84,6 +85,25 @@ internal static class RateLimitMapper
             max = Math.Max(max, window.UsedPercent);
         }
         return max;
+    }
+
+    // The balance is what is left and carries no ceiling, so the gauge needs the
+    // configured full amount. Unlimited credits have no meaningful fill, and a
+    // balance that will not parse has no number to draw: both stay text-only.
+    private static UsageRow BuildCreditsRow(CodexCredits credits, double fullAmount)
+    {
+        if (credits.Unlimited || !CreditsGauge.HasUsableCeiling(fullAmount)
+            || !decimal.TryParse(credits.Balance, NumberStyles.Number, CultureInfo.InvariantCulture, out var balance))
+        {
+            return new UsageRow("Credits", null, IsPrimary: false, FormatCredits(credits));
+        }
+
+        var remaining = (double)balance;
+        return new UsageRow(
+            "Credits",
+            new RateLimitWindow(CreditsGauge.UsedPercentFromBalance(remaining, fullAmount), null, null),
+            IsPrimary: false,
+            CreditsGauge.FormatRemaining(remaining, fullAmount));
     }
 
     private static string FormatCredits(CodexCredits credits)
@@ -173,9 +193,15 @@ internal static class RateLimitMapper
         return null;
     }
 
+    // TryGetDouble/TryGetInt64 throw rather than returning false when the
+    // element is not a number, and this payload spells "absent" as an explicit
+    // null, so the kind has to be checked first.
     private static double? GetDouble(JsonElement element, string name)
     {
-        if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.TryGetDouble(out var parsed))
+        if (element.ValueKind == JsonValueKind.Object
+            && element.TryGetProperty(name, out var value)
+            && value.ValueKind == JsonValueKind.Number
+            && value.TryGetDouble(out var parsed))
         {
             return parsed;
         }
@@ -184,7 +210,10 @@ internal static class RateLimitMapper
 
     private static long? GetLong(JsonElement element, string name)
     {
-        if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.TryGetInt64(out var parsed))
+        if (element.ValueKind == JsonValueKind.Object
+            && element.TryGetProperty(name, out var value)
+            && value.ValueKind == JsonValueKind.Number
+            && value.TryGetInt64(out var parsed))
         {
             return parsed;
         }
@@ -227,7 +256,7 @@ internal static class RateLimitMapper
         }";
 
         using var doc = JsonDocument.Parse(sample);
-        var usage = FromJsonResult(doc.RootElement);
+        var usage = FromJsonResult(doc.RootElement, CreditsGauge.DefaultFullAmount);
         return usage.Rows.Count == 4
             && NearlyEquals(usage.OverallUsedPercent, 37)
             && RowMatches(usage.Rows[0], "5h", 37, isPrimary: true)
@@ -269,12 +298,31 @@ internal static class RateLimitMapper
         }";
 
         using var doc = JsonDocument.Parse(sample);
-        var usage = FromJsonResult(doc.RootElement);
-        return usage.Rows.Count == 3
-            && NearlyEquals(usage.OverallUsedPercent, 12.5)
-            && RowMatches(usage.Rows[0], "7d", 12.5, isPrimary: true)
-            && RowMatches(usage.Rows[1], "Spark 7d", 4, isPrimary: false)
-            && usage.Rows[2] is { Label: "Credits", Window: null, IsPrimary: false, DetailText: "146.09" };
+        var usage = FromJsonResult(doc.RootElement, CreditsGauge.DefaultFullAmount);
+        // 146.0874125 left of 2500 is 94.1565% spent.
+        if (usage.Rows.Count != 3
+            || !NearlyEquals(usage.OverallUsedPercent, 12.5)
+            || !RowMatches(usage.Rows[0], "7d", 12.5, isPrimary: true)
+            || !RowMatches(usage.Rows[1], "Spark 7d", 4, isPrimary: false)
+            || usage.Rows[2] is not { Label: "Credits", IsPrimary: false, DetailText: "146.09 / 2500" }
+            || !RowMatches(usage.Rows[2], "Credits", 94.1565035, isPrimary: false))
+        {
+            return false;
+        }
+
+        // The full amount is configurable, so it has to move the gauge: the same
+        // balance against 200 credits is 26.9563% spent.
+        var rescaled = FromJsonResult(doc.RootElement, 200d);
+        if (!RowMatches(rescaled.Rows[2], "Credits", 26.9562938, isPrimary: false)
+            || rescaled.Rows[2].DetailText != "146.09 / 200")
+        {
+            return false;
+        }
+
+        // A full amount of zero has no denominator to divide by; the row falls
+        // back to the plain balance instead of dividing by zero.
+        var unscaled = FromJsonResult(doc.RootElement, 0d);
+        return unscaled.Rows[2] is { Label: "Credits", Window: null, DetailText: "146.09" };
     }
 
     private static bool RowMatches(UsageRow row, string label, double usedPercent, bool isPrimary)

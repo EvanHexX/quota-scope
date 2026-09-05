@@ -283,11 +283,19 @@ internal sealed class SettingsWindow
             SectionLabel("Codex"),
             Row(enabledLabel, Loc.T("Changes apply without restart.", "재시작 없이 반영됩니다."), ProviderToggle(codex, SettingsChange.Providers)),
             Row(refreshLabel, Loc.T("Minimum 10 seconds.", "최소 10초."), RefreshBox(codex, 10)),
+            Row(Loc.T("Credits gauge full amount", "크레딧 게이지 기준량"),
+                Loc.T("Credits arrive without a ceiling, so the gauge is drawn against this.",
+                      "크레딧은 상한 없이 전달되므로 게이지는 이 값을 100% 기준으로 그립니다."),
+                CreditsFullAmountBox(codex)),
             Row(Loc.T("Codex command", "Codex 명령"), Loc.T("Command or full path used to start codex app-server.", "codex app-server 실행에 쓰는 명령 또는 전체 경로."), codexCommand),
             codexResolved,
             SectionLabel("Claude"),
             Row(enabledLabel, null, ProviderToggle(claude, SettingsChange.Providers)),
             Row(refreshLabel, Loc.T("Clamped to a 60-second minimum.", "최소 60초로 제한됩니다."), RefreshBox(claude, 60)),
+            Row(Loc.T("Credits gauge full amount", "크레딧 게이지 기준량"),
+                Loc.T("Credits arrive without a ceiling, so the gauge is drawn against this.",
+                      "크레딧은 상한 없이 전달되므로 게이지는 이 값을 100% 기준으로 그립니다."),
+                CreditsFullAmountBox(claude)),
             Row(Loc.T("Auto-renew session", "세션 자동 갱신"),
                 Loc.T("Runs 'claude mcp list' before the 8-hour token expires so Claude Code refreshes it. Costs no usage.",
                       "8시간짜리 토큰이 만료되기 전에 'claude mcp list'를 실행해 Claude Code가 갱신하도록 합니다. 사용량은 소모되지 않습니다."),
@@ -321,6 +329,29 @@ internal sealed class SettingsWindow
         {
             if (double.IsNaN(box.Value)) return;
             provider.RefreshSeconds = (int)Math.Clamp(box.Value, minimum, 3600);
+            Save(SettingsChange.Providers);
+        };
+        return box;
+    }
+
+    // Claude reports its own monthly limit when extra usage is on and that wins;
+    // this is the fallback ceiling, and the only one Codex ever has.
+    private NumberBox CreditsFullAmountBox(ProviderSettings provider)
+    {
+        var box = new NumberBox
+        {
+            Minimum = 0,
+            Maximum = 1_000_000,
+            Value = Math.Max(0, provider.CreditsFullAmount),
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
+            SmallChange = 100,
+            LargeChange = 500,
+            Width = 160
+        };
+        box.ValueChanged += (_, _) =>
+        {
+            if (double.IsNaN(box.Value)) return;
+            provider.CreditsFullAmount = Math.Clamp(box.Value, 0, 1_000_000);
             Save(SettingsChange.Providers);
         };
         return box;
@@ -402,18 +433,18 @@ internal sealed class SettingsWindow
             Row(Loc.T("Shape theme", "게이지 모양"),
                 Loc.T("Bars, gauges, or mix & match per row.", "막대, 게이지, 또는 행별 믹스 & 매치."), shape)
         };
-        if (string.Equals(_settings.ShapeTheme, "MixMatch", StringComparison.OrdinalIgnoreCase))
-        {
-            var columns = MakeCombo(
-                new[] { "Auto", "OneColumn", "TwoColumns" },
-                _settings.LayoutColumns,
-                value => { _settings.LayoutColumns = value; Save(SettingsChange.Appearance); });
-            rows.Add(Row(
-                Loc.T("Columns", "열 수"),
-                Loc.T("Auto uses two columns only when a provider has two gauges.",
-                      "자동은 한 프로바이더에 게이지가 2개 이상일 때만 2열로 배치합니다."),
-                columns));
-        }
+        // The column count applies to every shape theme, not just mix & match:
+        // it forces the popup width and pairs gauge cards, and it decides whether
+        // bar rows stack their time text or keep it inline.
+        var columns = MakeCombo(
+            new[] { "Auto", "OneColumn", "TwoColumns" },
+            _settings.LayoutColumns,
+            value => { _settings.LayoutColumns = value; Save(SettingsChange.Appearance); });
+        rows.Add(Row(
+            Loc.T("Columns", "열 수"),
+            Loc.T("Sets the popup width. Auto pairs gauges only when a provider has two.",
+                  "팝업 너비를 정합니다. 자동은 한 프로바이더에 게이지가 2개 이상일 때만 2열로 배치합니다."),
+            columns));
         // Visibility and order apply to every shape theme; only the per-row
         // shape picker is specific to mix & match.
         rows.Add(BuildRowList());

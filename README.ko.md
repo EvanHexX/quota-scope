@@ -39,10 +39,11 @@ self-contained 빌드라 .NET이나 Windows App SDK 런타임을 따로 설치�
 - Codex와 Claude(Pro/Max) 사용량을 provider별 구분 섹션으로 동시에 표시
 - Payload 기반 행 생성: provider가 보고하는 rate limit window마다 1행이라, 새 window(예: 모델별 주간 한도)가 생겨도 앱 업데이트 없이 표시됨
 - 행마다 체크박스로 표시할 행 선택, 프로바이더별로 최소 1행 유지
-- 선택 표시: secondary 행(GPT-5.3-Codex-Spark 5시간·주간, Claude 모델별 window)과 credits 행
+- 선택 표시: secondary 행(GPT-5.3-Codex-Spark 5시간·주간, Claude 모델별 window)과 두 provider 모두의 credits 행
+- credits는 provider별 기준량(기본 2500, 변경 가능)을 100%로 삼아 게이지로 표시 — 두 provider 모두 상한을 보고하지 않기 때문
 - 트레이 아이콘은 전체 사용률을 호 채움(5% 단위)과 3단계 상태 색상으로 표시, 호버 툴팁은 window별 잔여량(%)을 표시하고 전체 수치는 팝업에서 제공
 - 경고 임계값 진입 시 트레이 알림 (선택)
-- 레이아웃: 막대 / 게이지 / 믹스 & 매치(행별 모양 지정 + 1열·2열 강제)
+- 레이아웃: 막대 / 게이지 / 믹스 & 매치(행별 모양 지정), 열 수 설정은 모든 모양에 적용
 - 테마: 다크, 라이트, 미드나잇, 시스템 테마 따르기, 글래스모피즘(4단계 강도)
 - UI 크기 조절(80~150%)과 한국어/영어 인터페이스
 - 사용자 지정 전역 단축키: 팝업 토글(기본 `Ctrl+Alt+U`), 전체 새로 고침, 핀 토글

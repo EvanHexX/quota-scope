@@ -81,7 +81,11 @@ internal sealed class UsagePopupForm : Form
     private static bool IsRowVisible(UsageRow row, ProviderSettings provider)
     {
         if (row.IsPrimary) return true;
-        return row.Window is not null ? provider.ShowSecondaryRows : provider.ShowCredits;
+        // The credits row carries a gauge now, so the label separates it from
+        // the model windows rather than whether it has a window.
+        return row.Label.Equals("Credits", StringComparison.OrdinalIgnoreCase)
+            ? provider.ShowCredits
+            : provider.ShowSecondaryRows;
     }
 
     private void ApplyThemeSize()
