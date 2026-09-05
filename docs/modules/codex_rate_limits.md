@@ -80,6 +80,8 @@ app-server가 LSP/MCP식 2단계 핸드셰이크를 요구하도록 바뀌었다
 - overall 수치는 main snapshot의 window usedPercent 중 가장 높은 값이다.
 - Spark rows는 `limitName`/`limitId`에서 `spark`, `bengalfox`, `gpt-5.3-codex`를 찾고, 해당 snapshot의 window들을 `Spark <라벨>` secondary row로 표시한다.
 - `credits.hasCredits == true`이면 잔액을 `Credits` row로 표시할 수 있다 (per-provider 표시 옵션, 기본 off). Claude의 `extra_usage`와 대칭 구조다.
+- `balance`는 **남은** 잔액이고 상한이 없으므로, gauge는 provider 설정 `CreditsFullAmount`(기본 2500)를 100% 기준으로 삼아 usedPercent = `(1 - balance / 기준값) * 100`으로 그린다. `unlimited`이거나 기준값이 0이거나 `balance` 파싱에 실패하면 gauge 없이 잔액 텍스트만 표시한다.
+- `Credits` row는 `IsPrimary: false`이므로 overall 수치와 트레이 아이콘에 반영되지 않고, 트레이 툴팁의 window 목록에서도 제외된다.
 
 ## Failure Handling
 

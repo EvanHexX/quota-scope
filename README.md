@@ -39,10 +39,11 @@ The build is self-contained: no .NET or Windows App SDK runtime install is requi
 - Codex and Claude (Pro/Max) usage side by side, in labeled per-provider sections
 - Payload-driven rows: one row per rate-limit window the provider reports, so new windows (for example a per-model weekly limit) appear without an app update
 - Pick the rows you want with a checkbox per row, with each provider keeping at least one
-- Optional secondary rows (GPT-5.3-Codex-Spark 5h and weekly, Claude per-model windows) and credits rows
+- Optional secondary rows (GPT-5.3-Codex-Spark 5h and weekly, Claude per-model windows) and credits rows for both providers
+- Credits render as a gauge against a per-provider full amount (2500 by default, configurable), since neither provider reports a ceiling
 - Tray icon signals overall usage with an arc fill (5% steps) and a 3-level state color; the hover tooltip lists how much quota is left per window, and full numbers live in the popup
 - Optional tray notification when usage crosses the warning threshold
-- Layout: bars, gauges, or mix & match with a per-row shape and a forced one/two column mode
+- Layout: bars, gauges, or mix & match with a per-row shape, and a column count that applies to every shape theme
 - Themes: Dark, Light, Midnight, optional system-theme following, and glassmorphism with four strength levels
 - UI scale (80–150%) and English / Korean interface
 - Configurable global hotkeys: toggle popup (default `Ctrl+Alt+U`), refresh all, toggle pin

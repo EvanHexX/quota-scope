@@ -89,11 +89,14 @@ User-Agent: claude-code/<version>
 | `scope == null`, group `session` | primary, `5h` |
 | `scope == null`, group `weekly` | primary, `7d` |
 | scoped (model/surface) | `7d <이름>` — **`is_active == true`면 primary(항상 표시 + overall 반영)**, 아니면 secondary(모델별 행 토글) |
-| `extra_usage` | `is_enabled == true`일 때만 secondary, `Credits` |
+| `extra_usage` | 항상 secondary `Credits` row 1개. `is_enabled`는 읽지 않는다 |
 
 `limits`가 없는 구 응답은 기존 필드 매핑으로 폴백한다: `five_hour`/`seven_day` → primary, `seven_day_<model>` 접두어 동적 매핑 → secondary.
 
-- null인 필드는 row를 만들지 않는다.
+- null인 필드는 row를 만들지 않는다. `extra_usage`는 예외로, 값이 전부 null이어도 `Credits` row는 만든다 (소비 0).
+- `Credits` gauge의 분모는 `monthly_limit` > 0이면 그 값, 아니면 provider 설정 `CreditsFullAmount`(기본 2500)다. `utilization`이 오면 그 값이 그대로 usedPercent가 된다.
+- `Credits` row의 보조 텍스트(`남은 값 / 기준값`)는 실제로 그려진 usedPercent에서 역산한다. `used_credits`가 없거나 `utilization`과 어긋나도 막대와 텍스트가 어긋나지 않게 하기 위함이다.
+- 분모가 없으면(설정값 0 + `monthly_limit` 없음 + `utilization` 없음) gauge 없이 텍스트 row로 떨어진다.
 - overall 수치는 primary row(5h, 7d)의 usedPercent 중 최댓값이다 (전 계층 usedPercent 통일).
 - secondary row와 Credits row 표시는 per-provider 옵션(`ShowSecondaryRows`, `ShowCredits`)을 따른다.
 
