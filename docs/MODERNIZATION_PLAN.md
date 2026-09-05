@@ -1,5 +1,12 @@
 # Modernization Plan
 
+> **Historical record.** Everything this plan proposes has been carried out: the app
+> reached .NET 10, and the WinUI 3 phase shipped as `v1.0.0` on 2026-07-23. The
+> "current repository state" section below describes the pre-WinUI Windows Forms app
+> and is no longer accurate. For the app as it stands, read `AGENTS.md`,
+> `docs/PROJECT_MAP.md`, and `docs/WINUI3_PARITY.md`. Do not treat the unchecked
+> boxes below as a live backlog.
+
 Last updated: 2026-07-22
 
 ## Current repository state

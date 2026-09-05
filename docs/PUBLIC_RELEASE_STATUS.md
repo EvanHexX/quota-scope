@@ -1,5 +1,11 @@
 # Public Release Status
 
+> **Historical record.** This snapshot predates the first release. `v0.1.0` was tagged
+> on 2026-06-21 and `v1.0.0` (WinUI 3) on 2026-07-23; `LICENSE`, the README sections,
+> and the screenshots listed as remaining below all landed. The technical status
+> section still describes the Windows Forms app. For the app as it stands, read
+> `AGENTS.md` and `docs/PROJECT_MAP.md`.
+
 Last updated: 2026-06-21
 
 ## Completed
