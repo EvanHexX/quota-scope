@@ -6,9 +6,9 @@ using QuotaScope.Providers;
 namespace QuotaScope.WinUI;
 
 // A row the user can show, order, and assign a shape to, surfaced by the
-// settings window. IsPrimary/HasWindow carry the provider's own defaults so
-// settings can resolve visibility for a row it has never seen before.
-internal sealed record UsageRowRef(string ProviderId, string ProviderName, string Label, bool IsPrimary, bool HasWindow);
+// settings window. IsPrimary carries the provider's own default so settings can
+// resolve visibility for a row it has never seen before.
+internal sealed record UsageRowRef(string ProviderId, string ProviderName, string Label, bool IsPrimary);
 
 internal static class RowShapes
 {
@@ -37,23 +37,28 @@ internal static class RowShapes
             .ToList();
     }
 
+    // The credits row carries a gauge like every other row now, so whether a row
+    // has a window no longer separates credits from the model windows.
+    public static bool IsCreditsRow(string label) =>
+        label.Equals("Credits", StringComparison.OrdinalIgnoreCase);
+
     // Row visibility. The settings row list writes an explicit choice per row;
     // rows without one fall back to the provider defaults, i.e. the windows the
     // provider marks primary are shown and model/credit rows follow the
     // provider's own toggles.
-    public static bool IsVisible(AppSettings settings, string providerId, string label, bool isPrimary, bool hasWindow)
+    public static bool IsVisible(AppSettings settings, string providerId, string label, bool isPrimary)
     {
         if (settings.RowVisibility.TryGetValue(Key(providerId, label), out var visible)) return visible;
         if (isPrimary) return true;
         var provider = settings.GetProvider(providerId);
-        return hasWindow ? provider.ShowSecondaryRows : provider.ShowCredits;
+        return IsCreditsRow(label) ? provider.ShowCredits : provider.ShowSecondaryRows;
     }
 
     public static bool IsVisible(AppSettings settings, string providerId, UsageRow row) =>
-        IsVisible(settings, providerId, row.Label, row.IsPrimary, row.Window is not null);
+        IsVisible(settings, providerId, row.Label, row.IsPrimary);
 
     public static bool IsVisible(AppSettings settings, UsageRowRef row) =>
-        IsVisible(settings, row.ProviderId, row.Label, row.IsPrimary, row.HasWindow);
+        IsVisible(settings, row.ProviderId, row.Label, row.IsPrimary);
 
     // Pure-logic self-test for row visibility: provider defaults first, then an
     // explicit per-row choice overriding them in both directions.
@@ -65,7 +70,9 @@ internal static class RowShapes
         var main = new UsageRow("5h", window, IsPrimary: true);
         var spark5h = new UsageRow("Spark 5h", window, IsPrimary: false);
         var sparkWeekly = new UsageRow("Spark 7d", window, IsPrimary: false);
-        var credits = new UsageRow("Credits", null, IsPrimary: false, "12");
+        // Credits now arrive with a window, which must not push the row into the
+        // secondary-rows bucket.
+        var credits = new UsageRow("Credits", window, IsPrimary: false, "12 / 2500");
 
         codex.ShowSecondaryRows = false;
         codex.ShowCredits = false;

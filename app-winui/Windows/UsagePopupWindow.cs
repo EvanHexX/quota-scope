@@ -700,8 +700,11 @@ internal sealed class UsagePopupWindow
         {
             var used = RoundPercent(window);
             var display = DisplayPercent(window);
-            timeText.Text = FormatWindowTime(window);
-            timeText.Tapped += (_, _) => ToggleTimeDisplayMode();
+            timeText.Text = FormatRowFooter(row);
+            if (!RowShapes.IsCreditsRow(row.Label))
+            {
+                timeText.Tapped += (_, _) => ToggleTimeDisplayMode();
+            }
             percentText.Text = $"{display}%";
 
             var bar = new ProgressBar
@@ -828,14 +831,17 @@ internal sealed class UsagePopupWindow
 
             var time = new TextBlock
             {
-                Text = FormatWindowTime(window),
+                Text = FormatRowFooter(row),
                 FontFamily = UiFont,
                 FontSize = 11.5,
                 Foreground = Brush(palette.Muted),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(0, 8, 0, 0)
             };
-            time.Tapped += (_, _) => ToggleTimeDisplayMode();
+            if (!RowShapes.IsCreditsRow(row.Label))
+            {
+                time.Tapped += (_, _) => ToggleTimeDisplayMode();
+            }
             Grid.SetRow(time, 2);
             grid.Children.Add(time);
         }
@@ -1031,6 +1037,15 @@ internal sealed class UsagePopupWindow
         return string.Equals(_settings.GaugeMetric, "Remaining", StringComparison.OrdinalIgnoreCase)
             ? 100 - used
             : used;
+    }
+
+    // A gauge row normally counts down to its reset. Credits have no reset, so
+    // the slot shows what the gauge is drawn against, and stays empty rather
+    // than claiming "reset --" when there is nothing to divide by.
+    private string FormatRowFooter(UsageRow row)
+    {
+        if (RowShapes.IsCreditsRow(row.Label)) return row.DetailText ?? string.Empty;
+        return FormatWindowTime(row.Window);
     }
 
     private string FormatWindowTime(RateLimitWindow? window)

@@ -15,6 +15,9 @@ internal sealed class ProviderSettings
     // Claude only: nudge Claude Code to refresh its own OAuth token before the
     // 8-hour access token expires, instead of going dark until a manual sign-in.
     public bool AutoRenewSession { get; set; } = true;
+    // Neither provider reports a credit ceiling, so the credits gauge is drawn
+    // against this. See QuotaScope.Providers.CreditsGauge.
+    public double CreditsFullAmount { get; set; } = 2500;
 }
 
 internal sealed class AppSettings
