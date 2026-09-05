@@ -86,8 +86,13 @@ WinForms app is a separate follow-up task after sign-off.
   fractional-DPI setup. No exact matching upstream Windows App SDK issue was
   found, so the black-band behavior remains a project observation.
 - The manual drag region covers the outer card's top padding plus its header,
-  excluding the pin button. This keeps every visible top-row client pixel
-  draggable after the non-client strip is reclaimed.
+  excluding the refresh and pin buttons. This keeps every visible top-row
+  client pixel draggable after the non-client strip is reclaimed.
+- The header refresh button runs the same poll as the `Refresh` menu item, not
+  `Reconnect`: reconnecting restarts the Codex child process and can open a
+  Claude sign-in terminal, which is too much for a one-click header control.
+  The glyph spins while the poll runs, with a 450 ms floor so a poll that is
+  already in flight (and therefore returns instantly) still reads as feedback.
 - Once the user manually moves a visible popup, asynchronous provider refreshes
   rebuild and resize it at the current position instead of reapplying the
   configured `PopupPosition`. A refresh received during pointer capture defers

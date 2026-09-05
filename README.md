@@ -78,6 +78,7 @@ Each provider is isolated: one provider failing does not affect the other. The a
 
 - Left-click the tray icon to open or close the popup.
 - Press `Ctrl+Alt+U` (or your own binding) to toggle the popup.
+- Use the refresh button in the popup header to poll every provider right away.
 - Use the pin button to keep the popup open.
 - Drag the popup header to move it.
 - Click the time text to switch between clock time and remaining time.

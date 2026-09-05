@@ -48,6 +48,7 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
     private SettingsWindow? _settingsWindow;
     private Hotkeys.HotkeyWindow? _hotkeyWindow;
     private bool _refreshing;
+    private Task _pollInFlight = Task.CompletedTask;
     private bool _disposed;
 
     public TrayController()
@@ -172,7 +173,7 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
     {
         if (_popup is null)
         {
-            _popup = new UsagePopupWindow(_settings, BuildMenu);
+            _popup = new UsagePopupWindow(_settings, BuildMenu, RefreshAsync);
         }
         return _popup;
     }
@@ -369,9 +370,19 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
         return timer;
     }
 
-    private async Task RefreshAsync()
+    // A poll already running is the answer to a new request, so its task is
+    // handed back rather than a completed one: a caller that waits on the
+    // result (the popup's header refresh button) then waits for real work.
+    private Task RefreshAsync()
     {
-        if (_refreshing || _disposed) return;
+        if (_disposed) return Task.CompletedTask;
+        if (_refreshing) return _pollInFlight;
+        _pollInFlight = RefreshCoreAsync();
+        return _pollInFlight;
+    }
+
+    private async Task RefreshCoreAsync()
+    {
         _refreshing = true;
         try
         {
@@ -397,10 +408,16 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
         }
     }
 
-    private async Task ReconnectAsync()
+    private Task ReconnectAsync()
     {
-        if (_refreshing || _disposed) return;
+        if (_disposed) return Task.CompletedTask;
+        if (_refreshing) return _pollInFlight;
+        _pollInFlight = ReconnectCoreAsync();
+        return _pollInFlight;
+    }
 
+    private async Task ReconnectCoreAsync()
+    {
         // If Claude needs a sign-in, open the login terminal right away so the
         // user only has to complete the browser flow; polling resumes on its
         // own once Claude Code rewrites the credentials file.
