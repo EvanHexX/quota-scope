@@ -10,20 +10,45 @@ The product is multi-provider, limited to an approved provider whitelist: **Code
 
 ## Current implementation assumptions
 
-- Main app project: `app/QuotaScope.csproj`
-- Current UI stack: Windows Forms tray app
-- Current target framework: check `app/QuotaScope.csproj` before changing it
-- Entry point: `app/Program.cs`
-- Tray lifecycle/menu/hotkey wiring: `app/TrayApplicationContext.cs`
-- Popup UI: `app/UsagePopupForm.cs`
+The repository holds two apps. `app-winui/` is the released one. `app/` is the legacy Windows Forms app, kept in the tree because the WinUI project compiles several of its files directly.
+
+### Released app (WinUI 3)
+
+- Main app project: `app-winui/QuotaScope.WinUI.csproj`
+- UI stack: WinUI 3 / Windows App SDK, unpackaged and self-contained, x64
+- Target framework: check `app-winui/QuotaScope.WinUI.csproj` before changing it
+- Entry point: `app-winui/Program.cs` — a hand-written `Main` (`DISABLE_XAML_GENERATED_MAIN`) so `--self-test` runs before any XAML initialization
+- Tray lifecycle, polling, menu, and hotkey wiring: `app-winui/TrayController.cs`
+- Popup UI: `app-winui/Windows/UsagePopupWindow.cs`
+- Settings window: `app-winui/Windows/SettingsWindow.cs`
+- Tray icon host (Win32 `NotifyIcon` + `TrackPopupMenu`): `app-winui/Tray/TrayIconHost.cs`
+
+### Shared sources
+
+These files live under `app/` and are compiled by **both** projects, via the `Compile Include` items in `app-winui/QuotaScope.WinUI.csproj`. Editing one of them changes both apps.
+
+- Settings model/load/save: `app/AppSettings.cs`
+- Tray icon rendering: `app/TrayIconRenderer.cs`
+- Hotkey parsing: `app/Hotkeys/HotkeyDefinition.cs`
 - Provider abstraction: `app/Providers/IUsageProvider.cs`, `app/Providers/UsageModels.cs`
 - Codex app-server client: `app/Providers/Codex/CodexAppServerClient.cs`
 - Codex rate limit mapping: `app/Providers/Codex/RateLimitMapper.cs`
 - Claude usage provider: `app/Providers/Claude/` (undocumented OAuth usage endpoint; token is read per poll and never stored or logged)
-- Project map: `docs/PROJECT_MAP.md`
-- Modernization plan: `docs/MODERNIZATION_PLAN.md`
 
-The app currently launches `codex app-server`, communicates over stdio JSON-RPC, calls `account/rateLimits/read`, and listens for `account/rateLimits/updated`. It should not require a separate OpenAI API key.
+### Legacy app (Windows Forms, not released)
+
+- Project `app/QuotaScope.csproj`, entry point `app/Program.cs`
+- Tray lifecycle/menu/hotkey wiring: `app/TrayApplicationContext.cs`
+- Popup UI: `app/UsagePopupForm.cs`
+- It still builds, and it must keep building when a shared file changes. Do not port WinUI-only features into it unless the maintainer asks.
+
+### Reference docs
+
+- Project map: `docs/PROJECT_MAP.md`
+- WinUI platform workarounds and popup chrome decisions: `docs/WINUI3_PARITY.md`
+- Historical planning records: `docs/MODERNIZATION_PLAN.md`, `docs/PUBLIC_RELEASE_STATUS.md`
+
+The app launches `codex app-server`, communicates over stdio JSON-RPC, calls `account/rateLimits/read`, and listens for `account/rateLimits/updated`. It should not require a separate OpenAI API key.
 
 ## Required workflow
 
@@ -41,16 +66,25 @@ Prefer small, reviewable diffs. Do not perform broad refactors, UI framework rew
 Use the smallest relevant command first.
 
 ```powershell
-dotnet build app/QuotaScope.csproj
-dotnet run --project app/QuotaScope.csproj -- --self-test
+dotnet build app-winui/QuotaScope.WinUI.csproj
+dotnet run --project app-winui/QuotaScope.WinUI.csproj -- --self-test
 ```
 
-For UI, tray, hotkey, or popup changes, also report a manual Windows smoke-test checklist covering:
+Build `app/QuotaScope.csproj` as well when the change touches a shared file under `app/`, so the legacy app is not left broken.
+
+The maintainer often has `QuotaScopeWinUI.exe` running, which locks `app-winui/bin/`. When the build fails only at the executable copy step (`MSB3026`/`MSB3027`), build to a scratch output instead of killing the running app:
+
+```powershell
+dotnet build app-winui/QuotaScope.WinUI.csproj -p:BaseOutputPath=$env:TEMP/quota-scope-build/
+```
+
+For UI, tray, hotkey, or popup changes, report a manual Windows smoke-test checklist for the maintainer to run, and do not launch the GUI yourself unless asked. Cover:
 
 - tray icon appears
 - popup opens from tray click
 - `Ctrl+Alt+U` toggles popup
-- Refresh/Reconnect menu still works
+- tray and popup Refresh/Reconnect menu items still work
+- popup header refresh and pin buttons still work
 - pinned popup behavior still works
 - settings persist after restart
 
@@ -58,25 +92,19 @@ If a command fails, report the exact failure. Do not claim verification that was
 
 ## Modernization policy
 
-Follow `docs/MODERNIZATION_PLAN.md`.
+`docs/MODERNIZATION_PLAN.md` and `docs/PUBLIC_RELEASE_STATUS.md` are historical records of how the app reached its current shape. Read them for background, not as current instructions: their "current state" sections still describe the pre-WinUI Windows Forms app.
 
-The preferred modernization path is:
+The path they lay out is finished. WinUI 3 was approved on 2026-07-22, built on `feat/winui3-shell`, and shipped as `v1.0.0` on 2026-07-23. `docs/WINUI3_PARITY.md` is the doc that describes the app as it stands.
 
-1. public-repo hygiene and documentation
-2. Windows Forms app on a supported modern .NET LTS target
-3. pre-release polish and settings cleanup
-4. public release packaging
-5. optional WinUI 3 prototype only after the current app is stable
+Still in force: do not perform a UI framework rewrite, a namespace change, or a provider expansion as part of an unrelated fix.
 
-Do not migrate to WinUI 3 in the same task as .NET/theme/icon/README polish. Treat WinUI 3 as a separate prototype/rewrite phase with its own branch and parity checklist.
+## Compatibility policy
 
-## Pre-release compatibility policy
+The first public releases are tagged: `v0.1.0` (2026-06-21) and `v1.0.0` (2026-07-23, WinUI 3). The pre-release allowance to break local state no longer applies.
 
-There has not been a public release or external download yet.
+Breaking changes to settings keys, theme IDs, command-line behavior, or persisted app data are compatibility-sensitive. Do not rename or drop a settings key without either a fallback read or explicit maintainer approval, and document any such change in the READMEs.
 
-Until the first tagged public release, compatibility with old local settings, theme IDs, names, screenshots, or internal option strings is not required. Prefer clean names and simple code over migration code.
-
-After the first tagged public release, breaking changes to settings, theme IDs, command-line behavior, or persisted app data should be treated as compatibility-sensitive and documented.
+Settings stay local: `settings.json` next to the executable (`AppContext.BaseDirectory`), and the app needs no credential of its own.
 
 ## Public repository safety
 
@@ -88,7 +116,7 @@ Never commit:
 - generated build outputs such as `bin/`, `obj/`, publish folders, or local installer artifacts
 - telemetry, analytics, or remote logging without explicit approval
 
-Settings should remain local. If settings storage changes before the first tagged public release, no compatibility migration is required unless the maintainer explicitly requests it.
+Settings should remain local. Changes to how settings are stored are compatibility-sensitive now that `v1.0.0` is tagged; see the compatibility policy above.
 
 ## Branding and trademark safety
 
@@ -104,9 +132,11 @@ Preserve this disclaimer in public-facing documentation when applicable:
 
 For user-facing behavior changes, update `README.md` or `docs/` in the same change.
 
+`README.md` (English) and `README.ko.md` (Korean) are both user-facing; keep user-facing changes in sync across the two.
+
 Keep README claims accurate. Do not claim support for providers, platforms, package formats, installers, or auto-update mechanisms that are not implemented.
 
-Public-facing documentation should be in English unless the maintainer explicitly asks otherwise.
+Public-facing documentation should be in English unless the maintainer explicitly asks otherwise. `README.ko.md` and the existing notes under `docs/` are the established exceptions.
 
 ## Git behavior
 
