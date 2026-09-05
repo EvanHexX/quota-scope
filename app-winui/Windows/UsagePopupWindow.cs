@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using Microsoft.UI;
 using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
@@ -9,6 +10,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using QuotaScope.Providers;
 using Windows.Graphics;
 using Windows.System;
@@ -38,6 +40,10 @@ internal sealed class UsagePopupWindow
     private readonly Grid _islandRoot;
     private readonly Grid _headerGrid;
     private readonly TextBlock _titleText;
+    private readonly Button _refreshButton;
+    private readonly FontIcon _refreshIcon;
+    private readonly Storyboard _refreshSpin;
+    private readonly Func<Task> _refreshRequested;
     private readonly Button _pinButton;
     private readonly FontIcon _pinIcon;
     private readonly Border _headerDivider;
@@ -47,6 +53,7 @@ internal sealed class UsagePopupWindow
     private AcrylicBackdropHost _glass = null!;
     private bool _glassAcrylicActive;
     private bool _menuOpen;
+    private bool _refreshInFlight;
     private bool _manuallyPositioned;
     private bool _resizePendingAfterDrag;
 
@@ -54,9 +61,10 @@ internal sealed class UsagePopupWindow
 
     public event Action? SettingsChanged;
 
-    public UsagePopupWindow(AppSettings settings, Func<MenuFlyout> menuFactory)
+    public UsagePopupWindow(AppSettings settings, Func<MenuFlyout> menuFactory, Func<Task> refreshRequested)
     {
         _settings = settings;
+        _refreshRequested = refreshRequested;
 
         _titleText = new TextBlock
         {
@@ -66,6 +74,30 @@ internal sealed class UsagePopupWindow
             FontWeight = FontWeights.Bold,
             VerticalAlignment = VerticalAlignment.Center
         };
+        _refreshIcon = new FontIcon
+        {
+            Glyph = "",
+            FontSize = 14,
+            // Spun in place while a poll is in flight, so the origin has to
+            // be the glyph's own centre rather than its top-left corner.
+            RenderTransformOrigin = new global::Windows.Foundation.Point(0.5, 0.5),
+            RenderTransform = new RotateTransform()
+        };
+        _refreshSpin = BuildSpinStoryboard((RotateTransform)_refreshIcon.RenderTransform);
+        _refreshButton = new Button
+        {
+            Content = _refreshIcon,
+            Width = 32,
+            Height = 32,
+            Padding = new Thickness(0),
+            CornerRadius = new CornerRadius(8),
+            Margin = new Thickness(0, 0, 4, 0),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Background = new SolidColorBrush(Colors.Transparent),
+            BorderBrush = new SolidColorBrush(Colors.Transparent)
+        };
+        _refreshButton.Click += (_, _) => RequestRefresh();
+
         _pinIcon = new FontIcon { Glyph = "", FontSize = 14 };
         _pinButton = new Button
         {
@@ -83,9 +115,12 @@ internal sealed class UsagePopupWindow
         _headerGrid = new Grid { Height = 40, Background = new SolidColorBrush(Colors.Transparent) };
         _headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         _headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        _headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(_titleText, 0);
-        Grid.SetColumn(_pinButton, 1);
+        Grid.SetColumn(_refreshButton, 1);
+        Grid.SetColumn(_pinButton, 2);
         _headerGrid.Children.Add(_titleText);
+        _headerGrid.Children.Add(_refreshButton);
         _headerGrid.Children.Add(_pinButton);
         _headerDivider = new Border { Height = 1, Margin = new Thickness(2, 6, 2, 10) };
 
@@ -118,7 +153,7 @@ internal sealed class UsagePopupWindow
             }
         };
         // Include the top padding as well as the visible header in the manual
-        // drag region. The pin button remains interactive and is excluded below.
+        // drag region. The header buttons stay interactive and are excluded below.
         _rootBorder.PointerPressed += OnDragRegionPointerPressed;
         _rootBorder.PointerMoved += OnDragRegionPointerMoved;
         _rootBorder.PointerReleased += OnDragRegionPointerReleased;
@@ -252,6 +287,60 @@ internal sealed class UsagePopupWindow
         _settings.Save();
     }
 
+    // Header shortcut for the "Refresh" menu item: one poll of every provider,
+    // not the heavier Reconnect, which restarts child processes and can open a
+    // Claude sign-in terminal. Both stay on the popup's context menu.
+    private async void RequestRefresh()
+    {
+        if (_refreshInFlight) return;
+        _refreshInFlight = true;
+        try
+        {
+            // Start the poll before the animation. A spin that fails to start is
+            // cosmetic; a poll skipped because it did would be a dead button.
+            var poll = _refreshRequested();
+            _refreshSpin.Begin();
+            // The floor keeps a poll that resolves faster than the eye from
+            // reading as a flicker rather than as feedback.
+            await Task.WhenAll(poll, Task.Delay(TimeSpan.FromMilliseconds(450)));
+        }
+        catch (Exception ex)
+        {
+            // Per-provider failures already surface as offline rows; an unhandled
+            // exception in an async void handler would take the app down.
+            CrashLog.Write("popup-refresh", ex);
+        }
+        finally
+        {
+            if (_window.DispatcherQueue.HasThreadAccess) EndRefreshSpin();
+            else _window.DispatcherQueue.TryEnqueue(EndRefreshSpin);
+        }
+    }
+
+    private void EndRefreshSpin()
+    {
+        // Released before stopping the spin: a stalled animation is cosmetic,
+        // a flag left set would disable the button for the rest of the session.
+        _refreshInFlight = false;
+        _refreshSpin.Stop();
+    }
+
+    private static Storyboard BuildSpinStoryboard(RotateTransform transform)
+    {
+        var animation = new DoubleAnimation
+        {
+            From = 0,
+            To = 360,
+            Duration = new Duration(TimeSpan.FromMilliseconds(900)),
+            RepeatBehavior = RepeatBehavior.Forever
+        };
+        Storyboard.SetTarget(animation, transform);
+        Storyboard.SetTargetProperty(animation, "Angle");
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(animation);
+        return storyboard;
+    }
+
     public void TogglePin()
     {
         _settings.IsPinned = !_settings.IsPinned;
@@ -280,7 +369,8 @@ internal sealed class UsagePopupWindow
         var point = e.GetCurrentPoint(_rootBorder);
         var dragRegionHeight = _rootBorder.Padding.Top + _headerGrid.Height;
         if (!point.Properties.IsLeftButtonPressed || point.Position.Y > dragRegionHeight) return;
-        if (IsDescendantOf(e.OriginalSource as DependencyObject, _pinButton)) return;
+        var source = e.OriginalSource as DependencyObject;
+        if (IsDescendantOf(source, _pinButton) || IsDescendantOf(source, _refreshButton)) return;
         GetCursorPos(out _dragStartCursor);
         _dragStartWindow = _appWindow.Position;
         _dragging = true;
@@ -365,6 +455,8 @@ internal sealed class UsagePopupWindow
         _rootBorder.Background = Brush(palette.Card);
         _titleText.Foreground = Brush(palette.Text);
         _headerDivider.Background = Brush(Color.FromArgb(118, palette.AccentBlue.R, palette.AccentBlue.G, palette.AccentBlue.B));
+        _refreshIcon.Foreground = Brush(palette.Muted);
+        ToolTipService.SetToolTip(_refreshButton, Loc.T("Refresh", "새로 고침"));
         _pinIcon.Foreground = _settings.IsPinned ? Brush(Colors.White) : Brush(palette.Muted);
         _pinButton.Background = _settings.IsPinned ? Brush(palette.AccentBlue) : new SolidColorBrush(Colors.Transparent);
 
