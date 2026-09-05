@@ -39,6 +39,7 @@
 
 - provider interface -> `app/Providers/IUsageProvider.cs`
 - shared usage models (ProviderUsage/UsageRow) -> `app/Providers/UsageModels.cs`
+- credits gauge denominator/percent helpers -> `app/Providers/CreditsGauge.cs`
 
 ## Codex Rate Limits
 

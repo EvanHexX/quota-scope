@@ -55,7 +55,8 @@ The app reads the local Claude Code sign-in (`%USERPROFILE%\.claude\.credentials
 - Usage rows are payload-driven: one row per rate-limit window the provider reports, labeled from the window duration with unified hour/day units (300 mins -> `5h`, 10080 mins -> `7d`).
 - The popup shows one labeled section per provider (provider name + status) so Codex and Claude are visually separated.
 - Rows can be hidden, reordered, and given individual shapes. The last visible row of a provider locks so a section can never render empty.
-- `Spark <window>` rows (GPT-5.3-Codex-Spark), Claude per-model windows, and the `Credits` balance row are optional.
+- `Spark <window>` rows (GPT-5.3-Codex-Spark), Claude per-model windows, and the `Credits` row are optional.
+- Both providers emit a `Credits` row on every poll, drawn as a gauge. Neither reports a ceiling -- Codex sends a bare remaining balance and Claude sends credits already spent -- so the gauge divides by the per-provider `CreditsFullAmount` (2500 by default). Claude's own `monthly_limit` wins over it when the account reports one. The row's footer shows `left / full` instead of a reset countdown, because credits have no reset.
 - Color themes are `Dark`, `Light`, and `Midnight`, optionally following the system theme, with an optional glassmorphism backdrop at four strengths.
 - The preferred font is Pretendard/Pretendard Variable, with Segoe UI Variable and Segoe UI fallbacks.
 - UI scale lays the popup out at a fixed base size inside a `Viewbox` that stretches to the scaled window, so scaling magnifies rather than reflows and cannot clip content. `docs/WINUI3_PARITY.md` records the popup chrome, DPI, and backdrop workarounds behind this.
@@ -97,7 +98,8 @@ Defaults:
       "ShowSecondaryRows": false,
       "ShowCredits": false,
       "Command": "codex",
-      "AutoRenewSession": true
+      "AutoRenewSession": true,
+      "CreditsFullAmount": 2500
     }
   }
 }
@@ -109,7 +111,7 @@ Notes on individual keys:
 
 - `Language` is `System`, `English`, or `한국어`.
 - `PopupPosition` is one of `BottomRight`, `TopRight`, `TopLeft`, `BottomLeft`, `Center`, `NearCursor`, `LastPosition`. `LastPosition` reads `LastPopupX`/`LastPopupY`, which the popup writes when it is hidden or dragged.
-- `ShapeTheme` is `Bars`, `BentoCircles`, or `MixMatch`. `LayoutColumns` (`Auto`, `OneColumn`, `TwoColumns`) is offered only for mix & match; `Auto` uses two columns only when a provider has two gauges.
+- `ShapeTheme` is `Bars`, `BentoCircles`, or `MixMatch`. `LayoutColumns` (`Auto`, `OneColumn`, `TwoColumns`) applies to every shape theme; `Auto` uses two columns only when a provider has two gauges.
 - `RowShapes`, `RowOrder`, and `RowVisibility` are keyed per row as `<providerId>|<row label>`.
 - `ThemeOverride` is `Dark`, `Light`, or `Midnight`, and is ignored while `FollowSystemTheme` is on.
 - `GlassStrength` is `Subtle`, `Medium`, `Strong`, or `VeryStrong`, and applies only while `Glassmorphism` is on.
@@ -117,6 +119,7 @@ Notes on individual keys:
 - `UiScale` is offered as 80%-150% in the settings window and clamped to 0.7-1.6 when read.
 - `RefreshSeconds` has a 10-second floor for Codex and a 60-second floor for Claude; the poll timer runs at the smallest enabled interval.
 - `AutoRenewSession` is Claude-only. With it off, the app never runs `claude` in the background, and usage stops updating once the 8-hour token expires until a sign-in or reconnect.
+- `CreditsFullAmount` is the credits gauge denominator, per provider, default 2500. Setting it to 0 drops the gauge and leaves the credits row as plain text, on both providers -- except when Claude reports its own `monthly_limit` or an explicit `utilization`, either of which stands on its own.
 - `ColorTheme` and `PopupGraph` are legacy keys. `ColorTheme` is read only by the Windows Forms app in `app/`; `PopupGraph` is unused. Neither affects the released app.
 
 ## Related docs

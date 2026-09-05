@@ -52,7 +52,7 @@ internal sealed class CodexAppServerClient : IDisposable
     private async Task<ProviderUsage> ReadRateLimitsWithoutRestartAsync(CancellationToken cancellationToken)
     {
         var result = await SendRequestAsync("account/rateLimits/read", null, cancellationToken).ConfigureAwait(false);
-        return RateLimitMapper.FromJsonResult(result);
+        return RateLimitMapper.FromJsonResult(result, _settings.CreditsFullAmount);
     }
 
     private async Task EnsureStartedAsync(CancellationToken cancellationToken)
@@ -201,7 +201,7 @@ internal sealed class CodexAppServerClient : IDisposable
                     && methodElement.GetString() == "account/rateLimits/updated"
                     && root.TryGetProperty("params", out var parameters))
                 {
-                    RateLimitsUpdated?.Invoke(RateLimitMapper.FromJsonResult(parameters));
+                    RateLimitsUpdated?.Invoke(RateLimitMapper.FromJsonResult(parameters, _settings.CreditsFullAmount));
                 }
             }
         }

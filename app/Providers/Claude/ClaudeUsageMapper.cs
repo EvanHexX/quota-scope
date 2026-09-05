@@ -10,7 +10,7 @@ internal static class ClaudeUsageMapper
     public const string ProviderId = "claude";
     public const string ProviderDisplayName = "Claude";
 
-    public static ProviderUsage FromJson(JsonElement root)
+    public static ProviderUsage FromJson(JsonElement root, double creditsFullAmount)
     {
         var rows = new List<UsageRow>();
 
@@ -23,7 +23,7 @@ internal static class ClaudeUsageMapper
             AddWindowRow(rows, root, "seven_day", "7d", isPrimary: true);
             AddPerModelRows(rows, root);
         }
-        AddExtraUsageRow(rows, root);
+        AddExtraUsageRow(rows, root, creditsFullAmount);
 
         return new ProviderUsage(
             ProviderId,
@@ -115,27 +115,44 @@ internal static class ClaudeUsageMapper
         return char.ToUpperInvariant(pretty[0]) + pretty[1..];
     }
 
-    private static void AddExtraUsageRow(List<UsageRow> rows, JsonElement root)
+    // The row is always emitted. An account with extra usage switched off has
+    // spent nothing, which is a real 0% rather than a row worth hiding -- and
+    // hiding it is what the per-row visibility toggle is for.
+    private static void AddExtraUsageRow(List<UsageRow> rows, JsonElement root, double fullAmount)
     {
         var extra = GetObject(root, "extra_usage");
-        if (extra is null || !(extra.Value.TryGetProperty("is_enabled", out var enabled) && enabled.ValueKind == JsonValueKind.True))
+        var utilization = extra is null ? null : GetDouble(extra.Value, "utilization");
+        var spent = (extra is null ? null : GetDouble(extra.Value, "used_credits")) ?? 0d;
+        var monthlyLimit = extra is null ? null : GetDouble(extra.Value, "monthly_limit");
+
+        // Prefer what the provider reports -- an explicit utilization, then a
+        // monthly limit to divide by -- and fall back to the configured amount.
+        var ceiling = monthlyLimit is > 0 ? monthlyLimit.Value : fullAmount;
+        var hasCeiling = CreditsGauge.HasUsableCeiling(ceiling);
+
+        // An explicit utilization is already a percentage and stands on its own.
+        // Without one there is nothing to divide by, so the row stays text-only
+        // rather than drawing a gauge against a ceiling of zero.
+        if (!utilization.HasValue && !hasCeiling)
         {
+            rows.Add(new UsageRow("Credits", null, IsPrimary: false,
+                spent > 0 ? string.Create(CultureInfo.InvariantCulture, $"{spent:0.##}") : "--"));
             return;
         }
 
-        var utilization = GetDouble(extra.Value, "utilization");
-        if (utilization.HasValue)
-        {
-            rows.Add(new UsageRow("Credits", new RateLimitWindow(Math.Clamp(utilization.Value, 0d, 100d), null, null), IsPrimary: false));
-            return;
-        }
+        var usedPercent = utilization.HasValue
+            ? Math.Clamp(utilization.Value, 0d, 100d)
+            : CreditsGauge.UsedPercentFromSpend(spent, ceiling);
 
-        var used = GetDouble(extra.Value, "used_credits");
-        var limit = GetDouble(extra.Value, "monthly_limit");
-        var detail = used.HasValue && limit.HasValue
-            ? string.Create(CultureInfo.InvariantCulture, $"{used.Value:0.##} / {limit.Value:0.##}")
-            : "enabled";
-        rows.Add(new UsageRow("Credits", null, IsPrimary: false, detail));
+        // Derived from the percentage actually drawn, not from used_credits:
+        // the payload can report a utilization with no used_credits at all, and
+        // the two can disagree. A footer that contradicts its own bar is worse
+        // than no footer.
+        var detail = hasCeiling
+            ? CreditsGauge.FormatRemaining(ceiling * (1d - usedPercent / 100d), ceiling)
+            : null;
+
+        rows.Add(new UsageRow("Credits", new RateLimitWindow(usedPercent, null, null), IsPrimary: false, detail));
     }
 
     private static double ComputeOverallUsed(List<UsageRow> rows)
@@ -190,9 +207,15 @@ internal static class ClaudeUsageMapper
         return null;
     }
 
+    // TryGetDouble throws rather than returning false when the element is not a
+    // number, and this payload spells "absent" as an explicit null, so the kind
+    // has to be checked first.
     private static double? GetDouble(JsonElement element, string name)
     {
-        if (element.TryGetProperty(name, out var value) && value.TryGetDouble(out var parsed))
+        if (element.ValueKind == JsonValueKind.Object
+            && element.TryGetProperty(name, out var value)
+            && value.ValueKind == JsonValueKind.Number
+            && value.TryGetDouble(out var parsed))
         {
             return parsed;
         }
@@ -201,7 +224,44 @@ internal static class ClaudeUsageMapper
 
     public static bool RunSelfTest()
     {
-        return RunBasicSelfTest() && RunFullRowsSelfTest() && RunLimitsArraySelfTest();
+        return RunBasicSelfTest() && RunFullRowsSelfTest() && RunLimitsArraySelfTest() && RunCreditsFooterSelfTest();
+    }
+
+    // The payload can report a utilization with no used_credits, or the two can
+    // disagree. The footer is derived from the drawn percentage in both cases so
+    // it can never contradict its own bar.
+    private static bool RunCreditsFooterSelfTest()
+    {
+        const string noSpendField = @"
+        {
+          ""five_hour"": { ""utilization"": 10.0, ""resets_at"": ""2026-04-11T07:00:00+00:00"" },
+          ""extra_usage"": { ""is_enabled"": true, ""monthly_limit"": null, ""used_credits"": null, ""utilization"": 60 }
+        }";
+
+        using (var doc = JsonDocument.Parse(noSpendField))
+        {
+            // 60% of a 2500 fallback ceiling is spent, so 1000 are left.
+            var row = FromJson(doc.RootElement, CreditsGauge.DefaultFullAmount).Rows[^1];
+            if (row.Label != "Credits" || row.DetailText != "1000 / 2500") return false;
+            if (row.Window is null || !NearlyEquals(row.Window.UsedPercent, 60)) return false;
+        }
+
+        const string conflicting = @"
+        {
+          ""five_hour"": { ""utilization"": 10.0, ""resets_at"": ""2026-04-11T07:00:00+00:00"" },
+          ""extra_usage"": { ""is_enabled"": true, ""monthly_limit"": null, ""used_credits"": 1200, ""utilization"": 80 }
+        }";
+
+        using (var doc = JsonDocument.Parse(conflicting))
+        {
+            // used_credits says 1300 left, utilization says 500. The bar follows
+            // utilization, so the footer has to as well.
+            var row = FromJson(doc.RootElement, CreditsGauge.DefaultFullAmount).Rows[^1];
+            return row.Label == "Credits"
+                && row.DetailText == "500 / 2500"
+                && row.Window is not null
+                && NearlyEquals(row.Window.UsedPercent, 80);
+        }
     }
 
     // Condensed from a live 2026-07-22 response: legacy per-model fields are
@@ -225,14 +285,20 @@ internal static class ClaudeUsageMapper
         }";
 
         using var doc = JsonDocument.Parse(sample);
-        var usage = FromJson(doc.RootElement);
-        return usage.Rows.Count == 4
+        var usage = FromJson(doc.RootElement, CreditsGauge.DefaultFullAmount);
+        // Extra usage is off here, which is nothing spent rather than no row.
+        return usage.Rows.Count == 5
             && NearlyEquals(usage.OverallUsedPercent, 55)
             && RowMatches(usage.Rows[0], "5h", 20, isPrimary: true)
             && RowMatches(usage.Rows[1], "7d", 28, isPrimary: true)
             && RowMatches(usage.Rows[2], "7d Fable", 55, isPrimary: true)
             && RowMatches(usage.Rows[3], "7d Sonnet", 10, isPrimary: false)
-            && usage.Rows[2].Window!.ResetsAt is not null;
+            && RowMatches(usage.Rows[4], "Credits", 0, isPrimary: false)
+            && usage.Rows[4].DetailText == "2500 / 2500"
+            && usage.Rows[2].Window!.ResetsAt is not null
+            // A configured amount of zero has nothing to divide by, so the row
+            // drops the gauge instead of drawing against a ceiling of zero.
+            && FromJson(doc.RootElement, 0d).Rows[4] is { Label: "Credits", Window: null, DetailText: "--" };
     }
 
     // Sample shape from the undocumented oauth/usage endpoint: opus window null,
@@ -249,12 +315,13 @@ internal static class ClaudeUsageMapper
         }";
 
         using var doc = JsonDocument.Parse(sample);
-        var usage = FromJson(doc.RootElement);
-        return usage.Rows.Count == 3
+        var usage = FromJson(doc.RootElement, CreditsGauge.DefaultFullAmount);
+        return usage.Rows.Count == 4
             && NearlyEquals(usage.OverallUsedPercent, 33)
             && RowMatches(usage.Rows[0], "5h", 33, isPrimary: true)
             && RowMatches(usage.Rows[1], "7d", 13, isPrimary: true)
             && RowMatches(usage.Rows[2], "7d Sonnet", 1, isPrimary: false)
+            && RowMatches(usage.Rows[3], "Credits", 0, isPrimary: false)
             && usage.Rows[0].Window!.ResetsAt is { } resetsAt
             && resetsAt.UtcDateTime.Hour == 7;
     }
@@ -272,7 +339,9 @@ internal static class ClaudeUsageMapper
         }";
 
         using var doc = JsonDocument.Parse(sample);
-        var usage = FromJson(doc.RootElement);
+        var usage = FromJson(doc.RootElement, CreditsGauge.DefaultFullAmount);
+        // monthly_limit 100 with 25.5 spent: the provider's own ceiling is used
+        // for the detail text, not the configured 2500.
         return usage.Rows.Count == 6
             && NearlyEquals(usage.OverallUsedPercent, 37.5)
             && RowMatches(usage.Rows[0], "5h", 37.5, isPrimary: true)
@@ -280,7 +349,8 @@ internal static class ClaudeUsageMapper
             && RowMatches(usage.Rows[2], "7d Opus", 50, isPrimary: false)
             && RowMatches(usage.Rows[3], "7d Sonnet", 1, isPrimary: false)
             && RowMatches(usage.Rows[4], "7d Fable", 12.5, isPrimary: false)
-            && RowMatches(usage.Rows[5], "Credits", 25.5, isPrimary: false);
+            && RowMatches(usage.Rows[5], "Credits", 25.5, isPrimary: false)
+            && usage.Rows[5].DetailText == "74.5 / 100";
     }
 
     private static bool RowMatches(UsageRow row, string label, double usedPercent, bool isPrimary)

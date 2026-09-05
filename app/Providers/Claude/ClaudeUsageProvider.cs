@@ -30,6 +30,7 @@ internal sealed class ClaudeUsageProvider : IUsageProvider
     private readonly ClaudeSessionRenewer _renewer = new();
     private readonly TimeSpan _minPollInterval;
     private readonly bool _autoRenew;
+    private readonly double _creditsFullAmount;
     private FileSystemWatcher? _watcher;
     private int _watcherBusy;
     private ProviderUsage? _lastSuccess;
@@ -52,6 +53,7 @@ internal sealed class ClaudeUsageProvider : IUsageProvider
         // Poll interval floor is 60 seconds regardless of configuration.
         _minPollInterval = TimeSpan.FromSeconds(Math.Max(60, settings.RefreshSeconds));
         _autoRenew = settings.AutoRenewSession;
+        _creditsFullAmount = settings.CreditsFullAmount;
         TryStartCredentialsWatcher();
     }
 
@@ -155,7 +157,7 @@ internal sealed class ClaudeUsageProvider : IUsageProvider
             var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             using var doc = JsonDocument.Parse(body);
             DumpLastResponse(body);
-            var usage = ClaudeUsageMapper.FromJson(doc.RootElement) with { StatusText = SessionStatus(expiresAt, now) };
+            var usage = ClaudeUsageMapper.FromJson(doc.RootElement, _creditsFullAmount) with { StatusText = SessionStatus(expiresAt, now) };
             _backoffStep = 0;
             _authPaused = false;
             _nextFetchAt = now + _minPollInterval;
