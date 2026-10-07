@@ -515,7 +515,7 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
     {
         return CurrentUsages()
             .SelectMany(usage => usage.Rows.Select(row =>
-                new UsageRowRef(usage.ProviderId, usage.DisplayName, row.Label, row.IsPrimary)))
+                new UsageRowRef(usage.ProviderId, usage.DisplayName, row.Label, row.IsPrimary, row.Scope)))
             .ToList();
     }
 
@@ -543,7 +543,7 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
             parts.Add(rows.Count == 0
                 ? $"{usage.DisplayName} --"
                 : $"{usage.DisplayName} " + string.Join(" / ", rows.Select(r =>
-                    $"{Loc.RowLabel(usage.ProviderId, r.Label)} {FormatRemaining(r.Window!)}")));
+                    $"{Loc.RowLabel(usage.ProviderId, r.Label, r.Scope)} {FormatRemaining(r.Window!)}")));
         }
         return string.Join("  |  ", parts);
     }

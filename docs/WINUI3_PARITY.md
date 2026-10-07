@@ -123,7 +123,8 @@ WinForms app is a separate follow-up task after sign-off.
   and one-column width (408 dip) otherwise — so bars are one column wide in a
   single-column layout and two columns wide in a two-column layout.
 - Fill cards follow the bar width rules (a lone fill row is not "a single
-  gauge", so it never gets the 240 dip width) and never count toward the Auto
+  gauge", so Auto never shrinks the popup to 240 dip for it; a forced
+  `OneColumn` uses 240 dip for every shape) and never count toward the Auto
   two-column test. When the layout is two columns, neighbouring fill cards pair
   like gauges, with 8/10 dip gaps instead of 12/14; a change of shape flushes the
   pending card, so a fill card never shares a line with a gauge several times
@@ -138,11 +139,15 @@ WinForms app is a separate follow-up task after sign-off.
   stop is a stronger edge band, recomputed from the laid-out width on
   `SizeChanged`; 0% draws no layer and 100% a solid one.
 - The tint alpha is per theme (`PopupPalette.FillAlpha`/`FillEdgeAlpha`: Dark
-  60/150, Light 56/150, Midnight 22/96) and is held by `PopupPalette.RunSelfTest`
-  to WCAG contrast over the opaque row color for every accent band: Text 4.5:1,
-  Muted 3:1 (Midnight, whose own Muted is under 4.5:1, may lose at most 10%),
-  and Text over the edge band 3:1. Glass keeps the same alphas; see the comment
-  on `PopupPalette.WithGlass`.
+  60/150, Light 56/150, Midnight 42/110) and is held by `PopupPalette.RunSelfTest`
+  to WCAG contrast over the opaque row color for every accent band, with the
+  same floor for every theme: Text 4.5:1 and Muted 3:1 over the fill, and Text
+  3:1 over the edge band. Midnight's dim Muted (3.8:1 unfilled) is what caps its
+  tint: 44 is the most the orange band allows, and 42 keeps a margin (Muted
+  3.05:1 on orange). Its edge is raised with the fill so it stands off it at
+  least as far as Light's faintest band. The Muted footer can also cross the
+  edge band and is not held there, since only a 2 dip slice of a glyph sits on
+  it. Glass keeps the same alphas; see the comment on `PopupPalette.WithGlass`.
 - `LayoutColumns` (`Auto` | `OneColumn` | `TwoColumns`, surfaced in mix & match)
   overrides that heuristic when the user wants a forced column count.
 - Gauges only pair when they are adjacent, so the mix & match list also lets
@@ -174,13 +179,24 @@ WinForms app is a separate follow-up task after sign-off.
 
 ## Localization
 
-- `Loc` provides `T(en, ko)` plus `RowLabel` (duration tokens: `5h` -> `5시간`,
-  `7d` -> `7일`, `1w` -> `1주`; model names stay as-is) and `Option` for
-  settings values that are persisted as stable English keys.
-- Codex Spark reports its own windows, so `Spark 5h` and `Spark 7d` render as
-  `Spark · 5h` / `Spark · Weekly` (`Spark · 5시간` / `Spark · 주간`). They used
-  to collapse to a bare `Spark`, which made the two windows indistinguishable
-  in the popup, the tooltip, and the settings row list.
+- `Loc` provides `T(en, ko)` plus `RowLabel` (row names, below: 7-day and
+  1-week windows read `Weekly` / `주간`, other duration tokens localize as
+  `5h` -> `5시간`, `14d` -> `14일`; model and plan names stay as-is) and
+  `Option` for settings values that are persisted as stable English keys.
+- Row names read `<scope> · <window>` (`Weekly` / `주간` for 7-day windows,
+  the duration otherwise), and a scope is spelled out only where it tells rows
+  of one window apart (maintainer, 2026-10-08):
+  - Claude: `5h` (the session window counts every model), `All models · Weekly`,
+    `Fable · Weekly` (`5시간`, `전체 모델 · 주간`, `Fable · 주간`).
+  - Codex with a 5-hour window (Plus and similar): `5h`, `Weekly`. A Codex
+    account without one (Pro: weekly only) shows `Pro · Weekly`; the mapper
+    puts the plan from `planType` in `UsageRow.Scope`, and an unlisted plan gets
+    no scope rather than a guessed name.
+  - Codex Spark: `Spark · 5h` / `Spark · Weekly`. It used to collapse to a bare
+    `Spark`, which made the two windows indistinguishable.
+- The popup, the tray tooltip, and the settings row list all read `RowLabel`.
+  The names are short on purpose: Win32 cuts the tooltip at 127 characters and
+  Codex comes first, so long names would push Claude's values off the end.
 - Language changes apply live: the tray menu is rebuilt, and the settings
   window retitles itself, relabels its navigation items, and rebuilds the
   visible page instead of requiring a reopen.

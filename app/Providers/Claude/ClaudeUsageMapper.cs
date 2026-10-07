@@ -151,8 +151,14 @@ internal static class ClaudeUsageMapper
         var detail = hasCeiling
             ? CreditsGauge.FormatRemaining(ceiling * (1d - usedPercent / 100d), ceiling)
             : null;
+        // Spend past the ceiling clamps the gauge full; the flag lets the
+        // percent read >100% rather than claim the spend stopped at 100%.
+        var beyondFull = utilization.HasValue
+            ? utilization.Value > 100d
+            : CreditsGauge.SpendBeyondFull(spent, ceiling);
 
-        rows.Add(new UsageRow("Credits", new RateLimitWindow(usedPercent, null, null), IsPrimary: false, detail));
+        rows.Add(new UsageRow(
+            "Credits", new RateLimitWindow(usedPercent, null, null), IsPrimary: false, detail, BeyondFull: beyondFull));
     }
 
     private static double ComputeOverallUsed(List<UsageRow> rows)
@@ -257,10 +263,38 @@ internal static class ClaudeUsageMapper
             // used_credits says 1300 left, utilization says 500. The bar follows
             // utilization, so the footer has to as well.
             var row = FromJson(doc.RootElement, CreditsGauge.DefaultFullAmount).Rows[^1];
-            return row.Label == "Credits"
-                && row.DetailText == "500 / 2500"
-                && row.Window is not null
-                && NearlyEquals(row.Window.UsedPercent, 80);
+            if (row.Label != "Credits"
+                || row.DetailText != "500 / 2500"
+                || row.Window is null
+                || !NearlyEquals(row.Window.UsedPercent, 80)
+                || row.BeyondFull)
+            {
+                return false;
+            }
+
+            // An explicit utilization stands on its own: a smaller reference
+            // that used_credits would overrun changes neither the percent nor
+            // the flag.
+            var overspent = FromJson(doc.RootElement, 1000d).Rows[^1];
+            if (overspent is not { BeyondFull: false } || !NearlyEquals(overspent.Window!.UsedPercent, 80)) return false;
+        }
+
+        const string spendOnly = @"
+        {
+          ""five_hour"": { ""utilization"": 10.0, ""resets_at"": ""2026-04-11T07:00:00+00:00"" },
+          ""extra_usage"": { ""is_enabled"": true, ""monthly_limit"": null, ""used_credits"": 1200, ""utilization"": null }
+        }";
+
+        using (var doc = JsonDocument.Parse(spendOnly))
+        {
+            // Against a 1000 reference the 1200 spent is past full: the gauge
+            // clamps at 100% used and the row is flagged so it reads >100%.
+            var within = FromJson(doc.RootElement, CreditsGauge.DefaultFullAmount).Rows[^1];
+            var past = FromJson(doc.RootElement, 1000d).Rows[^1];
+            return within is { BeyondFull: false, DetailText: "1300 / 2500" }
+                && past is { BeyondFull: true, DetailText: "0 / 1000" }
+                && past.Window is not null
+                && NearlyEquals(past.Window.UsedPercent, 100);
         }
     }
 

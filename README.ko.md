@@ -38,9 +38,11 @@ self-contained 빌드라 .NET이나 Windows App SDK 런타임을 따로 설치�
 - 트레이 상주 + 컴팩트 사용량 팝업
 - Codex와 Claude(Pro/Max) 사용량을 provider별 구분 섹션으로 동시에 표시
 - Payload 기반 행 생성: provider가 보고하는 rate limit window마다 1행이라, 새 window(예: 모델별 주간 한도)가 생겨도 앱 업데이트 없이 표시됨
+- 5시간 한도와 주간 한도가 함께 있는 Codex 플랜(예: Plus)은 Claude처럼 두 행을 5시간 행부터 표시하고, 주간 한도만 있는 Pro는 `Pro · 주간`으로 표시
+- 행 이름은 짧게, 같은 window의 행이 둘 이상일 때만 범위를 붙임: `5시간`, `주간`, `전체 모델 · 주간`, `Fable · 주간`, `Spark · 주간`
 - 행마다 체크박스로 표시할 행 선택, 프로바이더별로 최소 1행 유지
 - 선택 표시: secondary 행(GPT-5.3-Codex-Spark 5시간·주간, Claude 모델별 window)과 두 provider 모두의 credits 행
-- credits는 provider별 기준량(기본 2500, 변경 가능)을 100%로 삼아 게이지로 표시 — 두 provider 모두 상한을 보고하지 않기 때문
+- credits는 provider별 기준량(기본 2500, 변경 가능)을 100%로 삼아 게이지로 표시 — 두 provider 모두 상한을 보고하지 않기 때문. 기준량을 넘으면 게이지가 가득 차는 쪽 지표에서 `>100%`로 표시 (Codex 잔액은 잔여량 지표, Claude 사용량은 사용량 지표, 반대 지표에서는 0%). Codex는 아랫줄에 실제 잔액을 그대로 표시
 - 트레이 아이콘은 전체 사용률을 호 채움(5% 단위)과 3단계 상태 색상으로 표시, 호버 툴팁은 window별 잔여량(%)을 표시하고 전체 수치는 팝업에서 제공
 - 경고 임계값 진입 시 트레이 알림 (선택)
 - 레이아웃: 막대 / 게이지 / 채우기 / 믹스 & 매치(행별 모양 지정), 열 수 설정은 모든 모양에 적용
@@ -58,7 +60,7 @@ Codex:
 1. 앱이 `codex app-server`를 child process로 실행합니다.
 2. stdio JSON-RPC session을 초기화합니다.
 3. `account/rateLimits/read`를 호출합니다.
-4. `account/rateLimits/updated` notification을 수신합니다.
+4. `account/rateLimits/updated` notification을 수신해, 일부 값만 담긴 update를 마지막 full read에 merge합니다. 그래서 update에 빠진 window나 bucket도 계속 표시됩니다.
 
 Claude:
 
@@ -138,7 +140,7 @@ QuotaScope는 로컬 유틸리티로 설계되었습니다.
 dotnet build app-winui/QuotaScope.WinUI.csproj
 ```
 
-내장 self-test 실행 (rate limit mapper와 단축키 파서):
+내장 self-test 실행 (사용량 mapper, Claude 세션 갱신, 단축키 파서, 행 모양, 채우기 카드 대비, 현지화):
 
 ```powershell
 dotnet run --project app-winui/QuotaScope.WinUI.csproj -- --self-test
