@@ -139,6 +139,7 @@ internal static partial class Loc
             "BentoCircles" => "게이지",
             "MixMatch" => "믹스 & 매치",
             "Circle" => "게이지",
+            "Fill" => "채우기",
             "Dark" => "다크",
             "Light" => "라이트",
             "Midnight" => "미드나잇",
