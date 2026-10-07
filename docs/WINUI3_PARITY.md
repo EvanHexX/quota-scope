@@ -103,9 +103,9 @@ WinForms app is a separate follow-up task after sign-off.
 
 ## Popup layout modes
 
-- `ShapeTheme` is `Bars`, `BentoCircles`, or `MixMatch`. Mix & match stores a
-  per-row override in `RowShapes` (`"<providerId>|<row label>"` ->
-  `Circle` | `Bars`, gauge by default).
+- `ShapeTheme` is `Bars`, `BentoCircles`, `Fill`, or `MixMatch`. Mix & match
+  stores a per-row override in `RowShapes` (`"<providerId>|<row label>"` ->
+  `Circle` | `Bars` | `Fill`, gauge by default).
 - The Appearance page lists every row the enabled providers report, hidden ones
   included, with a checkbox per row. Checking or clearing it writes
   `RowVisibility` (same key as `RowShapes`); rows without an entry fall back to
@@ -116,12 +116,33 @@ WinForms app is a separate follow-up task after sign-off.
 - The last checked row of a provider locks (its checkbox disables) so a section
   can never render as a bare header with nothing under it. The popup and the
   tray tooltip read the same visibility and order.
-- Layout rule shared by all three modes: bar rows always span the full content
+- Layout rule shared by every mode: bar rows always span the full content
   width; gauges pair two per line only when some provider section has at least
   two gauges, otherwise everything stacks in a single column. The popup is wide
   (452 dip) for the two-column case, compact (240 dip) for a single lone gauge,
   and one-column width (408 dip) otherwise — so bars are one column wide in a
   single-column layout and two columns wide in a two-column layout.
+- Fill cards follow the bar width rules (a lone fill row is not "a single
+  gauge", so it never gets the 240 dip width) and never count toward the Auto
+  two-column test. When the layout is two columns, neighbouring fill cards pair
+  like gauges, with 8/10 dip gaps instead of 12/14; a change of shape flushes the
+  pending card, so a fill card never shares a line with a gauge several times
+  its height.
+- A fill card draws its value as a background layer: a `Border` with the card's
+  inner corner radius (10 = 11 - 1px stroke) whose `Background` is a horizontal
+  `LinearGradientBrush` with hard stops at the percent. A `Border` clips its own
+  background to its rounded shape, so 1%, 50% and 99% all stay inside the
+  corners, where a sized child rectangle would poke out. Each hard stop is two
+  stops 0.0001 apart rather than at one offset, so the edges do not depend on
+  how the renderer orders stops that share an offset. The last 2 dip before the
+  stop is a stronger edge band, recomputed from the laid-out width on
+  `SizeChanged`; 0% draws no layer and 100% a solid one.
+- The tint alpha is per theme (`PopupPalette.FillAlpha`/`FillEdgeAlpha`: Dark
+  60/150, Light 56/150, Midnight 22/96) and is held by `PopupPalette.RunSelfTest`
+  to WCAG contrast over the opaque row color for every accent band: Text 4.5:1,
+  Muted 3:1 (Midnight, whose own Muted is under 4.5:1, may lose at most 10%),
+  and Text over the edge band 3:1. Glass keeps the same alphas; see the comment
+  on `PopupPalette.WithGlass`.
 - `LayoutColumns` (`Auto` | `OneColumn` | `TwoColumns`, surfaced in mix & match)
   overrides that heuristic when the user wants a forced column count.
 - Gauges only pair when they are adjacent, so the mix & match list also lets

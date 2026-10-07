@@ -368,7 +368,7 @@ internal sealed class SettingsWindow
     private UIElement BuildAppearancePage()
     {
         var shape = MakeCombo(
-            new[] { "Bars", "BentoCircles", "MixMatch" },
+            new[] { "Bars", "BentoCircles", "Fill", "MixMatch" },
             _settings.ShapeTheme,
             value =>
             {
@@ -431,19 +431,20 @@ internal sealed class SettingsWindow
         var rows = new List<FrameworkElement>
         {
             Row(Loc.T("Shape theme", "게이지 모양"),
-                Loc.T("Bars, gauges, or mix & match per row.", "막대, 게이지, 또는 행별 믹스 & 매치."), shape)
+                Loc.T("Bars, gauges, fill (a two-line card whose background fills up to the percentage), or mix & match per row.",
+                      "막대, 게이지, 채우기(카드 배경이 퍼센트만큼 차오르는 두 줄 카드), 또는 행별 믹스 & 매치."), shape)
         };
         // The column count applies to every shape theme, not just mix & match:
-        // it forces the popup width and pairs gauge cards, and it decides whether
-        // bar rows stack their time text or keep it inline.
+        // it forces the popup width and pairs gauge and fill cards, and it
+        // decides whether bar rows stack their time text or keep it inline.
         var columns = MakeCombo(
             new[] { "Auto", "OneColumn", "TwoColumns" },
             _settings.LayoutColumns,
             value => { _settings.LayoutColumns = value; Save(SettingsChange.Appearance); });
         rows.Add(Row(
             Loc.T("Columns", "열 수"),
-            Loc.T("Sets the popup width. Auto pairs gauges only when a provider has two.",
-                  "팝업 너비를 정합니다. 자동은 한 프로바이더에 게이지가 2개 이상일 때만 2열로 배치합니다."),
+            Loc.T("Sets the popup width. Auto pairs gauges only when a provider has two; in two columns, neighbouring fill cards pair up too.",
+                  "팝업 너비를 정합니다. 자동은 한 프로바이더에 게이지가 2개 이상일 때만 2열로 배치하고, 2열에서는 이웃한 채우기 카드도 두 개씩 배치합니다."),
             columns));
         // Visibility and order apply to every shape theme; only the per-row
         // shape picker is specific to mix & match.
@@ -519,7 +520,7 @@ internal sealed class SettingsWindow
             var key = RowShapes.Key(rowRef.ProviderId, rowRef.Label);
             var current = _settings.RowShapes.TryGetValue(key, out var stored) ? stored : RowShapes.Circle;
             var combo = MakeCombo(
-                new[] { RowShapes.Circle, RowShapes.Bars },
+                new[] { RowShapes.Circle, RowShapes.Bars, RowShapes.Fill },
                 current,
                 value =>
                 {
@@ -594,7 +595,8 @@ internal sealed class SettingsWindow
     // Every row the providers report: check the ones to show, order them, and
     // in mix & match pick a shape each. Bars always span the full content
     // width; gauges pair up two per line when at least one provider has two of
-    // them, otherwise everything stacks in a single column.
+    // them, otherwise everything stacks in a single column. Fill cards pair
+    // only with a neighbouring fill card, and only in that two-column layout.
     private FrameworkElement BuildRowList()
     {
         var mixMatch = string.Equals(_settings.ShapeTheme, "MixMatch", StringComparison.OrdinalIgnoreCase);
@@ -610,8 +612,8 @@ internal sealed class SettingsWindow
         if (mixMatch)
         {
             panel.Children.Add(MutedText(Loc.T(
-                "Bars take the full popup width; gauges sit two per line when they are next to each other, so reorder rows to pair the gauges you want side by side.",
-                "막대는 팝업 전체 폭을 쓰고, 게이지는 서로 이웃할 때만 한 줄에 두 개씩 배치됩니다. 나란히 두고 싶은 게이지는 순서를 옮겨 붙여 주세요.")));
+                "Bars take the full popup width; gauges sit two per line when they are next to each other, so reorder rows to pair the gauges you want side by side. Fill cards are two lines tall: they take the full width, or pair with a neighbouring fill card when the popup is in two columns, never with a gauge.",
+                "막대는 팝업 전체 폭을 쓰고, 게이지는 서로 이웃할 때만 한 줄에 두 개씩 배치됩니다. 나란히 두고 싶은 게이지는 순서를 옮겨 붙여 주세요. 채우기는 두 줄 높이 카드로, 전체 폭을 쓰거나 팝업이 2열일 때 이웃한 채우기 카드와만 짝을 이루며 게이지와는 짝을 이루지 않습니다.")));
         }
 
         var rows = _currentRows();

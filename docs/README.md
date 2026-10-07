@@ -18,7 +18,7 @@ The released app is the WinUI 3 project under `app-winui/`. `app/` holds the leg
 dotnet run --project app-winui/QuotaScope.WinUI.csproj
 ```
 
-For the built-in self-tests (Codex and Claude usage mappers, the Claude session renewer, the hotkey parser, row shape resolution, and localization):
+For the built-in self-tests (Codex and Claude usage mappers, the Claude session renewer, the hotkey parser, row shape resolution, fill-card text contrast, and localization):
 
 ```powershell
 dotnet run --project app-winui/QuotaScope.WinUI.csproj -- --self-test
@@ -55,6 +55,7 @@ The app reads the local Claude Code sign-in (`%USERPROFILE%\.claude\.credentials
 - Usage rows are payload-driven: one row per rate-limit window the provider reports, labeled from the window duration with unified hour/day units (300 mins -> `5h`, 10080 mins -> `7d`).
 - The popup shows one labeled section per provider (provider name + status) so Codex and Claude are visually separated.
 - Rows can be hidden, reordered, and given individual shapes. The last visible row of a provider locks so a section can never render empty.
+- Row shapes are bars, gauges, and fill cards. A fill card is the bar row without its bar line: two text lines (label and percent, then the reset time or credits footer) on a card whose own background is tinted in the state color from the left edge up to the displayed percent, with a 2px stronger band marking the exact value. In two columns, neighbouring fill cards share a line; a fill card never pairs with a gauge, and a lone one spans the full width.
 - `Spark <window>` rows (GPT-5.3-Codex-Spark), Claude per-model windows, and the `Credits` row are optional.
 - Both providers emit a `Credits` row on every poll, drawn as a gauge. Neither reports a ceiling -- Codex sends a bare remaining balance and Claude sends credits already spent -- so the gauge divides by the per-provider `CreditsFullAmount` (2500 by default). Claude's own `monthly_limit` wins over it when the account reports one. The row's footer shows `left / full` instead of a reset countdown, because credits have no reset.
 - Color themes are `Dark`, `Light`, and `Midnight`, optionally following the system theme, with an optional glassmorphism backdrop at four strengths.
@@ -111,8 +112,8 @@ Notes on individual keys:
 
 - `Language` is `System`, `English`, or `한국어`.
 - `PopupPosition` is one of `BottomRight`, `TopRight`, `TopLeft`, `BottomLeft`, `Center`, `NearCursor`, `LastPosition`. `LastPosition` reads `LastPopupX`/`LastPopupY`, which the popup writes when it is hidden or dragged.
-- `ShapeTheme` is `Bars`, `BentoCircles`, or `MixMatch`. `LayoutColumns` (`Auto`, `OneColumn`, `TwoColumns`) applies to every shape theme; `Auto` uses two columns only when a provider has two gauges.
-- `RowShapes`, `RowOrder`, and `RowVisibility` are keyed per row as `<providerId>|<row label>`.
+- `ShapeTheme` is `Bars`, `BentoCircles`, `Fill`, or `MixMatch`. `LayoutColumns` (`Auto`, `OneColumn`, `TwoColumns`) applies to every shape theme; `Auto` uses two columns only when a provider has two gauges. The Windows Forms app in `app/` draws every theme except `BentoCircles` as bars, `Fill` included.
+- `RowShapes`, `RowOrder`, and `RowVisibility` are keyed per row as `<providerId>|<row label>`. `RowShapes` values are `Circle`, `Bars`, or `Fill` and apply only under `MixMatch`; a row without one, or with any other value, is a gauge.
 - `ThemeOverride` is `Dark`, `Light`, or `Midnight`, and is ignored while `FollowSystemTheme` is on.
 - `GlassStrength` is `Subtle`, `Medium`, `Strong`, or `VeryStrong`, and applies only while `Glassmorphism` is on.
 - `TrayIconStyle` is `UsageArc` or `Glyph`. `GaugeMetric` (`Used` or `Remaining`) drives the popup gauges and the tray arc fill; the tray state colors always key off usage.
