@@ -103,9 +103,9 @@ WinForms app is a separate follow-up task after sign-off.
 
 ## Popup layout modes
 
-- `ShapeTheme` is `Bars`, `BentoCircles`, or `MixMatch`. Mix & match stores a
-  per-row override in `RowShapes` (`"<providerId>|<row label>"` ->
-  `Circle` | `Bars`, gauge by default).
+- `ShapeTheme` is `Bars`, `BentoCircles`, `Fill`, or `MixMatch`. Mix & match
+  stores a per-row override in `RowShapes` (`"<providerId>|<row label>"` ->
+  `Circle` | `Bars` | `Fill`, gauge by default).
 - The Appearance page lists every row the enabled providers report, hidden ones
   included, with a checkbox per row. Checking or clearing it writes
   `RowVisibility` (same key as `RowShapes`); rows without an entry fall back to
@@ -116,12 +116,38 @@ WinForms app is a separate follow-up task after sign-off.
 - The last checked row of a provider locks (its checkbox disables) so a section
   can never render as a bare header with nothing under it. The popup and the
   tray tooltip read the same visibility and order.
-- Layout rule shared by all three modes: bar rows always span the full content
+- Layout rule shared by every mode: bar rows always span the full content
   width; gauges pair two per line only when some provider section has at least
   two gauges, otherwise everything stacks in a single column. The popup is wide
   (452 dip) for the two-column case, compact (240 dip) for a single lone gauge,
   and one-column width (408 dip) otherwise — so bars are one column wide in a
   single-column layout and two columns wide in a two-column layout.
+- Fill cards follow the bar width rules (a lone fill row is not "a single
+  gauge", so Auto never shrinks the popup to 240 dip for it; a forced
+  `OneColumn` uses 240 dip for every shape) and never count toward the Auto
+  two-column test. When the layout is two columns, neighbouring fill cards pair
+  like gauges, with 8/10 dip gaps instead of 12/14; a change of shape flushes the
+  pending card, so a fill card never shares a line with a gauge several times
+  its height.
+- A fill card draws its value as a background layer: a `Border` with the card's
+  inner corner radius (10 = 11 - 1px stroke) whose `Background` is a horizontal
+  `LinearGradientBrush` with hard stops at the percent. A `Border` clips its own
+  background to its rounded shape, so 1%, 50% and 99% all stay inside the
+  corners, where a sized child rectangle would poke out. Each hard stop is two
+  stops 0.0001 apart rather than at one offset, so the edges do not depend on
+  how the renderer orders stops that share an offset. The last 2 dip before the
+  stop is a stronger edge band, recomputed from the laid-out width on
+  `SizeChanged`; 0% draws no layer and 100% a solid one.
+- The tint alpha is per theme (`PopupPalette.FillAlpha`/`FillEdgeAlpha`: Dark
+  60/150, Light 56/150, Midnight 42/110) and is held by `PopupPalette.RunSelfTest`
+  to WCAG contrast over the opaque row color for every accent band, with the
+  same floor for every theme: Text 4.5:1 and Muted 3:1 over the fill, and Text
+  3:1 over the edge band. Midnight's dim Muted (3.8:1 unfilled) is what caps its
+  tint: 44 is the most the orange band allows, and 42 keeps a margin (Muted
+  3.05:1 on orange). Its edge is raised with the fill so it stands off it at
+  least as far as Light's faintest band. The Muted footer can also cross the
+  edge band and is not held there, since only a 2 dip slice of a glyph sits on
+  it. Glass keeps the same alphas; see the comment on `PopupPalette.WithGlass`.
 - `LayoutColumns` (`Auto` | `OneColumn` | `TwoColumns`, surfaced in mix & match)
   overrides that heuristic when the user wants a forced column count.
 - Gauges only pair when they are adjacent, so the mix & match list also lets
@@ -153,13 +179,24 @@ WinForms app is a separate follow-up task after sign-off.
 
 ## Localization
 
-- `Loc` provides `T(en, ko)` plus `RowLabel` (duration tokens: `5h` -> `5시간`,
-  `7d` -> `7일`, `1w` -> `1주`; model names stay as-is) and `Option` for
-  settings values that are persisted as stable English keys.
-- Codex Spark reports its own windows, so `Spark 5h` and `Spark 7d` render as
-  `Spark · 5h` / `Spark · Weekly` (`Spark · 5시간` / `Spark · 주간`). They used
-  to collapse to a bare `Spark`, which made the two windows indistinguishable
-  in the popup, the tooltip, and the settings row list.
+- `Loc` provides `T(en, ko)` plus `RowLabel` (row names, below: 7-day and
+  1-week windows read `Weekly` / `주간`, other duration tokens localize as
+  `5h` -> `5시간`, `14d` -> `14일`; model and plan names stay as-is) and
+  `Option` for settings values that are persisted as stable English keys.
+- Row names read `<scope> · <window>` (`Weekly` / `주간` for 7-day windows,
+  the duration otherwise), and a scope is spelled out only where it tells rows
+  of one window apart (maintainer, 2026-10-08):
+  - Claude: `5h` (the session window counts every model), `All models · Weekly`,
+    `Fable · Weekly` (`5시간`, `전체 모델 · 주간`, `Fable · 주간`).
+  - Codex with a 5-hour window (Plus and similar): `5h`, `Weekly`. A Codex
+    account without one (Pro: weekly only) shows `Pro · Weekly`; the mapper
+    puts the plan from `planType` in `UsageRow.Scope`, and an unlisted plan gets
+    no scope rather than a guessed name.
+  - Codex Spark: `Spark · 5h` / `Spark · Weekly`. It used to collapse to a bare
+    `Spark`, which made the two windows indistinguishable.
+- The popup, the tray tooltip, and the settings row list all read `RowLabel`.
+  The names are short on purpose: Win32 cuts the tooltip at 127 characters and
+  Codex comes first, so long names would push Claude's values off the end.
 - Language changes apply live: the tray menu is rebuilt, and the settings
   window retitles itself, relabels its navigation items, and rebuilds the
   visible page instead of requiring a reopen.

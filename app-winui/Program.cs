@@ -4,6 +4,7 @@ using Microsoft.UI.Dispatching;
 using QuotaScope.Hotkeys;
 using QuotaScope.Providers.Claude;
 using QuotaScope.Providers.Codex;
+using QuotaScope.WinUI.Windows;
 
 namespace QuotaScope.WinUI;
 
@@ -23,6 +24,7 @@ internal static class Program
                 && ClaudeSessionRenewer.RunSelfTest()
                 && HotkeyDefinition.RunSelfTest()
                 && RowShapes.RunSelfTest()
+                && PopupPalette.RunSelfTest()
                 && Loc.RunSelfTest() ? 0 : 1;
         }
 

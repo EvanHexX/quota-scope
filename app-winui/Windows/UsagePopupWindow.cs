@@ -20,14 +20,22 @@ using WinRT.Interop;
 namespace QuotaScope.WinUI.Windows;
 
 // WinUI port of app/UsagePopupForm.cs: borderless always-on-top-capable popup
-// rendering provider sections as bars or bento cards. Content is built in code
-// and the window is sized from measured content, so layout can never clip.
+// rendering provider sections as bars, bento cards, or fill cards. Content is
+// built in code and the window is sized from measured content, so layout can
+// never clip.
 internal sealed class UsagePopupWindow
 {
     private const double BarsWidth = 408;
     private const double BentoWidth = 452;
     private const double BentoSingleCardWidth = 240;
     private const double BentoCardHeight = 230;
+    // Fill cards are two lines tall, so the gaps that suit gauges would leave
+    // nearly as much space between cards as inside them.
+    private const double FillRowGap = 8;
+    private const double FillColumnGap = 10;
+    // Same corner as a bar row, so the two shapes line up in mix & match.
+    private const double FillCardRadius = 11;
+    private const double FillEdgeWidth = 2;
     private static readonly FontFamily UiFont = new("Pretendard, Pretendard Variable, Segoe UI Variable, Segoe UI");
 
     private readonly Window _window = new();
@@ -519,20 +527,24 @@ internal sealed class UsagePopupWindow
 
     private void AddSectionRows(string providerId, List<UsageRow> rows, PopupPalette palette, bool twoColumn)
     {
-        // Consecutive gauges pair up; a bar row always spans the full content
-        // width and flushes any pending gauge first.
-        UsageRow? pendingCircle = null;
+        // Consecutive cards of one shape pair up; a bar row always spans the
+        // full content width and flushes any pending card first. A fill card
+        // never shares a line with a gauge several times its height, so a
+        // change of shape flushes as well, leaving the pending card full width.
+        UsageRow? pending = null;
+        var pendingShape = RowShapes.Circle;
 
         void FlushPending()
         {
-            if (pendingCircle is null) return;
-            _sectionsPanel.Children.Add(BuildCardRow(BuildBentoCard(providerId, pendingCircle, palette), null, palette));
-            pendingCircle = null;
+            if (pending is null) return;
+            _sectionsPanel.Children.Add(BuildShapeRow(providerId, pendingShape, pending, null, palette));
+            pending = null;
         }
 
         foreach (var row in rows)
         {
-            if (RowShapes.Resolve(_settings, providerId, row) == RowShapes.Bars)
+            var shape = RowShapes.Resolve(_settings, providerId, row);
+            if (shape == RowShapes.Bars)
             {
                 FlushPending();
                 _sectionsPanel.Children.Add(BuildBarRow(providerId, row, palette, stackTime: !twoColumn));
@@ -541,33 +553,58 @@ internal sealed class UsagePopupWindow
 
             if (!twoColumn)
             {
-                _sectionsPanel.Children.Add(BuildCardRow(BuildBentoCard(providerId, row, palette), null, palette));
+                _sectionsPanel.Children.Add(BuildShapeRow(providerId, shape, row, null, palette));
                 continue;
             }
 
-            if (pendingCircle is null)
+            if (pending is not null && shape != pendingShape)
             {
-                pendingCircle = row;
+                FlushPending();
+            }
+
+            if (pending is null)
+            {
+                pending = row;
+                pendingShape = shape;
                 continue;
             }
 
-            _sectionsPanel.Children.Add(BuildCardRow(
-                BuildBentoCard(providerId, pendingCircle, palette), BuildBentoCard(providerId, row, palette), palette));
-            pendingCircle = null;
+            _sectionsPanel.Children.Add(BuildShapeRow(providerId, shape, pending, row, palette));
+            pending = null;
         }
 
         FlushPending();
     }
 
-    private static Grid BuildCardRow(FrameworkElement left, FrameworkElement? right, PopupPalette palette)
+    // One line of gauge or fill cards: a single card, or a pair of one shape.
+    private Grid BuildShapeRow(string providerId, string shape, UsageRow left, UsageRow? right, PopupPalette palette)
     {
-        var rowGrid = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+        if (shape == RowShapes.Fill)
+        {
+            return BuildCardRow(
+                BuildFillCard(providerId, left, palette),
+                right is null ? null : BuildFillCard(providerId, right, palette),
+                palette,
+                FillRowGap,
+                FillColumnGap);
+        }
+
+        return BuildCardRow(
+            BuildBentoCard(providerId, left, palette),
+            right is null ? null : BuildBentoCard(providerId, right, palette),
+            palette);
+    }
+
+    private static Grid BuildCardRow(
+        FrameworkElement left, FrameworkElement? right, PopupPalette palette, double rowGap = 12, double columnGap = 14)
+    {
+        var rowGrid = new Grid { Margin = new Thickness(0, 0, 0, rowGap) };
         rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         Grid.SetColumn(left, 0);
         rowGrid.Children.Add(left);
         if (right is not null)
         {
-            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(columnGap) });
             rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             Grid.SetColumn(right, 2);
             rowGrid.Children.Add(right);
@@ -656,7 +693,7 @@ internal sealed class UsagePopupWindow
         var percentColumn = stackTime ? 1 : 2;
         var barSpan = stackTime ? 2 : 3;
 
-        var labelText = Loc.RowLabel(providerId, row.Label);
+        var labelText = Loc.RowLabel(providerId, row.Label, row.Scope);
         var label = new TextBlock
         {
             Text = labelText,
@@ -705,7 +742,7 @@ internal sealed class UsagePopupWindow
             {
                 timeText.Tapped += (_, _) => ToggleTimeDisplayMode();
             }
-            percentText.Text = $"{display}%";
+            percentText.Text = FormatPercent(row, display);
 
             var bar = new ProgressBar
             {
@@ -788,7 +825,7 @@ internal sealed class UsagePopupWindow
 
         var label = new TextBlock
         {
-            Text = Loc.RowLabel(providerId, row.Label),
+            Text = Loc.RowLabel(providerId, row.Label, row.Scope),
             FontFamily = UiFont,
             FontSize = 12.5,
             FontWeight = FontWeights.Bold,
@@ -816,7 +853,7 @@ internal sealed class UsagePopupWindow
             };
             var percentText = new TextBlock
             {
-                Text = $"{display}%",
+                Text = FormatPercent(row, display),
                 FontFamily = UiFont,
                 FontSize = 24,
                 FontWeight = FontWeights.Bold,
@@ -870,6 +907,150 @@ internal sealed class UsagePopupWindow
             CornerRadius = new CornerRadius(14),
             Child = grid
         };
+    }
+
+    // The bar row without its bar line: the card's own background is the gauge,
+    // tinted from the left edge to the displayed percent. Text keeps Text/Muted
+    // over a tint whose alpha is capped for contrast (PopupPalette.FillAlpha),
+    // never sitting on a solid accent.
+    private FrameworkElement BuildFillCard(string providerId, UsageRow row, PopupPalette palette)
+    {
+        var grid = new Grid { Margin = new Thickness(12, 8, 12, 8) };
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var label = new TextBlock
+        {
+            Text = Loc.RowLabel(providerId, row.Label, row.Scope),
+            FontFamily = UiFont,
+            FontSize = 13.5,
+            FontWeight = FontWeights.Bold,
+            Foreground = Brush(palette.Text),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        grid.Children.Add(label);
+
+        // A step up from the bar row's percent: with no bar to scan, the number
+        // is what the eye lands on.
+        var percentText = new TextBlock
+        {
+            FontFamily = UiFont,
+            FontSize = 15,
+            FontWeight = FontWeights.Bold,
+            Foreground = Brush(palette.Text),
+            TextAlignment = TextAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(10, 0, 0, 0)
+        };
+        Grid.SetColumn(percentText, 1);
+        grid.Children.Add(percentText);
+
+        // Right-aligned under the percent, as the bar row places its time text.
+        var footer = new TextBlock
+        {
+            FontFamily = UiFont,
+            FontSize = 12,
+            Foreground = Brush(palette.Muted),
+            TextAlignment = TextAlignment.Right,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(0, 1, 0, 0)
+        };
+        Grid.SetRow(footer, 1);
+        Grid.SetColumnSpan(footer, 2);
+        grid.Children.Add(footer);
+
+        var surface = new Grid();
+        if (row.Window is { } window)
+        {
+            var used = RoundPercent(window);
+            var display = DisplayPercent(window);
+            footer.Text = FormatRowFooter(row);
+            if (!RowShapes.IsCreditsRow(row.Label))
+            {
+                footer.Tapped += (_, _) => ToggleTimeDisplayMode();
+            }
+            percentText.Text = FormatPercent(row, display);
+            if (display > 0)
+            {
+                surface.Children.Add(BuildFillLayer(display, palette.FillTint(used), palette.FillEdge(used)));
+            }
+        }
+        else
+        {
+            percentText.Text = row.DetailText ?? "--";
+        }
+        surface.Children.Add(grid);
+
+        return new Border
+        {
+            Background = CardFill(palette),
+            BorderBrush = CardStroke(palette),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(FillCardRadius),
+            Child = surface
+        };
+    }
+
+    // The tint is the background of a Border with the card's inner corner
+    // radius, because a Border clips its own background to its rounded shape at
+    // any width; a sized child rectangle would poke past the corners at both
+    // ends of the range. Hard stops end the tint at the percent, with a
+    // stronger band just inside it so the exact value reads without a bar. The
+    // band is a fixed width, so where it starts follows the laid-out width.
+    private static Border BuildFillLayer(int percent, Color tint, Color edge)
+    {
+        var layer = new Border
+        {
+            CornerRadius = new CornerRadius(FillCardRadius - 1),
+            IsHitTestVisible = false
+        };
+        if (percent >= 100)
+        {
+            // Nothing left to mark: the card's own border is where the fill ends.
+            layer.Background = Brush(tint);
+            return layer;
+        }
+
+        // Each hard stop is a pair of stops a sliver apart rather than at one
+        // offset, so the edges cannot depend on how the renderer orders stops
+        // that share an offset. The sliver is far below a pixel.
+        const double hardStop = 0.0001;
+        var end = percent / 100.0;
+        var clear = Color.FromArgb(0, tint.R, tint.G, tint.B);
+        var tintEnd = new GradientStop { Color = tint };
+        var edgeStart = new GradientStop { Color = edge };
+        var brush = new LinearGradientBrush
+        {
+            StartPoint = new global::Windows.Foundation.Point(0, 0),
+            EndPoint = new global::Windows.Foundation.Point(1, 0)
+        };
+        brush.GradientStops.Add(new GradientStop { Offset = 0, Color = tint });
+        brush.GradientStops.Add(tintEnd);
+        brush.GradientStops.Add(edgeStart);
+        brush.GradientStops.Add(new GradientStop { Offset = end, Color = edge });
+        brush.GradientStops.Add(new GradientStop { Offset = end + hardStop, Color = clear });
+        brush.GradientStops.Add(new GradientStop { Offset = 1, Color = clear });
+        layer.Background = brush;
+
+        void PlaceEdge(double width)
+        {
+            // A value narrower than the band is drawn as all edge, so 1% still
+            // shows as a sliver hugging the rounded left side.
+            var edgeOffset = Math.Max(0, end - FillEdgeWidth / width);
+            tintEnd.Offset = edgeOffset;
+            edgeStart.Offset = Math.Min(edgeOffset + hardStop, end);
+        }
+
+        // Until layout reports the real width, assume the widest the popup gets.
+        PlaceEdge(BentoWidth);
+        layer.SizeChanged += (_, e) =>
+        {
+            if (e.NewSize.Width > 0) PlaceEdge(e.NewSize.Width);
+        };
+        return layer;
     }
 
     private void ApplyBackdrop(PopupPalette palette, string theme)
@@ -1038,6 +1219,14 @@ internal sealed class UsagePopupWindow
             ? 100 - used
             : used;
     }
+
+    // A credits amount past its full amount fills the gauge, and the text says
+    // so rather than claiming exactly 100%. The marker leads the number so the
+    // trailing "%" stays aligned with every other row. Only the end the amount
+    // overflows can read 100 (remaining for a Codex balance, used for Claude
+    // spend), so the other metric keeps its plain 0%.
+    private static string FormatPercent(UsageRow row, int display) =>
+        row.BeyondFull && display == 100 ? ">100%" : $"{display}%";
 
     // A gauge row normally counts down to its reset. Credits have no reset, so
     // the slot shows what the gauge is drawn against, and stays empty rather

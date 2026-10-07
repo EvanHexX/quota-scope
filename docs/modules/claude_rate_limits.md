@@ -95,6 +95,7 @@ User-Agent: claude-code/<version>
 
 - null인 필드는 row를 만들지 않는다. `extra_usage`는 예외로, 값이 전부 null이어도 `Credits` row는 만든다 (소비 0).
 - `Credits` gauge의 분모는 `monthly_limit` > 0이면 그 값, 아니면 provider 설정 `CreditsFullAmount`(기본 2500)다. `utilization`이 오면 그 값이 그대로 usedPercent가 된다.
+- 사용량이 분모를 넘으면(`utilization` > 100, 또는 `utilization` 없이 `used_credits` > 분모) gauge는 100% used로 고정되고 `UsageRow.BeyondFull`이 서서, 팝업 퍼센트가 `>100%`로 나온다 (사용량 지표일 때. 잔여량 지표에서는 `0%`).
 - `Credits` row의 보조 텍스트(`남은 값 / 기준값`)는 실제로 그려진 usedPercent에서 역산한다. `used_credits`가 없거나 `utilization`과 어긋나도 막대와 텍스트가 어긋나지 않게 하기 위함이다.
 - 분모가 없으면(설정값 0 + `monthly_limit` 없음 + `utilization` 없음) gauge 없이 텍스트 row로 떨어진다.
 - overall 수치는 primary row(5h, 7d)의 usedPercent 중 최댓값이다 (전 계층 usedPercent 통일).

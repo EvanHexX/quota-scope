@@ -30,7 +30,7 @@ internal sealed class AppSettings
     public string ThemeOverride { get; set; } = "Dark";
     public bool Autostart { get; set; } = false;
     // Per-row shape overrides used when ShapeTheme is "MixMatch".
-    // Key: "<providerId>|<row label>", value: "Circle" | "Bars".
+    // Key: "<providerId>|<row label>", value: "Circle" | "Bars" | "Fill".
     public Dictionary<string, string> RowShapes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     // "Auto" | "OneColumn" | "TwoColumns".
     public string LayoutColumns { get; set; } = "Auto";
@@ -53,6 +53,8 @@ internal sealed class AppSettings
     // Used by PopupPosition "LastPosition"; int.MinValue means "not recorded yet".
     public int LastPopupX { get; set; } = int.MinValue;
     public int LastPopupY { get; set; } = int.MinValue;
+    // "Bars" | "BentoCircles" | "Fill" | "MixMatch". The Windows Forms app
+    // draws everything but "BentoCircles" as bars.
     public string ShapeTheme { get; set; } = "Bars";
     public string ColorTheme { get; set; } = "DarkBluePurple";
     public string TimeDisplayMode { get; set; } = "ClockTime";
