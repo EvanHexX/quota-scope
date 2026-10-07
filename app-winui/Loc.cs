@@ -24,8 +24,10 @@ internal static partial class Loc
 
     // Provider row labels are produced in English ("5h", "7d", "Spark 7d",
     // "7d Fable"). Display names follow each provider's own vocabulary: Codex
-    // calls its overall weekly window "General", Claude phrases windows the way
-    // its /usage view does.
+    // calls its main bucket "General" as opposed to Spark, Claude phrases
+    // windows the way its /usage view does. Codex plans with a 5-hour window
+    // next to the weekly one (Plus) then read like Claude's two main rows:
+    // "5-hour limit", then "Weekly · <scope>".
     public static string RowLabel(string providerId, string label)
     {
         if (string.IsNullOrEmpty(label)) return label;
@@ -39,7 +41,8 @@ internal static partial class Loc
             {
                 return "Spark · " + WindowLabel(label["Spark ".Length..]);
             }
-            if (label is "7d" or "1w") return T("General", "일반");
+            if (label == "5h") return T("5-hour limit", "5시간 한도");
+            if (label is "7d" or "1w") return T("Weekly · General", "주간 · 일반");
             return DurationLabel(label);
         }
 
@@ -177,12 +180,18 @@ internal static partial class Loc
         SetLanguage("English");
         if (RowLabel("codex", "Spark 5h") != "Spark · 5h") return false;
         if (RowLabel("codex", "Spark 7d") != "Spark · Weekly") return false;
-        if (RowLabel("codex", "5h") != "5h" || RowLabel("codex", "7d") != "General") return false;
+        if (RowLabel("codex", "5h") != "5-hour limit" || RowLabel("codex", "7d") != "Weekly · General") return false;
+        if (!CodexLabelsDistinct()) return false;
 
         SetLanguage("Korean");
         if (RowLabel("codex", "Spark 5h") != "Spark · 5시간") return false;
         if (RowLabel("codex", "Spark 7d") != "Spark · 주간") return false;
-        return RowLabel("codex", "Spark 5h") != RowLabel("codex", "Spark 7d");
+        if (RowLabel("codex", "5h") != "5시간 한도" || RowLabel("codex", "7d") != "주간 · 일반") return false;
+        return CodexLabelsDistinct();
+
+        // A Plus account shows all four at once: the two main windows and Spark's two.
+        static bool CodexLabelsDistinct() =>
+            new HashSet<string>(new[] { "5h", "7d", "Spark 5h", "Spark 7d" }.Select(label => RowLabel("codex", label))).Count == 4;
     }
 
     [GeneratedRegex(@"(\d+)([hdw])\b")]
