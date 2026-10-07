@@ -33,6 +33,15 @@ internal static class CreditsGauge
         return Math.Clamp(spent / fullAmount * 100d, 0d, 100d);
     }
 
+    // The full amount is the user's reference, not a real ceiling, so the
+    // amount can pass it. The gauge stops at full either way; these say when
+    // the percent text should read ">100%" instead of claiming exactly 100%.
+    public static bool BalanceBeyondFull(double remaining, double fullAmount) =>
+        HasUsableCeiling(fullAmount) && double.IsFinite(remaining) && remaining > fullAmount;
+
+    public static bool SpendBeyondFull(double spent, double fullAmount) =>
+        HasUsableCeiling(fullAmount) && double.IsFinite(spent) && spent > fullAmount;
+
     // Both providers render as "left / full" so the two never read as opposites
     // sitting next to each other in the same popup.
     public static string FormatRemaining(double remaining, double fullAmount)

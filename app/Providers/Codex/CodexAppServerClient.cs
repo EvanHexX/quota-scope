@@ -9,14 +9,23 @@ namespace QuotaScope.Providers.Codex;
 
 internal sealed class CodexAppServerClient : IDisposable
 {
+    private const string RateLimitsReadMethod = "account/rateLimits/read";
+
     private readonly ProviderSettings _settings;
-    private readonly ConcurrentDictionary<int, TaskCompletionSource<JsonElement>> _pending = new();
+    private readonly ConcurrentDictionary<int, PendingRequest> _pending = new();
     private readonly SemaphoreSlim _startLock = new(1, 1);
+    private readonly object _latestReadLock = new();
     private Process? _process;
     private int _nextId;
     private bool _initialized;
     private CancellationTokenSource? _readerCts;
     private string? _lastError;
+    // The last account/rateLimits/read result with every rolling update since
+    // merged in. The read loop writes it and a reconnect clears it from another
+    // thread, hence the lock.
+    private JsonElement? _latestRead;
+
+    private sealed record PendingRequest(string Method, TaskCompletionSource<JsonElement> Completion);
 
     public string ResolvedCommandText => CodexCommandResolver.Resolve(_settings.Command).DisplayText;
 
@@ -51,7 +60,7 @@ internal sealed class CodexAppServerClient : IDisposable
 
     private async Task<ProviderUsage> ReadRateLimitsWithoutRestartAsync(CancellationToken cancellationToken)
     {
-        var result = await SendRequestAsync("account/rateLimits/read", null, cancellationToken).ConfigureAwait(false);
+        var result = await SendRequestAsync(RateLimitsReadMethod, null, cancellationToken).ConfigureAwait(false);
         return RateLimitMapper.FromJsonResult(result, _settings.CreditsFullAmount);
     }
 
@@ -137,7 +146,7 @@ internal sealed class CodexAppServerClient : IDisposable
 
         var id = Interlocked.Increment(ref _nextId);
         var tcs = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _pending[id] = tcs;
+        _pending[id] = new PendingRequest(method, tcs);
 
         var request = parameters is null
             ? JsonSerializer.Serialize(new { id, method, @params = (object?)null })
@@ -183,15 +192,20 @@ internal sealed class CodexAppServerClient : IDisposable
                 var root = doc.RootElement.Clone();
                 if (root.TryGetProperty("id", out var idElement) && idElement.TryGetInt32(out var id))
                 {
-                    if (_pending.TryRemove(id, out var tcs))
+                    if (_pending.TryRemove(id, out var pending))
                     {
                         if (root.TryGetProperty("error", out var error))
                         {
-                            tcs.TrySetException(new InvalidOperationException(error.ToString()));
+                            pending.Completion.TrySetException(new InvalidOperationException(error.ToString()));
                         }
                         else if (root.TryGetProperty("result", out var result))
                         {
-                            tcs.TrySetResult(result.Clone());
+                            var response = result.Clone();
+                            // Cached here rather than by the awaiting caller, so an
+                            // update right behind this response merges into it
+                            // instead of into the read before it.
+                            if (pending.Method == RateLimitsReadMethod) RememberRead(response, cancellationToken);
+                            pending.Completion.TrySetResult(response);
                         }
                     }
                     continue;
@@ -199,15 +213,51 @@ internal sealed class CodexAppServerClient : IDisposable
 
                 if (root.TryGetProperty("method", out var methodElement)
                     && methodElement.GetString() == "account/rateLimits/updated"
-                    && root.TryGetProperty("params", out var parameters))
+                    && root.TryGetProperty("params", out var parameters)
+                    && MergeIntoLatestRead(parameters, cancellationToken) is { } usage)
                 {
-                    RateLimitsUpdated?.Invoke(RateLimitMapper.FromJsonResult(parameters, _settings.CreditsFullAmount));
+                    RateLimitsUpdated?.Invoke(usage);
                 }
             }
         }
         catch
         {
             _initialized = false;
+        }
+    }
+
+    // Both run on the read loop and check its token under the lock: a reconnect
+    // cancels the old loop before clearing the cache, so a line the old process
+    // left behind cannot seed or update the new process's cache.
+    private void RememberRead(JsonElement result, CancellationToken cancellationToken)
+    {
+        lock (_latestReadLock)
+        {
+            if (!cancellationToken.IsCancellationRequested) _latestRead = result;
+        }
+    }
+
+    // A rolling update only carries what changed, so it is merged into the
+    // latest read instead of being mapped on its own. Before the first read there
+    // is nothing to merge into, and the regular poll delivers the full snapshot.
+    // A malformed update is dropped here: an exception would end the read loop,
+    // which is also what completes pending requests.
+    private ProviderUsage? MergeIntoLatestRead(JsonElement parameters, CancellationToken cancellationToken)
+    {
+        lock (_latestReadLock)
+        {
+            if (cancellationToken.IsCancellationRequested || _latestRead is not { } latest) return null;
+            try
+            {
+                var merged = RateLimitMapper.MergeRollingUpdate(latest, parameters);
+                var usage = RateLimitMapper.FromJsonResult(merged, _settings.CreditsFullAmount);
+                _latestRead = merged;
+                return usage;
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 
@@ -246,9 +296,15 @@ internal sealed class CodexAppServerClient : IDisposable
         _readerCts?.Cancel();
         _readerCts?.Dispose();
         _readerCts = null;
+        // The next process may be signed in to another account; its updates
+        // must wait for its own first read.
+        lock (_latestReadLock)
+        {
+            _latestRead = null;
+        }
         foreach (var pending in _pending)
         {
-            pending.Value.TrySetCanceled();
+            pending.Value.Completion.TrySetCanceled();
         }
         _pending.Clear();
 

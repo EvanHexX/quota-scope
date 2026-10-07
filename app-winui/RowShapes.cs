@@ -7,13 +7,17 @@ namespace QuotaScope.WinUI;
 
 // A row the user can show, order, and assign a shape to, surfaced by the
 // settings window. IsPrimary carries the provider's own default so settings can
-// resolve visibility for a row it has never seen before.
-internal sealed record UsageRowRef(string ProviderId, string ProviderName, string Label, bool IsPrimary);
+// resolve visibility for a row it has never seen before. Scope only names the
+// row (see UsageRow); the key stays provider id + Label.
+internal sealed record UsageRowRef(string ProviderId, string ProviderName, string Label, bool IsPrimary, string? Scope = null);
 
 internal static class RowShapes
 {
     public const string Circle = "Circle";
     public const string Bars = "Bars";
+    // Two-line card whose own background fills up to the percentage. Also the
+    // ShapeTheme value that applies it to every row.
+    public const string Fill = "Fill";
 
     // Stable per-row key: provider id + the provider's English row label.
     public static string Key(string providerId, string label) => $"{providerId}|{label}";
@@ -89,18 +93,49 @@ internal static class RowShapes
 
         codex.ShowSecondaryRows = false;
         settings.RowVisibility[Key("codex", sparkWeekly.Label)] = true;
-        return IsVisible(settings, "codex", sparkWeekly);
+        if (!IsVisible(settings, "codex", sparkWeekly)) return false;
+
+        return RunResolveSelfTest();
+    }
+
+    // A whole-popup theme wins over any per-row choice; only mix & match reads
+    // RowShapes, and a value it does not know falls back to a gauge.
+    private static bool RunResolveSelfTest()
+    {
+        var settings = new AppSettings();
+        var window = new RateLimitWindow(10d, null, 300);
+        var fiveHour = new UsageRow("5h", window, IsPrimary: true);
+        var weekly = new UsageRow("7d", window, IsPrimary: true);
+        settings.RowShapes[Key("codex", fiveHour.Label)] = Fill;
+
+        foreach (var (theme, expected) in new[] { ("Bars", Bars), ("BentoCircles", Circle), ("Fill", Fill) })
+        {
+            settings.ShapeTheme = theme;
+            if (Resolve(settings, "codex", fiveHour) != expected || Resolve(settings, "codex", weekly) != expected) return false;
+        }
+
+        settings.ShapeTheme = "MixMatch";
+        if (Resolve(settings, "codex", fiveHour) != Fill || Resolve(settings, "codex", weekly) != Circle) return false;
+        // The same label under another provider is a different row.
+        if (Resolve(settings, "claude", fiveHour) != Circle) return false;
+
+        settings.RowShapes[Key("codex", weekly.Label)] = Bars;
+        if (Resolve(settings, "codex", weekly) != Bars) return false;
+        settings.RowShapes[Key("codex", weekly.Label)] = "fill";
+        if (Resolve(settings, "codex", weekly) != Fill) return false;
+        settings.RowShapes[Key("codex", weekly.Label)] = "Ring";
+        return Resolve(settings, "codex", weekly) == Circle;
     }
 
     public static string Resolve(AppSettings settings, string providerId, UsageRow row)
     {
         if (string.Equals(settings.ShapeTheme, "Bars", StringComparison.OrdinalIgnoreCase)) return Bars;
         if (string.Equals(settings.ShapeTheme, "BentoCircles", StringComparison.OrdinalIgnoreCase)) return Circle;
+        if (string.Equals(settings.ShapeTheme, Fill, StringComparison.OrdinalIgnoreCase)) return Fill;
 
         // Mix & match: per-row override, gauge by default.
-        return settings.RowShapes.TryGetValue(Key(providerId, row.Label), out var shape)
-            && string.Equals(shape, Bars, StringComparison.OrdinalIgnoreCase)
-                ? Bars
-                : Circle;
+        if (!settings.RowShapes.TryGetValue(Key(providerId, row.Label), out var shape)) return Circle;
+        if (string.Equals(shape, Bars, StringComparison.OrdinalIgnoreCase)) return Bars;
+        return string.Equals(shape, Fill, StringComparison.OrdinalIgnoreCase) ? Fill : Circle;
     }
 }

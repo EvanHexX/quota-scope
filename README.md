@@ -38,12 +38,15 @@ The build is self-contained: no .NET or Windows App SDK runtime install is requi
 - Windows system tray utility with a compact usage popup
 - Codex and Claude (Pro/Max) usage side by side, in labeled per-provider sections
 - Payload-driven rows: one row per rate-limit window the provider reports, so new windows (for example a per-model weekly limit) appear without an app update
+- Codex plans with both a 5-hour and a weekly limit (for example Plus) show both rows, 5-hour first, like Claude; Pro, which has only the weekly limit, shows it as `Pro · Weekly`
+- Short row names that add a scope only where two rows share a window: `5h`, `Weekly`, `All models · Weekly`, `Fable · Weekly`, `Spark · Weekly`
 - Pick the rows you want with a checkbox per row, with each provider keeping at least one
 - Optional secondary rows (GPT-5.3-Codex-Spark 5h and weekly, Claude per-model windows) and credits rows for both providers
-- Credits render as a gauge against a per-provider full amount (2500 by default, configurable), since neither provider reports a ceiling
+- Credits render as a gauge against a per-provider full amount (2500 by default, configurable), since neither provider reports a ceiling; an amount past it reads `>100%` on the metric where the gauge is full (Remaining for a Codex balance, Used for Claude spend; the other metric shows 0%), and the Codex footer still shows the real balance
 - Tray icon signals overall usage with an arc fill (5% steps) and a 3-level state color; the hover tooltip lists how much quota is left per window, and full numbers live in the popup
 - Optional tray notification when usage crosses the warning threshold
-- Layout: bars, gauges, or mix & match with a per-row shape, and a column count that applies to every shape theme
+- Layout: bars, gauges, fill, or mix & match with a per-row shape, and a column count that applies to every shape theme
+- Fill is the compact shape: a two-line card whose own background fills up to the percentage, so a row skips the separate bar line
 - Themes: Dark, Light, Midnight, optional system-theme following, and glassmorphism with four strength levels
 - UI scale (80–150%) and English / Korean interface
 - Configurable global hotkeys: toggle popup (default `Ctrl+Alt+U`), refresh all, toggle pin
@@ -57,7 +60,7 @@ Codex:
 1. The app starts `codex app-server` as a child process.
 2. It initializes a stdio JSON-RPC session.
 3. It calls `account/rateLimits/read`.
-4. It listens for `account/rateLimits/updated` notifications.
+4. It listens for `account/rateLimits/updated` notifications and merges each sparse update into the last full read, so windows and buckets an update leaves out stay visible.
 
 Claude:
 
@@ -94,7 +97,7 @@ Everything is configured in the settings window (tray icon → `Settings…`), a
 
 - **General**: language, start with Windows, popup position (including "last position"), time display, warning threshold, threshold notification
 - **Providers**: per-provider enable, refresh interval, secondary rows, credits row, Codex command, Claude credential status, Claude session auto-renew, reconnect
-- **Appearance**: shape theme (bars / gauges / mix & match), per-row shapes and column count, UI scale, theme, glassmorphism and its strength, tray icon style, gauge metric
+- **Appearance**: shape theme (bars / gauges / fill / mix & match), per-row shapes and column count, UI scale, theme, glassmorphism and its strength, tray icon style, gauge metric
 - **Hotkeys**: toggle popup, refresh all, toggle pin — press a combination to bind; conflicts are reported inline and never saved silently
 - **About**: version, disclaimer, repository link
 
@@ -103,6 +106,7 @@ Notes:
 - Claude polling is clamped to at least 60 seconds regardless of the configured interval.
 - Claude session auto-renew is on by default. Turn it off to keep the app from launching `claude` in the background; usage then stops when the 8-hour token expires until you sign in or reconnect.
 - Gauges and percentages follow the gauge metric setting (used or remaining); state colors always key off usage.
+- Fill cards tint the card in the state color from the left edge up to the percentage, with a thin stronger edge marking the exact value. The tint is kept light enough that the text on it stays readable in every theme. In two columns, neighbouring fill cards share a line; a fill card never pairs with a gauge.
 
 ## Privacy
 
@@ -136,7 +140,7 @@ QuotaScope is designed as a local utility.
 dotnet build app-winui/QuotaScope.WinUI.csproj
 ```
 
-Run the built-in self-tests (rate limit mappers and the hotkey parser):
+Run the built-in self-tests (usage mappers, Claude session renewer, hotkey parser, row shapes, fill-card contrast, localization):
 
 ```powershell
 dotnet run --project app-winui/QuotaScope.WinUI.csproj -- --self-test
