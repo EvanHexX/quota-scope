@@ -20,8 +20,11 @@ internal sealed record PopupPalette(
     // Fill cards tint their own background with the accent instead of drawing a
     // bar, and the row's text sits on that tint, so these alphas are capped by
     // contrast, not chosen by eye: RunSelfTest holds every theme and accent band
-    // to it. The edge is the 2px band that marks where the fill stops; a glyph
-    // only ever crosses it, so it is held to the looser 3:1.
+    // to it. The edge is the 2px band that marks where the fill stops. A glyph
+    // only ever crosses it, so label and percent (Text) are held to the looser
+    // 3:1 there. The Muted footer can cross it too and is not held: only a 2px
+    // slice of a glyph sits on the band, and no edge strong enough to see would
+    // keep Midnight's Muted at 3:1.
     public byte FillAlpha { get; init; }
     public byte FillEdgeAlpha { get; init; }
 
@@ -84,8 +87,10 @@ internal sealed record PopupPalette(
 
     // Midnight is deliberately dim end-to-end: near-black surfaces with muted
     // text and desaturated accents so nothing glows in a dark room. Its muted
-    // text starts under 4.5:1, so the fill may cost it only a tenth of that,
-    // which leaves the tint as faint as the bar track; the edge carries the value.
+    // text starts at only 3.8:1, so the 3:1 floor caps its tint well below the
+    // other themes': 44 is the most the orange band allows, and 42 leaves room
+    // for 8-bit rounding of the blended color. The edge is raised with the fill
+    // so it stands off it at least as far as Light's faintest band does.
     public static PopupPalette Midnight => new(
         Color.FromArgb(242, 0, 0, 0),
         Color.FromArgb(255, 10, 10, 12),
@@ -96,8 +101,8 @@ internal sealed record PopupPalette(
         Color.FromArgb(255, 47, 111, 191),
         Color.FromArgb(255, 104, 92, 178))
     {
-        FillAlpha = 22,
-        FillEdgeAlpha = 96
+        FillAlpha = 42,
+        FillEdgeAlpha = 110
     };
 
     // Glass edge highlight: the bright 1px rim that makes a translucent pane
@@ -121,24 +126,22 @@ internal sealed record PopupPalette(
     private static Color WithAlpha(Color color, byte alpha) => Color.FromArgb(alpha, color.R, color.G, color.B);
 
     // WCAG contrast of the row text over a filled card, for every opaque theme
-    // and every accent band. Label and percent need 4.5:1 and the footer 3:1,
-    // except where a theme's own muted text is already under 4.5:1 (Midnight):
-    // there the fill may cost at most a tenth of the contrast the card had.
+    // and every accent band, with one floor for every theme: label and percent
+    // (Text) need 4.5:1 and the footer (Muted) 3:1 over the fill, and Text 3:1
+    // over the edge band.
     public static bool RunSelfTest()
     {
         foreach (var palette in new[] { DarkBluePurple, Light, Midnight })
         {
             if (palette.FillAlpha == 0 || palette.FillEdgeAlpha <= palette.FillAlpha) return false;
 
-            var unfilledMuted = ContrastRatio(palette.Muted, palette.Row);
-            var mutedFloor = unfilledMuted < 4.5 ? 0.9 * unfilledMuted : 3.0;
             // One value from each side of every band boundary.
             foreach (var used in new[] { 0, 49, 50, 79, 80, 100 })
             {
                 var filled = Over(palette.FillTint(used), palette.Row);
                 var edge = Over(palette.FillEdge(used), palette.Row);
                 if (ContrastRatio(palette.Text, filled) < 4.5) return false;
-                if (ContrastRatio(palette.Muted, filled) < mutedFloor) return false;
+                if (ContrastRatio(palette.Muted, filled) < 3.0) return false;
                 if (ContrastRatio(palette.Text, edge) < 3.0) return false;
             }
         }
@@ -158,9 +161,6 @@ internal sealed record PopupPalette(
 
     private static double ContrastRatio(Color text, (double R, double G, double B) background) =>
         ContrastRatio(RelativeLuminance(text.R, text.G, text.B), RelativeLuminance(background.R, background.G, background.B));
-
-    private static double ContrastRatio(Color text, Color opaqueBackground) =>
-        ContrastRatio(text, (opaqueBackground.R, opaqueBackground.G, opaqueBackground.B));
 
     private static double ContrastRatio(double luminanceA, double luminanceB)
     {

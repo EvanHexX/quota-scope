@@ -693,7 +693,7 @@ internal sealed class UsagePopupWindow
         var percentColumn = stackTime ? 1 : 2;
         var barSpan = stackTime ? 2 : 3;
 
-        var labelText = Loc.RowLabel(providerId, row.Label);
+        var labelText = Loc.RowLabel(providerId, row.Label, row.Scope);
         var label = new TextBlock
         {
             Text = labelText,
@@ -742,7 +742,7 @@ internal sealed class UsagePopupWindow
             {
                 timeText.Tapped += (_, _) => ToggleTimeDisplayMode();
             }
-            percentText.Text = $"{display}%";
+            percentText.Text = FormatPercent(row, display);
 
             var bar = new ProgressBar
             {
@@ -825,7 +825,7 @@ internal sealed class UsagePopupWindow
 
         var label = new TextBlock
         {
-            Text = Loc.RowLabel(providerId, row.Label),
+            Text = Loc.RowLabel(providerId, row.Label, row.Scope),
             FontFamily = UiFont,
             FontSize = 12.5,
             FontWeight = FontWeights.Bold,
@@ -853,7 +853,7 @@ internal sealed class UsagePopupWindow
             };
             var percentText = new TextBlock
             {
-                Text = $"{display}%",
+                Text = FormatPercent(row, display),
                 FontFamily = UiFont,
                 FontSize = 24,
                 FontWeight = FontWeights.Bold,
@@ -923,7 +923,7 @@ internal sealed class UsagePopupWindow
 
         var label = new TextBlock
         {
-            Text = Loc.RowLabel(providerId, row.Label),
+            Text = Loc.RowLabel(providerId, row.Label, row.Scope),
             FontFamily = UiFont,
             FontSize = 13.5,
             FontWeight = FontWeights.Bold,
@@ -948,11 +948,13 @@ internal sealed class UsagePopupWindow
         Grid.SetColumn(percentText, 1);
         grid.Children.Add(percentText);
 
+        // Right-aligned under the percent, as the bar row places its time text.
         var footer = new TextBlock
         {
             FontFamily = UiFont,
             FontSize = 12,
             Foreground = Brush(palette.Muted),
+            TextAlignment = TextAlignment.Right,
             TextTrimming = TextTrimming.CharacterEllipsis,
             Margin = new Thickness(0, 1, 0, 0)
         };
@@ -970,7 +972,7 @@ internal sealed class UsagePopupWindow
             {
                 footer.Tapped += (_, _) => ToggleTimeDisplayMode();
             }
-            percentText.Text = $"{display}%";
+            percentText.Text = FormatPercent(row, display);
             if (display > 0)
             {
                 surface.Children.Add(BuildFillLayer(display, palette.FillTint(used), palette.FillEdge(used)));
@@ -1217,6 +1219,14 @@ internal sealed class UsagePopupWindow
             ? 100 - used
             : used;
     }
+
+    // A credits amount past its full amount fills the gauge, and the text says
+    // so rather than claiming exactly 100%. The marker leads the number so the
+    // trailing "%" stays aligned with every other row. Only the end the amount
+    // overflows can read 100 (remaining for a Codex balance, used for Claude
+    // spend), so the other metric keeps its plain 0%.
+    private static string FormatPercent(UsageRow row, int display) =>
+        row.BeyondFull && display == 100 ? ">100%" : $"{display}%";
 
     // A gauge row normally counts down to its reset. Credits have no reset, so
     // the slot shows what the gauge is drawn against, and stays empty rather

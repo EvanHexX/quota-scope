@@ -284,8 +284,8 @@ internal sealed class SettingsWindow
             Row(enabledLabel, Loc.T("Changes apply without restart.", "재시작 없이 반영됩니다."), ProviderToggle(codex, SettingsChange.Providers)),
             Row(refreshLabel, Loc.T("Minimum 10 seconds.", "최소 10초."), RefreshBox(codex, 10)),
             Row(Loc.T("Credits gauge full amount", "크레딧 게이지 기준량"),
-                Loc.T("Credits arrive without a ceiling, so the gauge is drawn against this.",
-                      "크레딧은 상한 없이 전달되므로 게이지는 이 값을 100% 기준으로 그립니다."),
+                Loc.T("Credits arrive without a ceiling, so the gauge is drawn against this. A balance above it reads >100% with the Remaining metric (0% with Used).",
+                      "크레딧은 상한 없이 전달되므로 게이지는 이 값을 100% 기준으로 그립니다. 잔액이 이 값을 넘으면 잔여량 지표에서는 >100%, 사용량 지표에서는 0%로 표시됩니다."),
                 CreditsFullAmountBox(codex)),
             Row(Loc.T("Codex command", "Codex 명령"), Loc.T("Command or full path used to start codex app-server.", "codex app-server 실행에 쓰는 명령 또는 전체 경로."), codexCommand),
             codexResolved,
@@ -293,8 +293,8 @@ internal sealed class SettingsWindow
             Row(enabledLabel, null, ProviderToggle(claude, SettingsChange.Providers)),
             Row(refreshLabel, Loc.T("Clamped to a 60-second minimum.", "최소 60초로 제한됩니다."), RefreshBox(claude, 60)),
             Row(Loc.T("Credits gauge full amount", "크레딧 게이지 기준량"),
-                Loc.T("Credits arrive without a ceiling, so the gauge is drawn against this.",
-                      "크레딧은 상한 없이 전달되므로 게이지는 이 값을 100% 기준으로 그립니다."),
+                Loc.T("Credits arrive without a ceiling, so the gauge is drawn against this unless Claude reports its own monthly limit. Spend above it reads >100% with the Used metric (0% with Remaining).",
+                      "크레딧은 상한 없이 전달되므로, Claude가 월 한도를 따로 보고하지 않으면 게이지는 이 값을 100% 기준으로 그립니다. 사용량이 이 값을 넘으면 사용량 지표에서는 >100%, 잔여량 지표에서는 0%로 표시됩니다."),
                 CreditsFullAmountBox(claude)),
             Row(Loc.T("Auto-renew session", "세션 자동 갱신"),
                 Loc.T("Runs 'claude mcp list' before the 8-hour token expires so Claude Code refreshes it. Costs no usage.",
@@ -501,7 +501,7 @@ internal sealed class SettingsWindow
 
         var label = new TextBlock
         {
-            Text = Loc.RowLabel(rowRef.ProviderId, rowRef.Label),
+            Text = Loc.RowLabel(rowRef.ProviderId, rowRef.Label, rowRef.Scope),
             FontSize = 13,
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis

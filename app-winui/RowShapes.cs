@@ -7,8 +7,9 @@ namespace QuotaScope.WinUI;
 
 // A row the user can show, order, and assign a shape to, surfaced by the
 // settings window. IsPrimary carries the provider's own default so settings can
-// resolve visibility for a row it has never seen before.
-internal sealed record UsageRowRef(string ProviderId, string ProviderName, string Label, bool IsPrimary);
+// resolve visibility for a row it has never seen before. Scope only names the
+// row (see UsageRow); the key stays provider id + Label.
+internal sealed record UsageRowRef(string ProviderId, string ProviderName, string Label, bool IsPrimary, string? Scope = null);
 
 internal static class RowShapes
 {

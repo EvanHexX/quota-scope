@@ -22,44 +22,39 @@ internal static partial class Loc
 
     public static string T(string en, string ko) => IsKorean ? ko : en;
 
-    // Provider row labels are produced in English ("5h", "7d", "Spark 7d",
-    // "7d Fable"). Display names follow each provider's own vocabulary: Codex
-    // calls its main bucket "General" as opposed to Spark, Claude phrases
-    // windows the way its /usage view does. Codex plans with a 5-hour window
-    // next to the weekly one (Plus) then read like Claude's two main rows:
-    // "5-hour limit", then "Weekly · <scope>".
-    public static string RowLabel(string providerId, string label)
+    // Provider row labels are produced in English: a window ("5h", "7d"),
+    // optionally with a scope ("7d Fable", Codex's "Spark 7d"). Every display
+    // name reads "<scope> · <window>", and a scope is spelled out only where it
+    // tells rows of one window apart: Claude's single session window is just
+    // "5h", while its all-models and per-model weekly windows both carry one.
+    // A row's own Scope (Codex's plan on a weekly-only account) takes the
+    // same place. The popup, the tray tooltip, and the settings row list all
+    // read this, so the names stay short enough for the 127-character tooltip.
+    public static string RowLabel(string providerId, string label, string? scope = null)
     {
         if (string.IsNullOrEmpty(label)) return label;
         if (label.Equals("Credits", StringComparison.OrdinalIgnoreCase)) return T("Credits", "크레딧");
 
-        if (providerId.Equals("codex", StringComparison.OrdinalIgnoreCase))
+        if (providerId.Equals("codex", StringComparison.OrdinalIgnoreCase)
+            && label.StartsWith("Spark ", StringComparison.OrdinalIgnoreCase))
         {
-            // Spark reports its own 5h and weekly windows; both used to collapse
-            // to a bare "Spark", so name the window next to the model.
-            if (label.StartsWith("Spark ", StringComparison.OrdinalIgnoreCase))
-            {
-                return "Spark · " + WindowLabel(label["Spark ".Length..]);
-            }
-            if (label == "5h") return T("5-hour limit", "5시간 한도");
-            if (label is "7d" or "1w") return T("Weekly · General", "주간 · 일반");
-            return DurationLabel(label);
+            return Scoped("Spark", label["Spark ".Length..]);
         }
 
         if (providerId.Equals("claude", StringComparison.OrdinalIgnoreCase))
         {
-            if (label == "5h") return T("5-hour limit", "5시간 한도");
-            if (label == "7d") return T("Weekly · All models", "주간 · 전체 모델");
-            if (label.StartsWith("7d ", StringComparison.Ordinal))
-            {
-                var model = label[3..];
-                return T($"Weekly · {model}", $"주간 · {model}");
-            }
-            return DurationLabel(label);
+            // The session window counts every model, so it needs no scope; the
+            // unscoped weekly window does, next to the per-model ones.
+            if (label == "7d") return Scoped(T("All models", "전체 모델"), label);
+            var space = label.IndexOf(' ');
+            if (space > 0) return Scoped(label[(space + 1)..], label[..space]);
         }
 
-        return DurationLabel(label);
+        return Scoped(scope, label);
     }
+
+    private static string Scoped(string? scope, string window) =>
+        string.IsNullOrEmpty(scope) ? WindowLabel(window) : $"{scope} · {WindowLabel(window)}";
 
     // Weekly windows read better spelled out than as "7d"; anything shorter
     // keeps its duration ("5h" / "5시간").
@@ -173,25 +168,33 @@ internal static partial class Loc
     }
 
     // Row labels are what the popup, the tray tooltip, and the settings row
-    // list all read, so each window a provider reports has to come out distinct.
+    // list read, so each window a provider reports has to come out distinct.
     // Leaves the language set: the self-test path exits right after.
     public static bool RunSelfTest()
     {
         SetLanguage("English");
-        if (RowLabel("codex", "Spark 5h") != "Spark · 5h") return false;
-        if (RowLabel("codex", "Spark 7d") != "Spark · Weekly") return false;
-        if (RowLabel("codex", "5h") != "5-hour limit" || RowLabel("codex", "7d") != "Weekly · General") return false;
-        if (!CodexLabelsDistinct()) return false;
+        if (RowLabel("codex", "5h") != "5h" || RowLabel("codex", "7d") != "Weekly") return false;
+        if (RowLabel("codex", "7d", "Pro") != "Pro · Weekly") return false;
+        if (RowLabel("codex", "Spark 5h") != "Spark · 5h" || RowLabel("codex", "Spark 7d") != "Spark · Weekly") return false;
+        if (RowLabel("claude", "5h") != "5h" || RowLabel("claude", "7d") != "All models · Weekly") return false;
+        if (RowLabel("claude", "7d Fable") != "Fable · Weekly") return false;
+        if (!LabelsDistinct()) return false;
 
         SetLanguage("Korean");
-        if (RowLabel("codex", "Spark 5h") != "Spark · 5시간") return false;
-        if (RowLabel("codex", "Spark 7d") != "Spark · 주간") return false;
-        if (RowLabel("codex", "5h") != "5시간 한도" || RowLabel("codex", "7d") != "주간 · 일반") return false;
-        return CodexLabelsDistinct();
+        if (RowLabel("codex", "5h") != "5시간" || RowLabel("codex", "7d") != "주간") return false;
+        if (RowLabel("codex", "7d", "Pro") != "Pro · 주간") return false;
+        if (RowLabel("codex", "Spark 5h") != "Spark · 5시간" || RowLabel("codex", "Spark 7d") != "Spark · 주간") return false;
+        if (RowLabel("claude", "5h") != "5시간" || RowLabel("claude", "7d") != "전체 모델 · 주간") return false;
+        if (RowLabel("claude", "7d Fable") != "Fable · 주간") return false;
+        return LabelsDistinct();
 
-        // A Plus account shows all four at once: the two main windows and Spark's two.
-        static bool CodexLabelsDistinct() =>
-            new HashSet<string>(new[] { "5h", "7d", "Spark 5h", "Spark 7d" }.Select(label => RowLabel("codex", label))).Count == 4;
+        // A Plus account shows Codex's two main windows and Spark's two at
+        // once; Claude shows its session window next to two weekly ones.
+        static bool LabelsDistinct() =>
+            Distinct("codex", "5h", "7d", "Spark 5h", "Spark 7d") && Distinct("claude", "5h", "7d", "7d Fable");
+
+        static bool Distinct(string providerId, params string[] labels) =>
+            new HashSet<string>(labels.Select(label => RowLabel(providerId, label))).Count == labels.Length;
     }
 
     [GeneratedRegex(@"(\d+)([hdw])\b")]

@@ -38,9 +38,11 @@ The build is self-contained: no .NET or Windows App SDK runtime install is requi
 - Windows system tray utility with a compact usage popup
 - Codex and Claude (Pro/Max) usage side by side, in labeled per-provider sections
 - Payload-driven rows: one row per rate-limit window the provider reports, so new windows (for example a per-model weekly limit) appear without an app update
+- Codex plans with both a 5-hour and a weekly limit (for example Plus) show both rows, 5-hour first, like Claude; Pro, which has only the weekly limit, shows it as `Pro · Weekly`
+- Short row names that add a scope only where two rows share a window: `5h`, `Weekly`, `All models · Weekly`, `Fable · Weekly`, `Spark · Weekly`
 - Pick the rows you want with a checkbox per row, with each provider keeping at least one
 - Optional secondary rows (GPT-5.3-Codex-Spark 5h and weekly, Claude per-model windows) and credits rows for both providers
-- Credits render as a gauge against a per-provider full amount (2500 by default, configurable), since neither provider reports a ceiling
+- Credits render as a gauge against a per-provider full amount (2500 by default, configurable), since neither provider reports a ceiling; an amount past it reads `>100%` on the metric where the gauge is full (Remaining for a Codex balance, Used for Claude spend; the other metric shows 0%), and the Codex footer still shows the real balance
 - Tray icon signals overall usage with an arc fill (5% steps) and a 3-level state color; the hover tooltip lists how much quota is left per window, and full numbers live in the popup
 - Optional tray notification when usage crosses the warning threshold
 - Layout: bars, gauges, fill, or mix & match with a per-row shape, and a column count that applies to every shape theme
@@ -58,7 +60,7 @@ Codex:
 1. The app starts `codex app-server` as a child process.
 2. It initializes a stdio JSON-RPC session.
 3. It calls `account/rateLimits/read`.
-4. It listens for `account/rateLimits/updated` notifications.
+4. It listens for `account/rateLimits/updated` notifications and merges each sparse update into the last full read, so windows and buckets an update leaves out stay visible.
 
 Claude:
 
@@ -138,7 +140,7 @@ QuotaScope is designed as a local utility.
 dotnet build app-winui/QuotaScope.WinUI.csproj
 ```
 
-Run the built-in self-tests (rate limit mappers and the hotkey parser):
+Run the built-in self-tests (usage mappers, Claude session renewer, hotkey parser, row shapes, fill-card contrast, localization):
 
 ```powershell
 dotnet run --project app-winui/QuotaScope.WinUI.csproj -- --self-test

@@ -76,25 +76,65 @@ internal static class RateLimitMapper
 
     private static void MergeSnapshot(JsonObject target, JsonElement update)
     {
-        var primaryMins = GetNodeLong((target["primary"] as JsonObject)?["windowDurationMins"]);
-        var secondaryMins = GetNodeLong((target["secondary"] as JsonObject)?["windowDurationMins"]);
-
+        var slots = AssignWindowSlots(target, update);
         foreach (var property in update.EnumerateObject())
         {
-            var name = property.Name;
-            // A window that names the other slot's duration belongs to that
-            // slot. Merging by slot alone would turn a 5h + 7d pair into two
-            // 7d rows if an update fills the slots differently from the read.
-            if (name is "primary" or "secondary" && property.Value.ValueKind == JsonValueKind.Object)
+            if (!slots.TryGetValue(property.Name, out var slot))
             {
-                var mins = GetLong(property.Value, "windowDurationMins");
-                var (ownMins, otherMins, otherSlot) = name == "primary"
-                    ? (primaryMins, secondaryMins, "secondary")
-                    : (secondaryMins, primaryMins, "primary");
-                if (mins.HasValue && mins == otherMins && mins != ownMins) name = otherSlot;
+                MergeValue(target, property.Name, property.Value);
+                continue;
             }
-            MergeValue(target, name, property.Value);
+
+            // A window of a different length is a different window: merged
+            // field by field it would keep the old window's reset time, so it
+            // replaces the stored one. No reset time beats a wrong one.
+            var mins = GetLong(property.Value, "windowDurationMins");
+            var storedMins = GetNodeLong((target[slot] as JsonObject)?["windowDurationMins"]);
+            if (mins.HasValue && storedMins.HasValue && mins != storedMins)
+            {
+                target[slot] = JsonNode.Parse(property.Value.GetRawText());
+            }
+            else
+            {
+                MergeValue(target, slot, property.Value);
+            }
         }
+    }
+
+    // A window that names the other slot's duration belongs to that slot.
+    // Merging by slot alone would turn a 5h + 7d pair into two 7d rows if an
+    // update fills the slots differently from the read. Both windows are placed
+    // against the read before either is merged, and never into the same slot:
+    // a duration match outranks a window's own slot name, and the window that
+    // loses a slot takes the one left free. Property order cannot change it.
+    private static Dictionary<string, string> AssignWindowSlots(JsonObject target, JsonElement update)
+    {
+        var storedMins = new Dictionary<string, long?>
+        {
+            ["primary"] = GetNodeLong((target["primary"] as JsonObject)?["windowDurationMins"]),
+            ["secondary"] = GetNodeLong((target["secondary"] as JsonObject)?["windowDurationMins"])
+        };
+
+        var claims = new List<(string Name, string Slot, bool ByDuration)>();
+        foreach (var (name, other) in new[] { ("primary", "secondary"), ("secondary", "primary") })
+        {
+            if (!update.TryGetProperty(name, out var window) || window.ValueKind != JsonValueKind.Object) continue;
+            var mins = GetLong(window, "windowDurationMins");
+            if (mins.HasValue && mins == storedMins[name]) claims.Add((name, name, true));
+            else if (mins.HasValue && mins == storedMins[other]) claims.Add((name, other, true));
+            else claims.Add((name, name, false));
+        }
+
+        if (claims.Count == 2 && claims[0].Slot == claims[1].Slot)
+        {
+            var loser = claims[0].ByDuration != claims[1].ByDuration
+                ? (claims[0].ByDuration ? 1 : 0)
+                : (claims[0].Name == claims[0].Slot ? 1 : 0);
+            var freeSlot = claims[loser].Slot == "primary" ? "secondary" : "primary";
+            claims[loser] = claims[loser] with { Slot = freeSlot };
+        }
+
+        return claims.ToDictionary(claim => claim.Name, claim => claim.Slot);
     }
 
     // Field-wise: objects (windows, credits, individualLimit) merge one field at
@@ -138,9 +178,14 @@ internal static class RateLimitMapper
         var rows = new List<UsageRow>();
 
         // Rows are payload-driven: only windows that actually exist become rows.
+        // A plan whose windows are all a day or longer (Pro: weekly only) names
+        // its rows after the plan, so the missing 5h row reads as how that plan
+        // works rather than as data that failed to arrive. Plans with a 5h
+        // window read like Claude's main rows, with no qualifier.
+        var mainScope = IsWeeklyOnly(snapshot) ? PlanDisplayName(snapshot.PlanType) : null;
         foreach (var window in ShortestWindowFirst(snapshot))
         {
-            AddWindowRow(rows, window, label => label, isPrimary: true);
+            AddWindowRow(rows, window, label => label, isPrimary: true, mainScope);
         }
         if (sparkSnapshot is not null)
         {
@@ -165,11 +210,37 @@ internal static class RateLimitMapper
             ProviderState.Ok);
     }
 
-    private static void AddWindowRow(List<UsageRow> rows, RateLimitWindow? window, Func<string, string> labelFactory, bool isPrimary)
+    private static void AddWindowRow(
+        List<UsageRow> rows, RateLimitWindow? window, Func<string, string> labelFactory, bool isPrimary, string? scope = null)
     {
         if (window is null) return;
-        rows.Add(new UsageRow(labelFactory(FormatDurationLabel(window.WindowDurationMins)), window, isPrimary));
+        rows.Add(new UsageRow(labelFactory(FormatDurationLabel(window.WindowDurationMins)), window, isPrimary, Scope: scope));
     }
+
+    // Every present window must be known to span a day or more: a window
+    // without a duration says nothing about the plan, and naming the rows
+    // after it would mislabel a 5h window that merely arrived undated.
+    private static bool IsWeeklyOnly(RateLimitSnapshot snapshot)
+    {
+        var present = new[] { snapshot.Primary, snapshot.Secondary }.Where(window => window is not null).ToArray();
+        return present.Length > 0 && present.All(window => window!.WindowDurationMins is >= 1440);
+    }
+
+    // planType values from the app-server schema. Only plans whose display name
+    // is certain are listed; anything else (including "unknown") gets no
+    // qualifier rather than a guessed name.
+    private static string? PlanDisplayName(string? planType) => planType?.ToLowerInvariant() switch
+    {
+        "free" => "Free",
+        "go" => "Go",
+        "plus" => "Plus",
+        "pro" => "Pro",
+        "team" => "Team",
+        "business" => "Business",
+        "enterprise" => "Enterprise",
+        "edu" => "Edu",
+        _ => null
+    };
 
     // Which slot holds which window is the backend's call (Pro puts its weekly
     // window in primary), so the 5-hour row is kept ahead of the weekly one by
@@ -218,7 +289,8 @@ internal static class RateLimitMapper
             "Credits",
             new RateLimitWindow(CreditsGauge.UsedPercentFromBalance(remaining, fullAmount), null, null),
             IsPrimary: false,
-            CreditsGauge.FormatRemaining(remaining, fullAmount));
+            CreditsGauge.FormatRemaining(remaining, fullAmount),
+            BeyondFull: CreditsGauge.BalanceBeyondFull(remaining, fullAmount));
     }
 
     private static string FormatCredits(CodexCredits credits)
@@ -349,7 +421,8 @@ internal static class RateLimitMapper
             && RunWeeklyOnlySchemaSelfTest()
             && RunFiveHourAndWeeklySchemaSelfTest()
             && RunSwappedSlotsSelfTest()
-            && RunRollingUpdateSelfTest();
+            && RunRollingUpdateSelfTest()
+            && RunRollingUpdateWindowChangeSelfTest();
     }
 
     // Old schema: primary = 5h, secondary = 1w, integer percents.
@@ -381,7 +454,9 @@ internal static class RateLimitMapper
             && RowMatches(usage.Rows[0], "5h", 37, isPrimary: true)
             && RowMatches(usage.Rows[1], "7d", 12, isPrimary: true)
             && RowMatches(usage.Rows[2], "Spark 5h", 4, isPrimary: false)
-            && RowMatches(usage.Rows[3], "Spark 7d", 8, isPrimary: false);
+            && RowMatches(usage.Rows[3], "Spark 7d", 8, isPrimary: false)
+            // A plan with a 5h window needs no plan qualifier on its rows.
+            && usage.Rows.All(row => row.Scope is null);
     }
 
     // New schema (codex-cli 0.145.0-alpha.27): weekly-only primary, null secondary,
@@ -429,11 +504,53 @@ internal static class RateLimitMapper
             return false;
         }
 
+        // Weekly only: the main row carries the plan, Spark and Credits do not,
+        // and a plan without a certain display name carries nothing.
+        if (usage.Rows[0].Scope != "Pro" || usage.Rows[1].Scope is not null || usage.Rows[2].Scope is not null)
+        {
+            return false;
+        }
+        using (var unknownPlan = JsonDocument.Parse(sample.Replace(@"""planType"": ""pro""", @"""planType"": ""unknown""")))
+        {
+            if (FromJsonResult(unknownPlan.RootElement, CreditsGauge.DefaultFullAmount).Rows[0] is not { Label: "7d", Scope: null })
+            {
+                return false;
+            }
+        }
+        // An undated window could be the 5h one, so the plan is not named.
+        const string undated = @"
+        {
+          ""rateLimits"": {
+            ""limitId"": ""codex"",
+            ""planType"": ""pro"",
+            ""primary"": { ""usedPercent"": 22 },
+            ""secondary"": { ""usedPercent"": 41, ""windowDurationMins"": 10080 }
+          }
+        }";
+        using (var undatedDoc = JsonDocument.Parse(undated))
+        {
+            if (FromJsonResult(undatedDoc.RootElement, CreditsGauge.DefaultFullAmount).Rows.Any(row => row.Scope is not null))
+            {
+                return false;
+            }
+        }
+
         // The full amount is configurable, so it has to move the gauge: the same
         // balance against 200 credits is 26.9563% spent.
         var rescaled = FromJsonResult(doc.RootElement, 200d);
         if (!RowMatches(rescaled.Rows[2], "Credits", 26.9562938, isPrimary: false)
             || rescaled.Rows[2].DetailText != "146.09 / 200")
+        {
+            return false;
+        }
+
+        if (usage.Rows[2].BeyondFull || rescaled.Rows[2].BeyondFull) return false;
+
+        // A balance past the full amount fills the gauge (0% used) and is
+        // flagged so the popup reads >100%; the footer keeps the real balance.
+        var overfull = FromJsonResult(doc.RootElement, 100d);
+        if (overfull.Rows[2] is not { Label: "Credits", BeyondFull: true, DetailText: "146.09 / 100" }
+            || !RowMatches(overfull.Rows[2], "Credits", 0, isPrimary: false))
         {
             return false;
         }
@@ -473,7 +590,8 @@ internal static class RateLimitMapper
         return usage.Rows.Count == 2
             && NearlyEquals(usage.OverallUsedPercent, 41)
             && RowMatches(usage.Rows[0], "5h", 22, isPrimary: true)
-            && RowMatches(usage.Rows[1], "7d", 41, isPrimary: true);
+            && RowMatches(usage.Rows[1], "7d", 41, isPrimary: true)
+            && usage.Rows.All(row => row.Scope is null);
     }
 
     // The weekly window in primary and the 5h window in secondary, for the main
@@ -617,6 +735,47 @@ internal static class RateLimitMapper
         return usage.Rows.Count == 2
             && RowMatches(usage.Rows[0], "5h", 20, isPrimary: true)
             && RowMatches(usage.Rows[1], "Spark 5h", 6, isPrimary: false);
+    }
+
+    // Updates that bring a window the read did not have, merged into a
+    // weekly-only (Pro-shaped) read.
+    private static bool RunRollingUpdateWindowChangeSelfTest()
+    {
+        using var readDoc = JsonDocument.Parse(@"
+            { ""rateLimits"": { ""limitId"": ""codex"",
+              ""primary"": { ""usedPercent"": 12.5, ""resetsAt"": 1785269431, ""windowDurationMins"": 10080 },
+              ""secondary"": null } }");
+        var lastRead = readDoc.RootElement;
+        var weeklyReset = DateTimeOffset.FromUnixTimeSeconds(1785269431);
+        var fiveHourReset = DateTimeOffset.FromUnixTimeSeconds(1785200000);
+
+        // Both windows at once, the weekly one in the other slot: each keeps its
+        // own reset time, whichever order the properties come in.
+        const string fiveHour = @"""primary"": { ""usedPercent"": 3, ""resetsAt"": 1785200000, ""windowDurationMins"": 300 }";
+        const string weekly = @"""secondary"": { ""usedPercent"": 13, ""resetsAt"": null, ""windowDurationMins"": 10080 }";
+        foreach (var windows in new[] { $"{fiveHour}, {weekly}", $"{weekly}, {fiveHour}" })
+        {
+            var usage = FromJsonResult(MergeRollingUpdate(lastRead, ParseForTest(
+                $@"{{ ""rateLimits"": {{ ""limitId"": ""codex"", {windows} }} }}")), CreditsGauge.DefaultFullAmount);
+            if (usage.Rows.Count != 2
+                || !RowMatches(usage.Rows[0], "5h", 3, isPrimary: true)
+                || usage.Rows[0].Window!.ResetsAt != fiveHourReset
+                || !RowMatches(usage.Rows[1], "7d", 13, isPrimary: true)
+                || usage.Rows[1].Window!.ResetsAt != weeklyReset)
+            {
+                return false;
+            }
+        }
+
+        // A 5h window replacing the weekly one in its slot does not inherit the
+        // weekly reset time.
+        var replaced = FromJsonResult(MergeRollingUpdate(lastRead, ParseForTest(@"
+            { ""rateLimits"": { ""limitId"": ""codex"",
+              ""primary"": { ""usedPercent"": 3, ""resetsAt"": null, ""windowDurationMins"": 300 } } }")),
+            CreditsGauge.DefaultFullAmount);
+        return replaced.Rows.Count == 1
+            && RowMatches(replaced.Rows[0], "5h", 3, isPrimary: true)
+            && replaced.Rows[0].Window!.ResetsAt is null;
     }
 
     private static JsonElement ParseForTest(string json)
