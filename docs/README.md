@@ -18,7 +18,7 @@ The released app is the WinUI 3 project under `app-winui/`. `app/` holds the leg
 dotnet run --project app-winui/QuotaScope.WinUI.csproj
 ```
 
-For the built-in self-tests (Codex and Claude usage mappers, the Claude session renewer, the hotkey parser, row shape resolution, fill-card text contrast, and localization):
+For the built-in self-tests (Codex and Claude usage mappers, the Claude session renewer, the hotkey parser, row shape resolution, usage alerts, fill-card text contrast, and localization):
 
 ```powershell
 dotnet run --project app-winui/QuotaScope.WinUI.csproj -- --self-test
@@ -74,7 +74,11 @@ Defaults:
   "HotkeyRefreshAll": "",
   "HotkeyTogglePin": "",
   "WarningThresholdPercent": 20,
+  "CriticalThresholdPercent": 2.5,
   "NotifyOnThreshold": true,
+  "AlertPoints": [],
+  "RowAlerts": {},
+  "RowAlertPoints": {},
   "FollowSystemTheme": true,
   "ThemeOverride": "Dark",
   "Glassmorphism": false,
@@ -117,6 +121,9 @@ Notes on individual keys:
 - `ThemeOverride` is `Dark`, `Light`, or `Midnight`, and is ignored while `FollowSystemTheme` is on.
 - `GlassStrength` is `Subtle`, `Medium`, `Strong`, or `VeryStrong`, and applies only while `Glassmorphism` is on.
 - `TrayIconStyle` is `UsageArc` or `Glyph`. `GaugeMetric` (`Used` or `Remaining`) drives the popup gauges and the tray arc fill; the tray state colors always key off usage.
+- `WarningThresholdPercent` and `CriticalThresholdPercent` are remaining percentages (warning at 20% left, critical at 2.5% left, which was the fixed critical level before it became a setting). They set the tray icon state and the popup row colors: the theme accent, then warning orange, then critical red.
+- `AlertPoints` lists the remaining percentages that raise a tray notification, e.g. `[80, 60, 40]`; empty means the warning and critical levels. Each row notifies once per point it passes (a jump past several notifies the deepest) and re-arms when it climbs back above a point (usually a window reset). A refresh checks once after every provider has answered, so its alerts share one notification; a Codex update pushed between polls is checked as it arrives. `NotifyOnThreshold` switches the notifications off; the points are still tracked, so switching back on does not replay old ones.
+- `RowAlerts` (`true`/`false`) and `RowAlertPoints` (a points list) are keyed like `RowShapes`. A row without a `RowAlerts` entry is notified only if the provider marks it primary, which includes a Claude per-model limit while it is the active one; Spark, credits and inactive per-model rows stay quiet by default. Rows switched off are still tracked, so switching one on does not replay a point it already passed. `RowAlertPoints` replaces `AlertPoints` for that row.
 - `UiScale` is offered as 80%-150% in the settings window and clamped to 0.7-1.6 when read.
 - `RefreshSeconds` has a 10-second floor for Codex and a 60-second floor for Claude; the poll timer runs at the smallest enabled interval.
 - `AutoRenewSession` is Claude-only. With it off, the app never runs `claude` in the background, and usage stops updating once the 8-hour token expires until a sign-in or reconnect.

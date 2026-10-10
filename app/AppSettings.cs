@@ -25,7 +25,20 @@ internal sealed class AppSettings
     public string Hotkey { get; set; } = "Ctrl+Alt+U";
     public string HotkeyRefreshAll { get; set; } = "";
     public string HotkeyTogglePin { get; set; } = "";
+    // Alert levels and points are remaining percentages, like the original
+    // warning threshold. The warning and critical levels color the tray icon
+    // and the popup rows; 2.5 keeps the critical level the app used to fix at
+    // 97.5% used.
     public int WarningThresholdPercent { get; set; } = 20;
+    public double CriticalThresholdPercent { get; set; } = 2.5;
+    // Notify as a row's remaining capacity passes each of these. Empty means
+    // the warning and critical levels, the notifications the app always gave.
+    public List<double> AlertPoints { get; set; } = new();
+    // Per-row overrides, same key as RowShapes: RowAlerts turns a row's
+    // notifications on or off (absent: on for the provider's primary rows),
+    // RowAlertPoints replaces the global points for that row.
+    public Dictionary<string, bool> RowAlerts { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, List<double>> RowAlertPoints { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public bool FollowSystemTheme { get; set; } = true;
     public string ThemeOverride { get; set; } = "Dark";
     public bool Autostart { get; set; } = false;
@@ -87,6 +100,11 @@ internal sealed class AppSettings
         {
             var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath)) ?? new AppSettings();
             settings.GetProvider("codex");
+            // A hand-edited null would otherwise reach the alert checks that run
+            // on every usage update.
+            settings.AlertPoints ??= new();
+            settings.RowAlerts ??= new(StringComparer.OrdinalIgnoreCase);
+            settings.RowAlertPoints ??= new(StringComparer.OrdinalIgnoreCase);
             return settings;
         }
         catch

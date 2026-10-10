@@ -111,10 +111,16 @@ internal sealed record PopupPalette(
         ? Color.FromArgb(strength.EdgeAlpha, 255, 255, 255)
         : Color.FromArgb((byte)(strength.EdgeAlpha + 24), 255, 255, 255);
 
+    // Row colors follow the same two alert levels as the tray icon (used
+    // percentages here; the settings hold them as remaining). The defaults are
+    // the settings defaults: 20% and 2.5% remaining.
+    public double WarningAtUsed { get; init; } = 80;
+    public double CriticalAtUsed { get; init; } = 97.5;
+
     public Color AccentFor(int usedPercent)
     {
-        if (usedPercent >= 80) return Color.FromArgb(255, 255, 126, 91);
-        if (usedPercent >= 50) return Color.FromArgb(255, 132, 124, 255);
+        if (usedPercent >= CriticalAtUsed) return Color.FromArgb(255, 235, 68, 56);
+        if (usedPercent >= WarningAtUsed) return Color.FromArgb(255, 255, 126, 91);
         return AccentBlue;
     }
 
@@ -135,8 +141,9 @@ internal sealed record PopupPalette(
         {
             if (palette.FillAlpha == 0 || palette.FillEdgeAlpha <= palette.FillAlpha) return false;
 
-            // One value from each side of every band boundary.
-            foreach (var used in new[] { 0, 49, 50, 79, 80, 100 })
+            // One value from each side of every level at the default levels:
+            // the accent, warning orange, and critical red.
+            foreach (var used in new[] { 0, 79, 80, 97, 98, 100 })
             {
                 var filled = Over(palette.FillTint(used), palette.Row);
                 var edge = Over(palette.FillEdge(used), palette.Row);
@@ -145,7 +152,12 @@ internal sealed record PopupPalette(
                 if (ContrastRatio(palette.Text, edge) < 3.0) return false;
             }
         }
-        return true;
+
+        // Moved levels move the colors: warning from 40% used, critical from 90%.
+        var moved = DarkBluePurple with { WarningAtUsed = 40, CriticalAtUsed = 90 };
+        return moved.AccentFor(39) == moved.AccentBlue
+            && moved.AccentFor(40) == Color.FromArgb(255, 255, 126, 91)
+            && moved.AccentFor(90) == Color.FromArgb(255, 235, 68, 56);
     }
 
     // Source-over onto an opaque base, per channel in sRGB space as the

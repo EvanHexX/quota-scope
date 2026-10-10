@@ -24,6 +24,7 @@ internal static class Program
                 && ClaudeSessionRenewer.RunSelfTest()
                 && HotkeyDefinition.RunSelfTest()
                 && RowShapes.RunSelfTest()
+                && UsageAlerts.RunSelfTest()
                 && PopupPalette.RunSelfTest()
                 && Loc.RunSelfTest() ? 0 : 1;
         }

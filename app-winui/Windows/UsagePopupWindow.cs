@@ -448,7 +448,11 @@ internal sealed class UsagePopupWindow
     private void Rebuild()
     {
         var theme = ResolveTheme();
-        var palette = PopupPalette.FromSettings(theme, _settings.Glassmorphism, _settings.GlassStrength);
+        var palette = PopupPalette.FromSettings(theme, _settings.Glassmorphism, _settings.GlassStrength) with
+        {
+            WarningAtUsed = UsageAlerts.WarningAtUsed(_settings),
+            CriticalAtUsed = UsageAlerts.CriticalAtUsed(_settings)
+        };
         _rootBorder.RequestedTheme = string.Equals(theme, "Light", StringComparison.OrdinalIgnoreCase)
             ? ElementTheme.Light
             : ElementTheme.Dark;
