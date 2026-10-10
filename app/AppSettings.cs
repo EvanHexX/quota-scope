@@ -36,7 +36,8 @@ internal sealed class AppSettings
     public List<double> AlertPoints { get; set; } = new();
     // Per-row overrides, same key as RowShapes: RowAlerts turns a row's
     // notifications on or off (absent: on for the provider's primary rows),
-    // RowAlertPoints replaces the global points for that row.
+    // RowAlertPoints replaces the global points for that row. A credits row's
+    // points are amounts of credits left, not percents.
     public Dictionary<string, bool> RowAlerts { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, List<double>> RowAlertPoints { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public bool FollowSystemTheme { get; set; } = true;

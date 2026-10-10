@@ -230,6 +230,12 @@ WinForms app is a separate follow-up task after sign-off.
   each row that passed a point; a pushed Codex update is checked on arrival.
   Settings edits are not checked on their own: the next usage update uses the
   new levels and points, so spinning a level raises at most one notification.
+  A point of 0 is passed once nothing is left. Credits rows take their points
+  in credits left (`UsageRow.CreditsLeft`: the Codex balance, or what is left
+  of Claude's monthly limit, or of the gauge amount when Claude reports none),
+  not percents; unset, they notify at 0. Rows are compared as the popup shows
+  them (whole percents, credits to two decimals), and a thousands separator
+  in an amount is refused because commas separate points.
 - Fallback: if the small tray icon still reads poorly, drop the arc and use a
   fixed glyph with state color only.
 - Update (post-verification): visibility was judged good. Both channels are

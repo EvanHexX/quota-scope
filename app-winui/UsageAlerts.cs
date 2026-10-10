@@ -2,20 +2,29 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using QuotaScope.Providers;
 
 namespace QuotaScope.WinUI;
 
 // One row passing one of its alert points. Remaining is what the row had left
-// when the poll saw it; Critical says it is at or past the critical level.
-internal sealed record UsageAlert(string ProviderId, string ProviderName, UsageRow Row, double Point, double Remaining, bool Critical);
+// when the poll saw it, in the row's unit: a percent, or credits on a credits
+// row. Critical says it is at or past the critical level (credits: none left).
+internal sealed record UsageAlert(string ProviderId, string ProviderName, UsageRow Row, double Point, double Remaining, bool Critical)
+{
+    public bool IsCredits => RowShapes.IsCreditsRow(Row.Label);
+}
 
 // Usage alerts: two levels (warning, critical) that color the tray icon and
-// the popup rows, and any number of notification points per row. Everything is
-// a remaining percentage, like the warning threshold the app started with.
-internal static class UsageAlerts
+// the popup rows, and any number of notification points per row. Points are
+// remaining percentages, like the warning threshold the app started with,
+// except on a credits row: its percent is only relative to the configured
+// gauge amount, so its points are amounts of credits left.
+internal static partial class UsageAlerts
 {
     public const int MaxPoints = 10;
+    // Same ceiling the credits gauge amount accepts.
+    public const double MaxCredits = 1_000_000;
 
     public static double WarningAtUsed(AppSettings settings) => 100d - Math.Clamp(settings.WarningThresholdPercent, 0, 100);
 
@@ -28,10 +37,11 @@ internal static class UsageAlerts
     public static bool IsEnabled(AppSettings settings, string providerId, string label, bool isPrimary) =>
         settings.RowAlerts.TryGetValue(RowShapes.Key(providerId, label), out var enabled) ? enabled : isPrimary;
 
-    public static IReadOnlyList<double> PointsFor(AppSettings settings, string providerId, string label) =>
-        settings.RowAlertPoints.TryGetValue(RowShapes.Key(providerId, label), out var own) && own is { Count: > 0 }
-            ? own
-            : DefaultPoints(settings);
+    public static IReadOnlyList<double> PointsFor(AppSettings settings, string providerId, string label)
+    {
+        if (settings.RowAlertPoints.TryGetValue(RowShapes.Key(providerId, label), out var own) && own is { Count: > 0 }) return own;
+        return RowShapes.IsCreditsRow(label) ? DefaultCreditPoints : DefaultPoints(settings);
+    }
 
     // No points of its own means the warning and critical levels, which is
     // what the single warning notification used to cover.
@@ -40,15 +50,30 @@ internal static class UsageAlerts
             ? settings.AlertPoints
             : new[] { (double)settings.WarningThresholdPercent, settings.CriticalThresholdPercent };
 
+    // The percent levels mean nothing in credits, so a credits row switched on
+    // without points of its own is notified when its credits run out.
+    public static readonly IReadOnlyList<double> DefaultCreditPoints = new[] { 0d };
+
     // "80, 60, 40" (commas, semicolons or spaces; a trailing % is fine) into
-    // distinct points strictly between 0 and 100, highest first. Empty text is
-    // an empty list, which means "use the default". The comma is a separator,
-    // so decimals take a point: "2.5".
-    public static bool TryParsePoints(string? text, out List<double> points, out string? error)
+    // distinct points, highest first: remaining percents from 0 (none left) up
+    // to but excluding 100, or with credits set, amounts of credits from 0.
+    // Empty text is an empty list, which means "use the default". The comma is
+    // a separator, so decimals take a point: "2.5".
+    public static bool TryParsePoints(string? text, bool credits, out List<double> points, out string? error)
     {
         points = new List<double>();
         error = null;
         if (string.IsNullOrWhiteSpace(text)) return true;
+
+        // The comma separates points, so "2,000" would quietly become 2 and 0.
+        // Amounts of credits are the only points that reach thousands; a comma
+        // with three digits after it is refused rather than guessed at.
+        if (credits && ThousandsSeparator().Match(text) is { Success: true } grouped)
+        {
+            error = Loc.T($"\"{grouped.Value}\": write amounts without a thousands separator (e.g. 2000); commas separate points.",
+                          $"\"{grouped.Value}\": 수량은 천 단위 쉼표 없이 적어 주세요(예: 2000). 쉼표는 지점을 나눕니다.");
+            return false;
+        }
 
         foreach (var token in text.Split(new[] { ',', ';', ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries))
         {
@@ -60,10 +85,16 @@ internal static class UsageAlerts
             }
             // Stored as shown: the box writes points back with two decimals.
             value = Math.Round(value, 2);
-            if (value <= 0 || value >= 100)
+            if (credits && (value < 0 || value > MaxCredits))
             {
-                error = Loc.T($"{token}: a point must be greater than 0 and less than 100 (remaining %).",
-                              $"{token}: 지점은 0보다 크고 100보다 작은 남은 양 %여야 합니다.");
+                error = Loc.T($"{token}: a credits point must be from 0 to {MaxCredits:0} credits left.",
+                              $"{token}: 크레딧 지점은 0부터 {MaxCredits:0} 사이의 남은 크레딧 수량이어야 합니다.");
+                return false;
+            }
+            if (!credits && (value < 0 || value >= 100))
+            {
+                error = Loc.T($"{token}: a point must be from 0 up to (not including) 100 (remaining %).",
+                              $"{token}: 지점은 0 이상 100 미만의 남은 양 %여야 합니다.");
                 return false;
             }
             if (!points.Contains(value)) points.Add(value);
@@ -90,9 +121,14 @@ internal static class UsageAlerts
             : Loc.T("Usage warning", "사용량 경고");
         var body = string.Join("\n", alerts.Select(alert =>
         {
+            var name = Loc.RowLabel(alert.ProviderId, alert.Row.Label, alert.Row.Scope);
+            if (alert.IsCredits)
+            {
+                var credits = alert.Remaining.ToString("0.##", CultureInfo.InvariantCulture);
+                return $"{alert.ProviderName} {name} " + Loc.T($"{credits} left", $"{credits} 남음");
+            }
             // Rounded the way the popup and the tooltip round it.
             var left = 100 - (int)Math.Round(100d - alert.Remaining);
-            var name = Loc.RowLabel(alert.ProviderId, alert.Row.Label, alert.Row.Scope);
             return $"{alert.ProviderName} {name} " + Loc.T($"{left}% left", $"{left}% 남음");
         }));
         return (title, body.Length <= 255 ? body : body[..255]);
@@ -100,18 +136,68 @@ internal static class UsageAlerts
 
     public static bool RunSelfTest()
     {
-        if (!TryParsePoints("80, 60,40%", out var parsed, out _) || FormatPoints(parsed) != "80, 60, 40") return false;
-        if (!TryParsePoints("2.5 20;20", out parsed, out _) || FormatPoints(parsed) != "20, 2.5") return false;
-        if (!TryParsePoints("  ", out parsed, out _) || parsed.Count != 0) return false;
-        if (TryParsePoints("80, abc", out _, out _) || TryParsePoints("0", out _, out _) || TryParsePoints("100", out _, out _)) return false;
+        if (!TryParsePoints("80, 60,40%", false, out var parsed, out _) || FormatPoints(parsed) != "80, 60, 40") return false;
+        if (!TryParsePoints("2.5 20;20", false, out parsed, out _) || FormatPoints(parsed) != "20, 2.5") return false;
+        if (!TryParsePoints("  ", false, out parsed, out _) || parsed.Count != 0) return false;
+        if (!TryParsePoints("40, 0", false, out parsed, out _) || FormatPoints(parsed) != "40, 0") return false;
+        if (TryParsePoints("80, abc", false, out _, out _) || TryParsePoints("-1", false, out _, out _)
+            || TryParsePoints("100", false, out _, out _))
+        {
+            return false;
+        }
         // Rounded to what the box shows before the range check: 99.999 is 100.
-        if (!TryParsePoints("33.333", out parsed, out _) || parsed[0] != 33.33
-            || TryParsePoints("99.999", out _, out _) || TryParsePoints("0.001", out _, out _))
+        if (!TryParsePoints("33.333", false, out parsed, out _) || parsed[0] != 33.33 || TryParsePoints("99.999", false, out _, out _))
+        {
+            return false;
+        }
+        // Credits points are amounts: past 100 is fine, below 0 is not.
+        if (!TryParsePoints("500, 1500, 0", true, out parsed, out _) || FormatPoints(parsed) != "1500, 500, 0") return false;
+        if (TryParsePoints("-5", true, out _, out _) || TryParsePoints("2000000", true, out _, out _)) return false;
+
+        return RunTrackerSelfTest() && RunDefaultsSelfTest() && RunEdgeCasesSelfTest() && RunCreditsSelfTest();
+    }
+
+    // Credits rows compare their amount left against points in credits, with
+    // or without a gauge, and default to the moment they run out.
+    private static bool RunCreditsSelfTest()
+    {
+        var settings = new AppSettings();
+        var tracker = new UsageAlertTracker();
+        var key = RowShapes.Key("codex", "Credits");
+        IReadOnlyList<UsageAlert> Step(double left) =>
+            tracker.Evaluate(settings, new[] { Usage(new UsageRow("Credits", null, IsPrimary: false, "--", CreditsLeft: left)) });
+
+        // Off by default, like every non-primary row.
+        if (Step(0).Count != 0) return false;
+        settings.RowAlerts[key] = true;
+        if (Step(600).Count != 0 || Step(0) is not [{ Point: 0, Critical: true }]) return false;
+
+        settings.RowAlertPoints[key] = new List<double> { 500, 0 };
+        if (Step(600).Count != 0) return false;
+        var low = Step(450);
+        if (low is not [{ Point: 500, Critical: false }] || !BuildNotification(low).Body.Contains("450")) return false;
+        if (Step(0) is not [{ Point: 0, Critical: true }]) return false;
+
+        // Compared as shown: a remainder the footer prints as 0 has passed 0.
+        if (Step(600).Count != 0 || Step(0.003) is not [{ Point: 0 }]) return false;
+
+        // A credits row with a gauge but no amount (Claude with no ceiling to
+        // measure against) has nothing to compare and stays quiet.
+        var noAmount = new UsageRow("Credits", Window(99), IsPrimary: false, null);
+        if (tracker.Evaluate(settings, new[] { Usage(noAmount) }).Count != 0) return false;
+
+        // Thousands separators are refused, not split into two points.
+        if (TryParsePoints("2,000", true, out _, out _) || !TryParsePoints("2000, 500", true, out var amounts, out _)
+            || FormatPoints(amounts) != "2000, 500")
         {
             return false;
         }
 
-        return RunTrackerSelfTest() && RunDefaultsSelfTest() && RunEdgeCasesSelfTest();
+        // A percent point of 0 is passed once a window reads as used up.
+        var exhausted = new AppSettings { AlertPoints = new List<double> { 0 } };
+        return new UsageAlertTracker().Evaluate(exhausted, new[] { Usage(new UsageRow("5h", Window(99), IsPrimary: true)) }).Count == 0
+            && new UsageAlertTracker().Evaluate(exhausted, new[] { Usage(new UsageRow("5h", Window(99.7), IsPrimary: true)) })
+                is [{ Point: 0, Critical: true }];
     }
 
     private static bool RunEdgeCasesSelfTest()
@@ -142,7 +228,7 @@ internal static class UsageAlerts
         if (tracker.Evaluate(settings, new[] { twins }).Count != 1 || tracker.Evaluate(settings, new[] { twins }).Count != 0) return false;
 
         // Both providers in one check give one alert each, in one notification;
-        // a text-only row never alerts.
+        // a row with neither a gauge nor a credits amount never alerts.
         var both = new[]
         {
             Usage(new UsageRow("5h", Window(50), IsPrimary: true)),
@@ -211,6 +297,9 @@ internal static class UsageAlerts
 
     private static ProviderUsage Usage(UsageRow row) =>
         new("codex", "Codex", new[] { row }, row.Window?.UsedPercent ?? 0, "", DateTimeOffset.Now, ProviderState.Ok);
+
+    [GeneratedRegex(@"\d,\d{3}(?!\d)")]
+    private static partial Regex ThousandsSeparator();
 }
 
 // Remembers, per row, the deepest point already passed since the row was last
@@ -235,16 +324,34 @@ internal sealed class UsageAlertTracker
         {
             foreach (var row in usage.Rows)
             {
-                if (row.Window is null) continue;
+                // A credits row compares the credits it has left, so it needs
+                // that amount rather than a gauge; every other row its gauge.
+                // Both are compared as the popup shows them (whole percents,
+                // credits to two decimals), so a row reading "0" has passed 0.
+                var credits = RowShapes.IsCreditsRow(row.Label);
+                double remaining;
+                bool critical;
+                if (credits)
+                {
+                    if (row.CreditsLeft is not { } left) continue;
+                    remaining = Math.Round(left, 2);
+                    critical = remaining <= 0;
+                }
+                else
+                {
+                    if (row.Window is null) continue;
+                    var used = Math.Clamp(row.Window.UsedPercent, 0d, 100d);
+                    remaining = 100d - Math.Round(used);
+                    critical = used >= criticalAtUsed;
+                }
                 var key = RowShapes.Key(usage.ProviderId, row.Label);
                 if (!seen.Add(key)) continue;
 
-                var used = Math.Clamp(row.Window.UsedPercent, 0d, 100d);
-                var remaining = 100d - used;
+                // 0 is a point too: it is passed once nothing is left.
                 double? deepest = null;
                 foreach (var point in UsageAlerts.PointsFor(settings, usage.ProviderId, row.Label))
                 {
-                    if (point is > 0 and < 100 && remaining <= point && (deepest is null || point < deepest)) deepest = point;
+                    if (point >= 0 && (credits || point < 100) && remaining <= point && (deepest is null || point < deepest)) deepest = point;
                 }
 
                 if (deepest is not { } passed)
@@ -261,7 +368,7 @@ internal sealed class UsageAlertTracker
                 _notified[key] = passed;
                 if (UsageAlerts.IsEnabled(settings, usage.ProviderId, row.Label, row.IsPrimary))
                 {
-                    alerts.Add(new UsageAlert(usage.ProviderId, usage.DisplayName, row, passed, remaining, used >= criticalAtUsed));
+                    alerts.Add(new UsageAlert(usage.ProviderId, usage.DisplayName, row, passed, remaining, critical));
                 }
             }
         }
