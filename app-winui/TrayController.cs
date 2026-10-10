@@ -405,6 +405,8 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
         finally
         {
             _refreshing = false;
+            // Queued behind the provider updates above, so it sees all of them.
+            _dispatcherQueue.TryEnqueue(CheckAlerts);
         }
     }
 
@@ -456,6 +458,7 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
         finally
         {
             _refreshing = false;
+            _dispatcherQueue.TryEnqueue(CheckAlerts);
         }
     }
 
@@ -477,25 +480,45 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
 
         _usages[usage.ProviderId] = usage;
         ApplyTrayVisuals(CurrentUsages());
+        // A refresh or reconnect checks once after its last provider, so both
+        // providers' alerts share one notification; an update pushed between
+        // polls (a Codex rolling update) is checked as it arrives.
+        if (!_refreshing) CheckAlerts();
     }
 
-    private TrayIconState _lastIconState = TrayIconState.Normal;
+    private readonly UsageAlertTracker _alerts = new();
+
+    // Runs when usage arrives, never on a settings edit: the next update is
+    // checked against the edited levels and points, so spinning a level in
+    // the settings window raises at most one notification.
+    private void CheckAlerts()
+    {
+        if (_disposed) return;
+        try
+        {
+            // Tracked even with notifications off, so switching them on does
+            // not replay every point already passed.
+            var alerts = _alerts.Evaluate(_settings, CurrentUsages());
+            if (_settings.NotifyOnThreshold && alerts.Count > 0)
+            {
+                var (title, body) = UsageAlerts.BuildNotification(alerts);
+                _trayIcon.ShowNotification(title, body);
+            }
+        }
+        catch (Exception ex)
+        {
+            // A bad alert setting must not stop the icon and popup updating.
+            CrashLog.Write("usage-alerts", ex);
+        }
+    }
 
     private void ApplyTrayVisuals(IReadOnlyList<ProviderUsage> usages)
     {
         var overallUsed = usages.Count > 0 ? usages.Max(u => u.OverallUsedPercent) : 0d;
         var anyRateLimited = usages.Any(u => u.State == ProviderState.RateLimited);
-        var state = TrayIconRenderer.ComputeState(overallUsed, _settings.WarningThresholdPercent, anyRateLimited);
+        var state = TrayIconRenderer.ComputeState(
+            overallUsed, _settings.WarningThresholdPercent, anyRateLimited, _settings.CriticalThresholdPercent);
 
-        // Notify once per escalation (Normal -> Warning -> Critical); recovery resets silently.
-        if (_settings.NotifyOnThreshold && state > _lastIconState)
-        {
-            var title = state == TrayIconState.Critical
-                ? Loc.T("Usage critical", "사용량 위험")
-                : Loc.T("Usage warning", "사용량 경고");
-            _trayIcon.ShowNotification(title, TruncateTrayText(BuildTrayText(usages)));
-        }
-        _lastIconState = state;
         var size = TrayIconRenderer.GetNativeIconSize();
         // The arc fill follows the configured gauge metric; state colors always key off usage.
         var fill = string.Equals(_settings.GaugeMetric, "Remaining", StringComparison.OrdinalIgnoreCase)

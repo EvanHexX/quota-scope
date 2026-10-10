@@ -218,6 +218,18 @@ WinForms app is a separate follow-up task after sign-off.
   escalation (Normal -> Warning -> Critical; recovery resets silently),
   controlled by Settings > General > Threshold notification
   (`NotifyOnThreshold`, default on).
+- Update (maintainer, 2026-10-10): alerts moved to their own Settings > Alerts
+  page. The critical level is a setting (`CriticalThresholdPercent`, default
+  2.5% left = the old fixed 97.5% used), and the popup row colors follow the
+  same two levels as the tray icon (accent, warning orange, critical red)
+  instead of the fixed 50%/80% bands. Notifications now come per row from
+  `UsageAlertTracker` (`app-winui/UsageAlerts.cs`): any list of remaining
+  points (`AlertPoints`, e.g. 80, 60, 40; empty = the two levels), per-row
+  on/off and points (`RowAlerts`, `RowAlertPoints`). A refresh is checked once
+  after every provider answered, so its alerts share one notification naming
+  each row that passed a point; a pushed Codex update is checked on arrival.
+  Settings edits are not checked on their own: the next usage update uses the
+  new levels and points, so spinning a level raises at most one notification.
 - Fallback: if the small tray icon still reads poorly, drop the arc and use a
   fixed glyph with state color only.
 - Update (post-verification): visibility was judged good. Both channels are

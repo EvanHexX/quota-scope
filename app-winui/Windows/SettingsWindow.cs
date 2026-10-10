@@ -34,6 +34,9 @@ internal sealed class SettingsWindow
     private readonly IHotkeyConfigurator _hotkeys;
     private readonly Func<IReadOnlyList<UsageRowRef>> _currentRows;
     private readonly NavigationView _nav;
+    // Text boxes that save on Enter or focus loss. Hiding the window or
+    // rebuilding a page moves no focus, so their edits are committed there.
+    private readonly List<Action> _pendingCommits = new();
     private bool _appliedKorean;
 
     public SettingsWindow(
@@ -63,12 +66,14 @@ internal sealed class SettingsWindow
         AddNavItem("General", "");
         AddNavItem("Providers", "");
         AddNavItem("Appearance", "");
+        AddNavItem("Alerts", "");
         AddNavItem("Hotkeys", "");
         AddNavItem("About", "");
         _nav.SelectionChanged += (_, e) =>
         {
             if (e.SelectedItem is NavigationViewItem item && item.Tag is string tag)
             {
+                CommitPendingEdits();
                 _nav.Content = BuildPage(tag);
             }
         };
@@ -89,6 +94,7 @@ internal sealed class SettingsWindow
         _window.AppWindow.Closing += (_, e) =>
         {
             e.Cancel = true;
+            CommitPendingEdits();
             _window.AppWindow.Hide();
         };
 
@@ -120,8 +126,18 @@ internal sealed class SettingsWindow
     {
         if (_nav.SelectedItem is NavigationViewItem item && item.Tag is string tag)
         {
+            CommitPendingEdits();
             _nav.Content = BuildPage(tag);
         }
+    }
+
+    // Taken off the list first: a commit saves, and a save can rebuild the
+    // page, which registers the new page's boxes.
+    private void CommitPendingEdits()
+    {
+        var commits = _pendingCommits.ToArray();
+        _pendingCommits.Clear();
+        foreach (var commit in commits) commit();
     }
 
     // Language changes apply live: retitle the window and the navigation items,
@@ -145,6 +161,7 @@ internal sealed class SettingsWindow
         "General" => Loc.T("General", "일반"),
         "Providers" => Loc.T("Providers", "프로바이더"),
         "Appearance" => Loc.T("Appearance", "모양"),
+        "Alerts" => Loc.T("Alerts", "경고"),
         "Hotkeys" => Loc.T("Hotkeys", "단축키"),
         "About" => Loc.T("About", "정보"),
         _ => tag
@@ -188,6 +205,7 @@ internal sealed class SettingsWindow
     {
         "Providers" => BuildProvidersPage(),
         "Appearance" => BuildAppearancePage(),
+        "Alerts" => BuildAlertsPage(),
         "Hotkeys" => BuildHotkeysPage(),
         "About" => BuildAboutPage(),
         _ => BuildGeneralPage()
@@ -217,7 +235,40 @@ internal sealed class SettingsWindow
             _settings.TimeDisplayMode,
             value => { _settings.TimeDisplayMode = value; Save(SettingsChange.General); });
 
-        var threshold = new NumberBox
+        var language = MakeCombo(
+            new[] { "System", "English", "한국어" },
+            _settings.Language,
+            value => { _settings.Language = value; Save(SettingsChange.General); });
+
+        return Page(Loc.T("General", "일반"),
+            Row(Loc.T("Language", "언어"), Loc.T("Menus and settings text. Reopen this window to fully apply.", "메뉴와 설정 텍스트에 적용됩니다. 완전 적용은 이 창을 다시 여세요."), language),
+            Row(Loc.T("Start with Windows", "Windows 시작 시 자동 실행"), Loc.T("Registers the app in the current user's Run key.", "현재 사용자 Run 레지스트리에 등록합니다."), autostart),
+            Row(Loc.T("Popup position", "팝업 위치"), null, position),
+            Row(Loc.T("Time display", "시간 표시"), Loc.T("Reset times as clock time or remaining time.", "리셋 시각을 시계 시간 또는 남은 시간으로 표시합니다."), timeDisplay));
+    }
+
+    // Two levels that color the tray icon and the popup rows, and the points
+    // that raise tray notifications, globally and per row. Every number is a
+    // remaining percent, like the warning threshold this page grew out of.
+    private UIElement BuildAlertsPage()
+    {
+        var error = new InfoBar
+        {
+            Severity = InfoBarSeverity.Error,
+            Title = Loc.T("Alert points not saved", "알림 지점을 저장하지 않았습니다"),
+            IsOpen = false,
+            IsClosable = true
+        };
+        // Rows without their own points show the defaults as a placeholder,
+        // which the level and point controls below keep current.
+        var rowBoxes = new List<TextBox>();
+        void RefreshPlaceholders()
+        {
+            var text = DefaultPointsPlaceholder();
+            foreach (var box in rowBoxes) box.PlaceholderText = text;
+        }
+
+        var warning = new NumberBox
         {
             Minimum = 1,
             Maximum = 99,
@@ -226,17 +277,33 @@ internal sealed class SettingsWindow
             SmallChange = 5,
             Width = 160
         };
-        threshold.ValueChanged += (_, _) =>
+        warning.ValueChanged += (_, _) =>
         {
-            if (double.IsNaN(threshold.Value)) return;
-            _settings.WarningThresholdPercent = (int)Math.Clamp(threshold.Value, 1, 99);
+            if (double.IsNaN(warning.Value)) return;
+            _settings.WarningThresholdPercent = (int)Math.Clamp(warning.Value, 1, 99);
             Save(SettingsChange.General);
+            RefreshPlaceholders();
         };
 
-        var language = MakeCombo(
-            new[] { "System", "English", "한국어" },
-            _settings.Language,
-            value => { _settings.Language = value; Save(SettingsChange.General); });
+        // At least 0.5: a level of 0 could never be passed, which would
+        // silently drop the critical notification.
+        var critical = new NumberBox
+        {
+            Minimum = 0.5,
+            Maximum = 99,
+            Value = _settings.CriticalThresholdPercent,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
+            SmallChange = 0.5,
+            LargeChange = 5,
+            Width = 160
+        };
+        critical.ValueChanged += (_, _) =>
+        {
+            if (double.IsNaN(critical.Value)) return;
+            _settings.CriticalThresholdPercent = Math.Round(Math.Clamp(critical.Value, 0.5, 99), 1);
+            Save(SettingsChange.General);
+            RefreshPlaceholders();
+        };
 
         var notify = new ToggleSwitch { IsOn = _settings.NotifyOnThreshold };
         notify.Toggled += (_, _) =>
@@ -245,13 +312,184 @@ internal sealed class SettingsWindow
             Save(SettingsChange.General);
         };
 
-        return Page(Loc.T("General", "일반"),
-            Row(Loc.T("Language", "언어"), Loc.T("Menus and settings text. Reopen this window to fully apply.", "메뉴와 설정 텍스트에 적용됩니다. 완전 적용은 이 창을 다시 여세요."), language),
-            Row(Loc.T("Start with Windows", "Windows 시작 시 자동 실행"), Loc.T("Registers the app in the current user's Run key.", "현재 사용자 Run 레지스트리에 등록합니다."), autostart),
-            Row(Loc.T("Popup position", "팝업 위치"), null, position),
-            Row(Loc.T("Time display", "시간 표시"), Loc.T("Reset times as clock time or remaining time.", "리셋 시각을 시계 시간 또는 남은 시간으로 표시합니다."), timeDisplay),
-            Row(Loc.T("Warning threshold", "경고 임계값"), Loc.T("Warn when remaining capacity drops to this percent.", "남은 용량이 이 퍼센트 이하로 떨어지면 경고합니다."), threshold),
-            Row(Loc.T("Threshold notification", "임계값 알림"), Loc.T("Show a tray notification when usage crosses into warning or critical.", "사용량이 경고/위험 단계로 진입하면 트레이 알림을 표시합니다."), notify));
+        var points = PointsBox(
+            _settings.AlertPoints,
+            Loc.T("e.g. 80, 60, 40", "예: 80, 60, 40"),
+            error,
+            parsed =>
+            {
+                if (parsed.SequenceEqual(_settings.AlertPoints)) return;
+                _settings.AlertPoints = parsed;
+                Save(SettingsChange.General);
+                RefreshPlaceholders();
+            });
+
+        return Page(Loc.T("Alerts", "경고"),
+            Row(Loc.T("Warning level", "경고 단계"),
+                Loc.T("Remaining percent at which a popup row turns warning orange. The tray icon follows each provider's main rows.",
+                      "남은 양이 이 % 이하가 되면 팝업 행이 경고(주황)로 바뀝니다. 트레이 아이콘은 프로바이더의 주 행을 따릅니다."),
+                warning),
+            Row(Loc.T("Critical level", "위험 단계"),
+                Loc.T("Remaining percent at which it turns critical red. Keep it below the warning level.",
+                      "남은 양이 이 % 이하가 되면 위험(빨강)으로 바뀝니다. 경고 단계보다 낮게 두세요."),
+                critical),
+            Row(Loc.T("Notifications", "알림"),
+                Loc.T("Show a tray notification when a row passes one of its alert points.",
+                      "행이 알림 지점을 지나면 트레이 알림을 표시합니다."),
+                notify),
+            Row(Loc.T("Alert points", "알림 지점"),
+                Loc.T("Remaining percents to be notified at, e.g. 80, 60, 40. Each row notifies once per point; climbing back above a point (usually a window reset) re-arms it. Leave empty to be notified at the warning and critical levels.",
+                      "알림을 받을 남은 양 %입니다. 예: 80, 60, 40. 행마다 지점별로 한 번씩 알리고, 남은 양이 다시 그 지점 위로 올라가면(보통 한도 초기화) 다시 알립니다. 비우면 경고·위험 단계에서 알립니다."),
+                points),
+            error,
+            BuildRowAlertList(error, rowBoxes));
+    }
+
+    // What a row without its own points is notified at, for its placeholder.
+    private string DefaultPointsPlaceholder() =>
+        Loc.T("Default: ", "기본: ") + UsageAlerts.FormatPoints(UsageAlerts.DefaultPoints(_settings));
+
+    // Parses on Enter, when focus leaves, and when the window hides or the page
+    // is rebuilt; a bad entry is reported and not saved. The error bar is
+    // shared by every box, so only the box that raised it may close it.
+    private TextBox PointsBox(IReadOnlyList<double>? current, string placeholder, InfoBar error, Action<List<double>> apply)
+    {
+        var box = new TextBox
+        {
+            Text = current is { Count: > 0 } ? UsageAlerts.FormatPoints(current) : string.Empty,
+            PlaceholderText = placeholder,
+            Width = 180
+        };
+        void Commit()
+        {
+            if (!UsageAlerts.TryParsePoints(box.Text, out var parsed, out var message))
+            {
+                error.Tag = box;
+                error.Message = message ?? string.Empty;
+                error.IsOpen = true;
+                return;
+            }
+            if (ReferenceEquals(error.Tag, box))
+            {
+                error.Tag = null;
+                error.IsOpen = false;
+            }
+            box.Text = UsageAlerts.FormatPoints(parsed);
+            apply(parsed);
+        }
+        _pendingCommits.Add(Commit);
+        box.LostFocus += (_, _) => Commit();
+        box.KeyDown += (_, e) =>
+        {
+            if (e.Key != global::Windows.System.VirtualKey.Enter) return;
+            e.Handled = true;
+            Commit();
+        };
+        return box;
+    }
+
+    // Every row the providers report: check the ones to be notified for, and
+    // optionally give one its own points. Unchecked rows keep their points.
+    private FrameworkElement BuildRowAlertList(InfoBar error, List<TextBox> rowBoxes)
+    {
+        var panel = new StackPanel { Spacing = 8, Padding = new Thickness(16, 12, 16, 14) };
+        panel.Children.Add(new TextBlock { Text = Loc.T("Alerts per row", "행별 알림"), FontSize = 14 });
+        panel.Children.Add(MutedText(Loc.T(
+            "Checked rows are notified; by default only each provider's main rows are. Points typed for a row replace the ones above for that row.",
+            "체크한 행만 알림을 받으며, 기본값은 프로바이더의 주 행만 켜져 있습니다. 행에 지점을 따로 적으면 그 행은 위 설정 대신 그 값을 씁니다.")));
+
+        var rows = _currentRows();
+        if (rows.Count == 0)
+        {
+            panel.Children.Add(MutedText(Loc.T(
+                "No rows yet. Open the popup once so providers report their rows.",
+                "아직 표시할 행이 없습니다. 팝업을 한 번 열어 프로바이더 행을 받아오세요.")));
+        }
+
+        var placeholder = DefaultPointsPlaceholder();
+        foreach (var providerId in rows.Select(r => r.ProviderId).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var providerRows = RowShapes.Order(
+                _settings, providerId, rows.Where(r => r.ProviderId.Equals(providerId, StringComparison.OrdinalIgnoreCase)), r => r.Label);
+            panel.Children.Add(new TextBlock
+            {
+                Text = providerRows[0].ProviderName,
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
+                Opacity = 0.8,
+                Margin = new Thickness(0, 6, 0, 0)
+            });
+
+            foreach (var rowRef in providerRows)
+            {
+                var key = RowShapes.Key(rowRef.ProviderId, rowRef.Label);
+                var check = new CheckBox
+                {
+                    IsChecked = UsageAlerts.IsEnabled(_settings, rowRef.ProviderId, rowRef.Label, rowRef.IsPrimary),
+                    MinWidth = 0,
+                    Margin = new Thickness(0, 0, 10, 0),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                var box = PointsBox(
+                    _settings.RowAlertPoints.TryGetValue(key, out var own) ? own : null,
+                    placeholder,
+                    error,
+                    parsed =>
+                    {
+                        var stored = _settings.RowAlertPoints.TryGetValue(key, out var existing) ? existing : new List<double>();
+                        if (parsed.SequenceEqual(stored)) return;
+                        if (parsed.Count == 0) _settings.RowAlertPoints.Remove(key);
+                        else _settings.RowAlertPoints[key] = parsed;
+                        Save(SettingsChange.General);
+                    });
+                box.IsEnabled = check.IsChecked == true;
+                rowBoxes.Add(box);
+                void Apply()
+                {
+                    _settings.RowAlerts[key] = check.IsChecked == true;
+                    box.IsEnabled = check.IsChecked == true;
+                    Save(SettingsChange.General);
+                }
+                check.Checked += (_, _) => Apply();
+                check.Unchecked += (_, _) => Apply();
+
+                var line = new Grid { MinHeight = 40 };
+                line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var label = new TextBlock
+                {
+                    Text = Loc.RowLabel(rowRef.ProviderId, rowRef.Label, rowRef.Scope),
+                    FontSize = 13,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    TextTrimming = TextTrimming.CharacterEllipsis
+                };
+                box.VerticalAlignment = VerticalAlignment.Center;
+                Grid.SetColumn(check, 0);
+                Grid.SetColumn(label, 1);
+                Grid.SetColumn(box, 2);
+                line.Children.Add(check);
+                line.Children.Add(label);
+                line.Children.Add(box);
+                panel.Children.Add(line);
+            }
+        }
+
+        var card = new Border
+        {
+            Child = panel,
+            CornerRadius = new CornerRadius(6),
+            BorderThickness = new Thickness(1)
+        };
+        if (Application.Current.Resources.TryGetValue("CardBackgroundFillColorDefaultBrush", out var bg) && bg is Brush bgBrush)
+        {
+            card.Background = bgBrush;
+        }
+        if (Application.Current.Resources.TryGetValue("CardStrokeColorDefaultBrush", out var stroke) && stroke is Brush strokeBrush)
+        {
+            card.BorderBrush = strokeBrush;
+        }
+        return card;
     }
 
     private UIElement BuildProvidersPage()

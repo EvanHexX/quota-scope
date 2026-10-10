@@ -16,6 +16,7 @@
 - global hotkey native window -> `app-winui/Hotkeys/HotkeyWindow.cs`
 - hotkey capture control -> `app-winui/Controls/HotkeyCaptureBox.cs`
 - row shape/order/visibility resolution -> `app-winui/RowShapes.cs`
+- usage alert levels, points, and per-row notification tracking -> `app-winui/UsageAlerts.cs`
 - EN/KO localization helper -> `app-winui/Loc.cs`
 - start-with-Windows registration -> `app-winui/Autostart.cs`
 - Claude login terminal launcher -> `app-winui/ClaudeLoginLauncher.cs`
