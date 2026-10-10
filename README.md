@@ -44,7 +44,7 @@ The build is self-contained: no .NET or Windows App SDK runtime install is requi
 - Optional secondary rows (GPT-5.3-Codex-Spark 5h and weekly, Claude per-model windows) and credits rows for both providers
 - Credits render as a gauge against a per-provider full amount (2500 by default, configurable), since neither provider reports a ceiling; an amount past it reads `>100%` on the metric where the gauge is full (Remaining for a Codex balance, Used for Claude spend; the other metric shows 0%), and the Codex footer still shows the real balance
 - Tray icon signals overall usage with an arc fill (5% steps) and a 3-level state color; the hover tooltip lists how much quota is left per window, and full numbers live in the popup
-- Usage alerts: warning and critical levels color the tray icon and the popup rows, and tray notifications fire at remaining-percent points you list (e.g. `80, 60, 40`), for all rows or per row
+- Usage alerts: warning and critical levels color the tray icon and the popup rows, and tray notifications fire at remaining-percent points you list (e.g. `80, 60, 40, 0`), for all rows or per row; credits rows take amounts of credits left instead (e.g. `500, 0`)
 - Layout: bars, gauges, fill, or mix & match with a per-row shape, and a column count that applies to every shape theme
 - Fill is the compact shape: a two-line card whose own background fills up to the percentage, so a row skips the separate bar line
 - Themes: Dark, Light, Midnight, optional system-theme following, and glassmorphism with four strength levels
@@ -98,7 +98,7 @@ Everything is configured in the settings window (tray icon → `Settings…`), a
 - **General**: language, start with Windows, popup position (including "last position"), time display
 - **Providers**: per-provider enable, refresh interval, secondary rows, credits row, Codex command, Claude credential status, Claude session auto-renew, reconnect
 - **Appearance**: shape theme (bars / gauges / fill / mix & match), per-row shapes and column count, UI scale, theme, glassmorphism and its strength, tray icon style, gauge metric
-- **Alerts**: warning and critical levels (remaining %), tray notifications on/off, alert points (e.g. `80, 60, 40`; empty = the two levels), and per-row notification on/off with optional points of its own
+- **Alerts**: warning and critical levels (remaining %), tray notifications on/off, alert points (e.g. `80, 60, 40`, where `0` means used up; empty = the two levels), and per-row notification on/off with optional points of its own (credits rows in credits left)
 - **Hotkeys**: toggle popup, refresh all, toggle pin — press a combination to bind; conflicts are reported inline and never saved silently
 - **About**: version, disclaimer, repository link
 
