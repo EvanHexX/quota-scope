@@ -54,9 +54,14 @@ internal static class TrayIconRenderer
         _ => 16
     };
 
-    public static TrayIconState ComputeState(double overallUsedPercent, int warningThresholdRemainingPercent, bool anyRateLimited)
+    // Both levels are remaining percentages. The critical default is the level
+    // the app fixed before it became a setting.
+    public static TrayIconState ComputeState(
+        double overallUsedPercent, int warningThresholdRemainingPercent, bool anyRateLimited,
+        double criticalThresholdRemainingPercent = 2.5)
     {
-        if (anyRateLimited || overallUsedPercent >= 97.5) return TrayIconState.Critical;
+        var criticalAtUsed = 100 - Math.Clamp(criticalThresholdRemainingPercent, 0, 100);
+        if (anyRateLimited || overallUsedPercent >= criticalAtUsed) return TrayIconState.Critical;
         var warningAtUsed = 100 - Math.Clamp(warningThresholdRemainingPercent, 0, 100);
         return overallUsedPercent >= warningAtUsed ? TrayIconState.Warning : TrayIconState.Normal;
     }
