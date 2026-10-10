@@ -276,12 +276,15 @@ internal static class RateLimitMapper
     // The balance is what is left and carries no ceiling, so the gauge needs the
     // configured full amount. Unlimited credits have no meaningful fill, and a
     // balance that will not parse has no number to draw: both stay text-only.
+    // A parsed balance still carries its amount, which alerts compare against
+    // with or without a gauge.
     private static UsageRow BuildCreditsRow(CodexCredits credits, double fullAmount)
     {
-        if (credits.Unlimited || !CreditsGauge.HasUsableCeiling(fullAmount)
-            || !decimal.TryParse(credits.Balance, NumberStyles.Number, CultureInfo.InvariantCulture, out var balance))
+        var parsed = decimal.TryParse(credits.Balance, NumberStyles.Number, CultureInfo.InvariantCulture, out var balance);
+        if (credits.Unlimited || !CreditsGauge.HasUsableCeiling(fullAmount) || !parsed)
         {
-            return new UsageRow("Credits", null, IsPrimary: false, FormatCredits(credits));
+            return new UsageRow("Credits", null, IsPrimary: false, FormatCredits(credits),
+                CreditsLeft: !credits.Unlimited && parsed ? (double)balance : null);
         }
 
         var remaining = (double)balance;
@@ -290,7 +293,8 @@ internal static class RateLimitMapper
             new RateLimitWindow(CreditsGauge.UsedPercentFromBalance(remaining, fullAmount), null, null),
             IsPrimary: false,
             CreditsGauge.FormatRemaining(remaining, fullAmount),
-            BeyondFull: CreditsGauge.BalanceBeyondFull(remaining, fullAmount));
+            BeyondFull: CreditsGauge.BalanceBeyondFull(remaining, fullAmount),
+            CreditsLeft: remaining);
     }
 
     private static string FormatCredits(CodexCredits credits)
@@ -557,8 +561,21 @@ internal static class RateLimitMapper
 
         // A full amount of zero has no denominator to divide by; the row falls
         // back to the plain balance instead of dividing by zero.
+        // Unlimited credits have nothing to run out of: no amount to alert on.
+        using (var unlimited = JsonDocument.Parse(sample.Replace(@"""unlimited"": false", @"""unlimited"": true")))
+        {
+            if (FromJsonResult(unlimited.RootElement, CreditsGauge.DefaultFullAmount).Rows[2]
+                is not { Label: "Credits", Window: null, DetailText: "unlimited", CreditsLeft: null })
+            {
+                return false;
+            }
+        }
+
+        // Either way the row carries the real balance for credits alerts.
         var unscaled = FromJsonResult(doc.RootElement, 0d);
-        return unscaled.Rows[2] is { Label: "Credits", Window: null, DetailText: "146.09" };
+        return unscaled.Rows[2] is { Label: "Credits", Window: null, DetailText: "146.09" }
+            && NearlyEquals(unscaled.Rows[2].CreditsLeft ?? -1, 146.0874125)
+            && NearlyEquals(overfull.Rows[2].CreditsLeft ?? -1, 146.0874125);
     }
 
     // Non-Pro plans (Plus) report a 5h window next to the weekly one, like

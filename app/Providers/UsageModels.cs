@@ -22,14 +22,18 @@ internal sealed record RateLimitWindow(double UsedPercent, DateTimeOffset? Reset
 // shown before the window name (Codex's plan on a weekly-only account).
 // BeyondFull marks a credits row whose real amount lies past the configured
 // full amount (a Codex balance above it, Claude spend beyond it): the gauge is
-// clamped full, so the percent text has to say there is more.
+// clamped full, so the percent text has to say there is more. CreditsLeft is a
+// credits row's amount left, which credits alerts compare against: the Codex
+// balance (even with no gauge to draw), or what is left of the ceiling Claude
+// spend is drawn against.
 internal sealed record UsageRow(
     string Label,
     RateLimitWindow? Window,
     bool IsPrimary,
     string? DetailText = null,
     string? Scope = null,
-    bool BeyondFull = false);
+    bool BeyondFull = false,
+    double? CreditsLeft = null);
 
 internal sealed record ProviderUsage(
     string ProviderId,
