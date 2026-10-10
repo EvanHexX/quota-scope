@@ -148,9 +148,9 @@ internal static class ClaudeUsageMapper
         // the payload can report a utilization with no used_credits at all, and
         // the two can disagree. A footer that contradicts its own bar is worse
         // than no footer.
-        var detail = hasCeiling
-            ? CreditsGauge.FormatRemaining(ceiling * (1d - usedPercent / 100d), ceiling)
-            : null;
+        // What credits alerts compare against, and what the footer prints.
+        double? left = hasCeiling ? ceiling * (1d - usedPercent / 100d) : null;
+        var detail = left is { } amount ? CreditsGauge.FormatRemaining(amount, ceiling) : null;
         // Spend past the ceiling clamps the gauge full; the flag lets the
         // percent read >100% rather than claim the spend stopped at 100%.
         var beyondFull = utilization.HasValue
@@ -158,7 +158,8 @@ internal static class ClaudeUsageMapper
             : CreditsGauge.SpendBeyondFull(spent, ceiling);
 
         rows.Add(new UsageRow(
-            "Credits", new RateLimitWindow(usedPercent, null, null), IsPrimary: false, detail, BeyondFull: beyondFull));
+            "Credits", new RateLimitWindow(usedPercent, null, null), IsPrimary: false, detail,
+            BeyondFull: beyondFull, CreditsLeft: left));
     }
 
     private static double ComputeOverallUsed(List<UsageRow> rows)
@@ -250,6 +251,10 @@ internal static class ClaudeUsageMapper
             var row = FromJson(doc.RootElement, CreditsGauge.DefaultFullAmount).Rows[^1];
             if (row.Label != "Credits" || row.DetailText != "1000 / 2500") return false;
             if (row.Window is null || !NearlyEquals(row.Window.UsedPercent, 60)) return false;
+            // Credits alerts compare the same amount the footer prints; with no
+            // limit and no gauge amount there is nothing to measure against.
+            if (!NearlyEquals(row.CreditsLeft ?? -1, 1000)) return false;
+            if (FromJson(doc.RootElement, 0d).Rows[^1] is not { Window: not null, CreditsLeft: null }) return false;
         }
 
         const string conflicting = @"
@@ -292,7 +297,8 @@ internal static class ClaudeUsageMapper
             var within = FromJson(doc.RootElement, CreditsGauge.DefaultFullAmount).Rows[^1];
             var past = FromJson(doc.RootElement, 1000d).Rows[^1];
             return within is { BeyondFull: false, DetailText: "1300 / 2500" }
-                && past is { BeyondFull: true, DetailText: "0 / 1000" }
+                && NearlyEquals(within.CreditsLeft ?? -1, 1300)
+                && past is { BeyondFull: true, DetailText: "0 / 1000", CreditsLeft: 0d }
                 && past.Window is not null
                 && NearlyEquals(past.Window.UsedPercent, 100);
         }

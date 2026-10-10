@@ -285,11 +285,10 @@ internal sealed class SettingsWindow
             RefreshPlaceholders();
         };
 
-        // At least 0.5: a level of 0 could never be passed, which would
-        // silently drop the critical notification.
+        // 0 means "only once nothing is left": a point of 0 is passed then.
         var critical = new NumberBox
         {
-            Minimum = 0.5,
+            Minimum = 0,
             Maximum = 99,
             Value = _settings.CriticalThresholdPercent,
             SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
@@ -300,7 +299,7 @@ internal sealed class SettingsWindow
         critical.ValueChanged += (_, _) =>
         {
             if (double.IsNaN(critical.Value)) return;
-            _settings.CriticalThresholdPercent = Math.Round(Math.Clamp(critical.Value, 0.5, 99), 1);
+            _settings.CriticalThresholdPercent = Math.Round(Math.Clamp(critical.Value, 0, 99), 1);
             Save(SettingsChange.General);
             RefreshPlaceholders();
         };
@@ -315,6 +314,7 @@ internal sealed class SettingsWindow
         var points = PointsBox(
             _settings.AlertPoints,
             Loc.T("e.g. 80, 60, 40", "예: 80, 60, 40"),
+            credits: false,
             error,
             parsed =>
             {
@@ -338,8 +338,8 @@ internal sealed class SettingsWindow
                       "행이 알림 지점을 지나면 트레이 알림을 표시합니다."),
                 notify),
             Row(Loc.T("Alert points", "알림 지점"),
-                Loc.T("Remaining percents to be notified at, e.g. 80, 60, 40. Each row notifies once per point; climbing back above a point (usually a window reset) re-arms it. Leave empty to be notified at the warning and critical levels.",
-                      "알림을 받을 남은 양 %입니다. 예: 80, 60, 40. 행마다 지점별로 한 번씩 알리고, 남은 양이 다시 그 지점 위로 올라가면(보통 한도 초기화) 다시 알립니다. 비우면 경고·위험 단계에서 알립니다."),
+                Loc.T("Remaining percents to be notified at, e.g. 80, 60, 40; 0 means once nothing is left. Each row notifies once per point; climbing back above a point (usually a window reset) re-arms it. Leave empty to be notified at the warning and critical levels. Credits rows take amounts of credits instead, below.",
+                      "알림을 받을 남은 양 %입니다. 예: 80, 60, 40. 0은 다 쓴 순간입니다. 행마다 지점별로 한 번씩 알리고, 남은 양이 다시 그 지점 위로 올라가면(보통 한도 초기화) 다시 알립니다. 비우면 경고·위험 단계에서 알립니다. 크레딧 행은 아래에서 크레딧 수량으로 따로 정합니다."),
                 points),
             error,
             BuildRowAlertList(error, rowBoxes));
@@ -352,7 +352,8 @@ internal sealed class SettingsWindow
     // Parses on Enter, when focus leaves, and when the window hides or the page
     // is rebuilt; a bad entry is reported and not saved. The error bar is
     // shared by every box, so only the box that raised it may close it.
-    private TextBox PointsBox(IReadOnlyList<double>? current, string placeholder, InfoBar error, Action<List<double>> apply)
+    private TextBox PointsBox(
+        IReadOnlyList<double>? current, string placeholder, bool credits, InfoBar error, Action<List<double>> apply)
     {
         var box = new TextBox
         {
@@ -362,7 +363,7 @@ internal sealed class SettingsWindow
         };
         void Commit()
         {
-            if (!UsageAlerts.TryParsePoints(box.Text, out var parsed, out var message))
+            if (!UsageAlerts.TryParsePoints(box.Text, credits, out var parsed, out var message))
             {
                 error.Tag = box;
                 error.Message = message ?? string.Empty;
@@ -395,8 +396,8 @@ internal sealed class SettingsWindow
         var panel = new StackPanel { Spacing = 8, Padding = new Thickness(16, 12, 16, 14) };
         panel.Children.Add(new TextBlock { Text = Loc.T("Alerts per row", "행별 알림"), FontSize = 14 });
         panel.Children.Add(MutedText(Loc.T(
-            "Checked rows are notified; by default only each provider's main rows are. Points typed for a row replace the ones above for that row.",
-            "체크한 행만 알림을 받으며, 기본값은 프로바이더의 주 행만 켜져 있습니다. 행에 지점을 따로 적으면 그 행은 위 설정 대신 그 값을 씁니다.")));
+            "Checked rows are notified; by default only each provider's main rows are. Points typed for a row replace the ones above for that row. A credits row takes amounts of credits left (e.g. 500, 200, 0), written without thousands separators: the Codex balance, or what is left of Claude's monthly limit (of the gauge amount when Claude reports none). Empty means when it runs out.",
+            "체크한 행만 알림을 받으며, 기본값은 프로바이더의 주 행만 켜져 있습니다. 행에 지점을 따로 적으면 그 행은 위 설정 대신 그 값을 씁니다. 크레딧 행은 남은 크레딧 수량을 천 단위 쉼표 없이 적습니다(예: 500, 200, 0). Codex는 실제 잔액, Claude는 월 한도(보고하지 않으면 게이지 기준량)에서 남은 양과 비교합니다. 비우면 크레딧을 다 쓴 순간 알립니다.")));
 
         var rows = _currentRows();
         if (rows.Count == 0)
@@ -430,9 +431,15 @@ internal sealed class SettingsWindow
                     Margin = new Thickness(0, 0, 10, 0),
                     VerticalAlignment = VerticalAlignment.Center
                 };
+                // A credits row's points are credits left, not percents, so it
+                // has its own default and is left out of the percent refresh.
+                var credits = RowShapes.IsCreditsRow(rowRef.Label);
                 var box = PointsBox(
                     _settings.RowAlertPoints.TryGetValue(key, out var own) ? own : null,
-                    placeholder,
+                    credits
+                        ? Loc.T("Credits left, default: ", "남은 크레딧, 기본: ") + UsageAlerts.FormatPoints(UsageAlerts.DefaultCreditPoints)
+                        : placeholder,
+                    credits,
                     error,
                     parsed =>
                     {
@@ -443,7 +450,7 @@ internal sealed class SettingsWindow
                         Save(SettingsChange.General);
                     });
                 box.IsEnabled = check.IsChecked == true;
-                rowBoxes.Add(box);
+                if (!credits) rowBoxes.Add(box);
                 void Apply()
                 {
                     _settings.RowAlerts[key] = check.IsChecked == true;
