@@ -21,6 +21,7 @@
 - start-with-Windows registration -> `app-winui/Autostart.cs`
 - Claude login terminal launcher -> `app-winui/ClaudeLoginLauncher.cs`
 - crash logging -> `app-winui/CrashLog.cs`
+- graphics adapter change detection (self-restart, microsoft-ui-xaml#10844) -> `app-winui/GraphicsAdapters.cs`
 - platform workarounds and popup chrome notes -> `docs/WINUI3_PARITY.md`
 
 ## Shared (두 project가 모두 compile, file은 `app/` 아래)

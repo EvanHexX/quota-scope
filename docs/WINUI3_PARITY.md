@@ -61,6 +61,43 @@ WinForms app is a separate follow-up task after sign-off.
   settings window while the popup is hidden. This was the cause of the
   "silent exit with settings open" reports; only the tray Exit menu calls
   `Application.Exit()`.
+- Graphics adapter changes restart the app (maintainer, 2026-10-11). See
+  "Regression notes" below.
+
+## Regression notes
+
+### Blank or half-drawn windows after a graphics driver update
+
+- Symptom (seen on the maintainer's PC): after an NVIDIA driver update, the
+  running app's Usage popup came up nearly black, with only a few divider
+  lines faintly visible and no text. A settings window opened afterwards in
+  the same process drew only in part: the selected navigation item lost its
+  text, and pages drew or failed to draw as the selection moved. Some parts
+  came back on their own after a while, unreliably. A new process draws
+  correctly.
+- Cause: WinUI 3 bug
+  [microsoft-ui-xaml#10844](https://github.com/microsoft/microsoft-ui-xaml/issues/10844).
+  When a display adapter is added (driver install or update, adapter disabled
+  and re-enabled in Device Manager), a running WinUI 3 app loses text, images
+  and backgrounds. Redrawing or creating new windows in the same process does
+  not fully recover; restarting the process does.
+- Fix: `app-winui/GraphicsAdapters.cs` keeps a DXGI factory created at start
+  (`CreateDXGIFactory1`) and asks `IDXGIFactory1::IsCurrent()` every 30 s from
+  the tray controller. Once it answers false, the change is logged to
+  `crash.log`, and the app restarts itself: settings saved (a half-typed
+  settings box committed, the popup's position saved by hiding it), then
+  `QuotaScopeWinUI.exe --restart-after <pid> graphics [popup]` and the normal
+  Exit path. The new process waits up to 15 s for the old one before the
+  single-instance mutex check, reopens the popup if it was open, and records
+  alert points rows have already passed without notifying them again. A
+  restart waits 10 s after a tray notification, which would otherwise vanish
+  with the icon. It runs at most once per process.
+- Reproducing it is hard: a graphics driver reset (Win+Ctrl+Shift+B) does
+  not trigger it. It needs a real driver update or an adapter disabled and
+  re-enabled. To exercise the restart without one, start the app with
+  `QUOTASCOPE_SIMULATE_ADAPTER_CHANGE=1`: it restarts once within 30 s, and
+  the restarted instance ignores the variable. The headless `--self-test`
+  checks that the DXGI factory can be created and reports no change.
 
 ## Popup window chrome
 

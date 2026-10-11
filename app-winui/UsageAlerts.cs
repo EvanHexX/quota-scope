@@ -241,6 +241,16 @@ internal static partial class UsageAlerts
         var alerts = tracker.Evaluate(settings, both);
         if (alerts.Count != 2 || BuildNotification(alerts).Body.Split('\n').Length != 2) return false;
 
+        // After a self-restart, a point already passed is recorded, not
+        // notified again; a deeper one passed later still is.
+        var twoPoints = new AppSettings { AlertPoints = new List<double> { 60, 20 } };
+        var restarted = new UsageAlertTracker(silentFirstSight: true);
+        if (restarted.Evaluate(twoPoints, new[] { weekly }).Count != 0) return false;
+        if (restarted.Evaluate(twoPoints, new[] { Usage(new UsageRow("7d", Window(90), IsPrimary: true)) }) is not [{ Point: 20 }])
+        {
+            return false;
+        }
+
         // A custom point past the critical level is reported as critical.
         var deep = new AppSettings { AlertPoints = new List<double> { 1 } };
         return new UsageAlertTracker().Evaluate(deep, new[] { Usage(new UsageRow("5h", Window(99.5), IsPrimary: true)) })
@@ -311,6 +321,13 @@ internal static partial class UsageAlerts
 internal sealed class UsageAlertTracker
 {
     private readonly Dictionary<string, double> _notified = new(StringComparer.OrdinalIgnoreCase);
+    // A process that restarted itself (graphics adapters changed) lost the
+    // state above, so the points each row has already passed are recorded on
+    // first sight instead of being notified a second time.
+    private readonly bool _silentFirstSight;
+    private readonly HashSet<string> _observed = new(StringComparer.OrdinalIgnoreCase);
+
+    public UsageAlertTracker(bool silentFirstSight = false) => _silentFirstSight = silentFirstSight;
 
     public IReadOnlyList<UsageAlert> Evaluate(AppSettings settings, IEnumerable<ProviderUsage> usages)
     {
@@ -346,6 +363,7 @@ internal sealed class UsageAlertTracker
                 }
                 var key = RowShapes.Key(usage.ProviderId, row.Label);
                 if (!seen.Add(key)) continue;
+                var firstSight = _silentFirstSight && _observed.Add(key);
 
                 // 0 is a point too: it is passed once nothing is left.
                 double? deepest = null;
@@ -366,7 +384,7 @@ internal sealed class UsageAlertTracker
                 }
 
                 _notified[key] = passed;
-                if (UsageAlerts.IsEnabled(settings, usage.ProviderId, row.Label, row.IsPrimary))
+                if (!firstSight && UsageAlerts.IsEnabled(settings, usage.ProviderId, row.Label, row.IsPrimary))
                 {
                     alerts.Add(new UsageAlert(usage.ProviderId, usage.DisplayName, row, passed, remaining, critical));
                 }

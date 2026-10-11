@@ -90,6 +90,8 @@ For UI, tray, hotkey, or popup changes, report a manual Windows smoke-test check
 
 If a command fails, report the exact failure. Do not claim verification that was not actually run.
 
+Keep the graphics-adapter self-restart working (`app-winui/GraphicsAdapters.cs`, `TrayController.CheckGraphicsAdapters`, `--restart-after` in `Program.cs`): WinUI 3 cannot redraw after a driver update (microsoft-ui-xaml#10844), so anything new that lives only in memory must survive or be re-created after that restart. See "Regression notes" in `docs/WINUI3_PARITY.md`.
+
 ## Modernization policy
 
 `docs/MODERNIZATION_PLAN.md` and `docs/PUBLIC_RELEASE_STATUS.md` are historical records of how the app reached its current shape. Read them for background, not as current instructions: their "current state" sections still describe the pre-WinUI Windows Forms app.
