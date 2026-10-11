@@ -132,8 +132,9 @@ internal sealed class SettingsWindow
     }
 
     // Taken off the list first: a commit saves, and a save can rebuild the
-    // page, which registers the new page's boxes.
-    private void CommitPendingEdits()
+    // page, which registers the new page's boxes. Also called by the tray
+    // before it restarts itself, so a half-typed box is not lost.
+    public void CommitPendingEdits()
     {
         var commits = _pendingCommits.ToArray();
         _pendingCommits.Clear();

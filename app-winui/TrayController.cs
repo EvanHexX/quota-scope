@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -71,6 +72,85 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
         _timer.Tick += async (_, _) => await RefreshAsync().ConfigureAwait(false);
         _timer.Start();
         _ = RefreshAsync();
+
+        _adapters = GraphicsAdapters.TryCreate(allowSimulation: !Program.RestartedForGraphics);
+        if (_adapters is not null)
+        {
+            _adapterTimer = _dispatcherQueue.CreateTimer();
+            _adapterTimer.Interval = TimeSpan.FromSeconds(30);
+            _adapterTimer.IsRepeating = true;
+            _adapterTimer.Tick += (_, _) => CheckGraphicsAdapters();
+            _adapterTimer.Start();
+        }
+        if (Program.ReopenPopup)
+        {
+            _dispatcherQueue.TryEnqueue(TogglePopup);
+        }
+    }
+
+    // ----- graphics adapter changes (microsoft-ui-xaml#10844) -----
+
+    private readonly GraphicsAdapters? _adapters;
+    private readonly DispatcherQueueTimer? _adapterTimer;
+    private bool _adaptersChangeLogged;
+    private int _graphicsRestarting;
+    private DateTimeOffset _lastNotificationAt = DateTimeOffset.MinValue;
+    // A tray notification goes away with the icon, so a restart waits until
+    // one just shown has had time to be read.
+    private static readonly TimeSpan NotificationGrace = TimeSpan.FromSeconds(10);
+
+    // On the UI thread every 30 s. A driver update leaves this process's
+    // windows blank or half drawn for good, so once the adapters changed it
+    // restarts, after any notification it just showed.
+    private void CheckGraphicsAdapters()
+    {
+        if (_disposed || _adapters is null) return;
+        try
+        {
+            if (!_adaptersChangeLogged)
+            {
+                if (!_adapters.Changed()) return;
+                _adaptersChangeLogged = true;
+                CrashLog.Write("graphics-adapters", new InvalidOperationException(
+                    "Graphics adapters changed (a driver update?); restarting so the windows draw again (microsoft-ui-xaml#10844)."));
+            }
+            if (DateTimeOffset.Now - _lastNotificationAt < NotificationGrace) return;
+            if (Interlocked.Exchange(ref _graphicsRestarting, 1) == 1) return;
+            RestartForGraphics();
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("graphics-adapters", ex);
+        }
+    }
+
+    // Everything worth keeping is on disk before the new process starts:
+    // settings (the popup's last position is saved when it hides, and any
+    // half-typed settings box is committed). Usage is simply read again.
+    private void RestartForGraphics()
+    {
+        if (_disposed || Environment.ProcessPath is not { } exe) return;
+        var popupOpen = _popup?.Visible == true;
+        _settingsWindow?.CommitPendingEdits();
+        _popup?.Hide();
+        _settings.Save();
+        try
+        {
+            var arguments = $"--restart-after {Environment.ProcessId} graphics" + (popupOpen ? " popup" : "");
+            Process.Start(new ProcessStartInfo(exe, arguments) { UseShellExecute = false });
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("graphics-adapters-restart", ex);
+            return;
+        }
+        ExitApplication();
+    }
+
+    private void ShowNotification(string title, string message)
+    {
+        _lastNotificationAt = DateTimeOffset.Now;
+        _trayIcon.ShowNotification(title, message);
     }
 
     private void BuildProviders()
@@ -214,7 +294,7 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
         if (_hotkeyWarnings.Count > 0)
         {
             // Surface load-time problems immediately, not only on the settings page.
-            _trayIcon.ShowNotification("QuotaScope hotkeys", string.Join("\n", _hotkeyWarnings));
+            ShowNotification("QuotaScope hotkeys", string.Join("\n", _hotkeyWarnings));
         }
     }
 
@@ -429,7 +509,7 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
                 || (_usages.TryGetValue("claude", out var claudeUsage) && claudeUsage.State == ProviderState.Unauthenticated));
         if (claudeNeedsLogin && ClaudeLoginLauncher.TryLaunch())
         {
-            _trayIcon.ShowNotification(
+            ShowNotification(
                 Loc.T("Claude sign-in", "Claude 로그인"),
                 Loc.T("Complete the login in the opened terminal/browser. Usage resumes automatically.",
                       "열린 터미널/브라우저에서 로그인을 완료하세요. 사용량 표시는 자동으로 재개됩니다."));
@@ -486,7 +566,7 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
         if (!_refreshing) CheckAlerts();
     }
 
-    private readonly UsageAlertTracker _alerts = new();
+    private readonly UsageAlertTracker _alerts = new(silentFirstSight: Program.RestartedForGraphics);
 
     // Runs when usage arrives, never on a settings edit: the next update is
     // checked against the edited levels and points, so spinning a level in
@@ -502,7 +582,7 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
             if (_settings.NotifyOnThreshold && alerts.Count > 0)
             {
                 var (title, body) = UsageAlerts.BuildNotification(alerts);
-                _trayIcon.ShowNotification(title, body);
+                ShowNotification(title, body);
             }
         }
         catch (Exception ex)
@@ -596,6 +676,8 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
         if (_disposed) return;
         _disposed = true;
         _timer.Stop();
+        _adapterTimer?.Stop();
+        _adapters?.Dispose();
         _hotkeyWindow?.Dispose();
         _popup?.Hide();
         _trayIcon.Dispose();

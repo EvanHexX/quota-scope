@@ -13,9 +13,37 @@ internal static class Program
     private const string SingleInstanceMutexName = @"Local\QuotaScope.WinUI.SingleInstance";
     private const string TogglePopupEventName = @"Local\QuotaScope.WinUI.TogglePopup";
 
+    // Set when this instance replaced one whose graphics adapters changed
+    // (GraphicsAdapters): it ignores the simulation variable, silently records
+    // alert points already passed, and reopens the popup if that one had it open.
+    public static bool RestartedForGraphics { get; private set; }
+    public static bool ReopenPopup { get; private set; }
+
     [STAThread]
     private static int Main(string[] args)
     {
+        // `--restart-after <pid> graphics [popup]`: let the instance being
+        // replaced exit first, or the single-instance check below would hand
+        // straight back to it and this one would end.
+        if (args.Length > 0 && args[0].Equals("--restart-after", StringComparison.OrdinalIgnoreCase))
+        {
+            if (args.Length > 1 && int.TryParse(args[1], out var previousPid))
+            {
+                try
+                {
+                    using var previous = System.Diagnostics.Process.GetProcessById(previousPid);
+                    previous.WaitForExit(15000);
+                }
+                catch
+                {
+                    // Already gone.
+                }
+            }
+            RestartedForGraphics = Array.Exists(args, a => a.Equals("graphics", StringComparison.OrdinalIgnoreCase));
+            ReopenPopup = Array.Exists(args, a => a.Equals("popup", StringComparison.OrdinalIgnoreCase));
+            args = Array.Empty<string>();
+        }
+
         // Must run before any XAML/WinRT initialization so it stays headless.
         if (args.Length > 0 && args[0].Equals("--self-test", StringComparison.OrdinalIgnoreCase))
         {
@@ -26,6 +54,7 @@ internal static class Program
                 && RowShapes.RunSelfTest()
                 && UsageAlerts.RunSelfTest()
                 && PopupPalette.RunSelfTest()
+                && GraphicsAdapters.RunSelfTest()
                 && Loc.RunSelfTest() ? 0 : 1;
         }
 
