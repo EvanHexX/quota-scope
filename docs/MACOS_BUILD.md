@@ -1,6 +1,6 @@
 # macOS Build Plan
 
-> Status as of 2026-10-17: **no macOS code exists yet, and nothing here has been run on a Mac.** Phase 1 (shared fixtures, Windows side: 1a mappers, 1b renewer, hotkeys, rows, alerts) is done. Items marked **(verify)** are assumptions to check on the target Mac in phase 0.
+> Status as of 2026-10-17: **nothing here has been run on a Mac yet.** Phase 1 (shared fixtures, Windows side: 1a mappers, 1b renewer, hotkeys, rows, alerts) is done. Most of phase 2 is done too: `QuotaCore` (models, mappers, rows, alerts, settings model) is ported to Swift and passes the codex, claude, rows, and alerts fixtures, built and run on Windows (7.3). No UI or provider code exists yet. Items marked **(verify)** are assumptions to check on the target Mac in phase 0.
 
 ## 1. Goal and constraints
 
@@ -326,7 +326,50 @@ mac/build.sh [--release] [--install]
 
 `--self-test` mirrors the Windows convention and works with the Command Line Tools alone. `swift test` (XCTest or Swift Testing) can run the same fixture checks during development **(verify which test framework the installed CLT provides; XCTest has historically needed full Xcode)**.
 
-### 7.3 Permissions the user will see
+### 7.3 Developing `QuotaCore` on Windows
+
+`QuotaCore` uses Foundation only, so it also builds with the Swift toolchain for Windows. That way the shared logic can be ported and checked against the fixtures before a Mac is involved.
+
+Setup used on 2026-10-17: Swift 6.4.1 from swift.org (`winget install --id Swift.Toolchain -e`). It needs the Visual Studio C++ build tools and a Windows SDK, which are already present wherever the WinUI app builds.
+
+```powershell
+cd mac
+swift build
+swift run quotascope-selftest          # reads ../fixtures
+```
+
+The self-test prints a count per folder and exits 1 on the first mismatch, with the same path-style message as the C# side. `swift build` also prints warnings about the toolchain's own `WinSDK` module. Those come from the toolchain; `mac/Sources` itself builds without warnings.
+
+What exists (`mac/Sources/QuotaCore`):
+
+| Swift file | Ports | Checked by |
+|---|---|---|
+| `UsageModels.swift`, `CreditsGauge.swift` | `UsageModels.cs`, `CreditsGauge.cs` | `codex/`, `claude/` |
+| `RateLimitMapper.swift` | `RateLimitMapper.cs`, including the rolling-update merge | `codex/` (19 cases) |
+| `ClaudeUsageMapper.swift` | `ClaudeUsageMapper.cs` | `claude/` (10 cases) |
+| `AppSettings.swift` | the settings model and `FromJson` in `AppSettings.cs` (loading only; saving comes with the app) | `rows/`, `alerts/` |
+| `RowShapes.swift` | `RowShapes.cs` | `rows/` (9 cases) |
+| `UsageAlerts.swift` | `UsageAlerts.cs`, including the tracker | `alerts/` (12 cases) |
+| `Loc.swift` | the row naming in `Loc.cs` (`RowLabel`) | `alerts/` notification bodies |
+| `JSON.swift`, `Timestamp.swift`, `NumberText.swift` | the System.Text.Json, DateTimeOffset, and number-format behavior the C# code relies on | all of the above |
+| `Fixtures.swift` | `UsageFixtures.cs` and the per-folder evaluators | — |
+
+Matching .NET took deliberate code in four places:
+
+- **JSON:** an ordered JSON value that keeps numbers as their source text. Merging Codex rolling updates depends on member order, and `TryGetInt64` tells `300` apart from `300.0`. `JSONSerialization` does neither reliably on every platform.
+- **Timestamps:** 100 ns ticks. Claude reset times carry microseconds, and `ISO8601DateFormatter` keeps only milliseconds.
+- **Number text:** `"0.##"` formatting takes 15 significant digits and rounds half away from zero, as .NET does. `Math.Round` is ties-to-even. Point parsing accepts what `NumberStyles.Float` accepts, and refuses Swift-only forms such as hex or `inf`.
+- **Settings:** dictionary keys compare exactly. The C# defaults are declared case-insensitive, but System.Text.Json replaces them with plain dictionaries on load.
+
+Not ported yet:
+
+- The hotkey grammar (`fixtures/hotkeys`).
+- The session renewer (`fixtures/renewer`). It belongs to `QuotaProviders` on the Mac.
+- `Loc.ResetClock` / `ResetIn` (the reset and remaining-time text). These come with the UI. `fixtures/` has no cases for them yet, so add cases on the C# side first.
+
+Checked: a corrupted expected value in each of the four folders, or a missing expected file, makes the self-test exit 1.
+
+### 7.4 Permissions the user will see
 
 | Prompt | When | Avoidable? |
 |---|---|---|
@@ -340,8 +383,9 @@ No Accessibility, Screen Recording, Full Disk Access, or Automation permission s
 
 ```
 fixtures/                    shared input/expected pairs (section 5); used by C# and Swift
-mac/Package.swift            SwiftPM package: QuotaCore, QuotaProviders, QuotaScope
-mac/Sources/QuotaCore/…
+mac/Package.swift            SwiftPM package: QuotaCore and quotascope-selftest today; QuotaProviders and QuotaScope (macOS only) later
+mac/Sources/QuotaCore/…      exists: models, mappers, rows, alerts, settings model (7.3)
+mac/Sources/quotascope-selftest/…  exists: runs QuotaCore against ../fixtures
 mac/Sources/QuotaProviders/…
 mac/Sources/QuotaScope/…
 mac/Tests/…                  optional swift test targets over the same fixtures
@@ -358,7 +402,7 @@ docs/MACOS_BUILD.md          this file
 |---|---|---|
 | **0. Spike on the Mac** | Answers to every **(verify)** item: Keychain item name and format, attributes read without prompt, `claude mcp list` refresh on macOS, `codex app-server` started from a Finder-launched app, `SMAppService` and notifications with ad-hoc vs self-signed, available Swift test framework | Notes added to this file |
 | **1. Fixtures (Windows)** | `fixtures/` extracted from the C# self-tests, embedded in both projects (5.3). 1a (mappers) and 1b (renewer, hotkeys, rows, alerts) done | Both Windows projects build; `--self-test` passes on both; case count unchanged |
-| **2. `QuotaCore` in Swift** | Models, mappers, credits gauge, row resolution, alerts, settings model, hotkey grammar | Swift `--self-test` passes every fixture |
+| **2. `QuotaCore` in Swift** | Models, mappers, credits gauge, row resolution, alerts, settings model, hotkey grammar. **Mostly done (2026-10-17):** everything but the hotkey grammar (7.3) | Swift self-test passes every fixture |
 | **3. `QuotaProviders` in Swift** | Codex client, Claude client, Keychain source, renewer, command resolution | Behavior checklist (4.2) reviewed item by item; unit tests with fake clock/process; live run against both providers |
 | **4. Menu bar MVP** | Status item with arc icon, popover with bars, refresh, right-click menu, settings file | Manual smoke test (10) |
 | **5. Parity** | Gauges / fill / mix & match, columns, order and visibility, pin panel, time toggle, alerts + notifications, hotkeys, login item, EN/KO, settings window | Manual smoke test (10) |

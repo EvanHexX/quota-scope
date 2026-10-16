@@ -50,6 +50,9 @@
 ## macOS (planned)
 
 - build plan, shared fixture format -> `docs/MACOS_BUILD.md`
+- Swift package (QuotaCore, Windows에서도 빌드) -> `mac/Package.swift`
+- shared logic port: models, Codex/Claude mappers, row shapes, usage alerts, settings model -> `mac/Sources/QuotaCore/`
+- fixture runner (`swift run quotascope-selftest`) -> `mac/Sources/quotascope-selftest/main.swift`, `mac/Sources/QuotaCore/Fixtures.swift`
 
 ## Codex Rate Limits
 
