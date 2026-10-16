@@ -284,7 +284,23 @@ With ad-hoc signing every rebuild is a new signature, so the prompt returns afte
 
 Apps launched from Finder or at login do **not** inherit the shell `PATH`, so `/opt/homebrew/bin`, `~/.local/bin`, npm global bins, nvm shims etc. are missing.
 
-Resolution order for both commands:
+**Codex ships inside the OpenAI desktop app on macOS** (reported 2026-10-17 from the Agent Summit Mac work, on macOS 15.6 arm64; public sources below):
+
+- Since the 2026-07-09 merge, updating Codex.app turns it into the new `/Applications/ChatGPT.app`, which contains Codex. It is also downloadable on its own. The older desktop app becomes `/Applications/ChatGPT Classic.app` and has no Codex. On that Mac there was no `Codex.app`, no `~/Library/Application Support/OpenAI/Codex/bin`, and no `codex` on `PATH`. The only `codex` binary was the one inside ChatGPT.app.
+- The CLI sits at `<app>/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex` (codex-cli 0.162.0-alpha.17.2 there).
+- Bundle IDs: the new ChatGPT.app keeps Codex's `com.openai.codex`; Classic is `com.openai.chat`. A downloaded ChatGPT.app and one updated from Codex.app have the same executable hash.
+- Codex state stays in `~/.codex` (or `$CODEX_HOME`) whatever the app is called. QuotaScope never reads it; `codex app-server` does.
+- Sources: OpenAI, "Moving to the new ChatGPT desktop app" (help.openai.com/en/articles/20001276); openai/codex#31944.
+
+So the app is found by **bundle ID, not by name**.
+
+Resolution order for `codex`:
+
+1. The configured command if it is an absolute path.
+2. Apps whose bundle ID is `com.openai.codex`: `NSWorkspace.urlsForApplications(withBundleIdentifier:)`, plus a direct check of `/Applications/ChatGPT.app`, `~/Applications/ChatGPT.app`, and a leftover `Codex.app` in either place. Read each candidate's `CFBundleIdentifier` and skip anything else (`com.openai.chat` is Classic). Use the first one whose bundled CLI path above exists and is executable, preferring the highest `CFBundleShortVersionString`.
+3. The `PATH` steps below (a Homebrew or npm install of the CLI).
+
+Resolution order for `claude`, and steps 3 onward for `codex`:
 
 1. The configured command if it is an absolute path.
 2. Known locations: `~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin`, `~/.npm-global/bin`, `~/.bun/bin`, the newest `~/.nvm/versions/node/*/bin`.
@@ -292,6 +308,14 @@ Resolution order for both commands:
 4. Otherwise report "not found" with the paths tried, and let the user set the command in settings.
 
 Node-based shims also need `node` on `PATH`; start children with the login shell's `PATH` (resolved once, kept in memory).
+
+The Settings → Providers screen shows which `codex` was found and where it came from: "ChatGPT.app (bundled)", "PATH", or "custom". That way a missing or unexpected CLI is visible without reading logs.
+
+**(verify)** in phase 0:
+
+- The bundle ID of `/Applications/ChatGPT.app` on the target Mac. It has not been read directly yet; `com.openai.codex` is inferred from the bundle contents and the public reports.
+- That the bundled CLI runs `codex app-server` when started from QuotaScope while ChatGPT.app is not running, and also while ChatGPT.app is running. ChatGPT.app's own codex process holds the lock files in `~/.codex`, so check that a second app-server can read rate limits next to it.
+- Whether a ChatGPT.app update replaces the CLI path while QuotaScope holds a child process on it. Reconnect must then pick up the new binary.
 
 ### 6.3 Settings and data paths
 
@@ -400,7 +424,7 @@ docs/MACOS_BUILD.md          this file
 
 | Phase | Deliverable | Verified by |
 |---|---|---|
-| **0. Spike on the Mac** | Answers to every **(verify)** item: Keychain item name and format, attributes read without prompt, `claude mcp list` refresh on macOS, `codex app-server` started from a Finder-launched app, `SMAppService` and notifications with ad-hoc vs self-signed, available Swift test framework | Notes added to this file |
+| **0. Spike on the Mac** | Answers to every **(verify)** item: Keychain item name and format, attributes read without prompt, `claude mcp list` refresh on macOS, ChatGPT.app bundle ID and its bundled `codex app-server` started from a Finder-launched app next to a running ChatGPT.app, `SMAppService` and notifications with ad-hoc vs self-signed, available Swift test framework | Notes added to this file |
 | **1. Fixtures (Windows)** | `fixtures/` extracted from the C# self-tests, embedded in both projects (5.3). 1a (mappers) and 1b (renewer, hotkeys, rows, alerts) done | Both Windows projects build; `--self-test` passes on both; case count unchanged |
 | **2. `QuotaCore` in Swift** | Models, mappers, credits gauge, row resolution, alerts, settings model, hotkey grammar. **Done (2026-10-17)** on Windows (7.3) | Swift self-test passes every `QuotaCore` fixture: 53 cases (codex 19, claude 10, rows 9, alerts 12, hotkeys 3). `renewer/` waits for phase 3 |
 | **3. `QuotaProviders` in Swift** | Codex client, Claude client, Keychain source, renewer, command resolution | Behavior checklist (4.2) reviewed item by item; unit tests with fake clock/process; live run against both providers |
@@ -419,7 +443,7 @@ The README must not claim a macOS download, installer, Homebrew cask, or auto-up
 - Pin detaches a floating panel that stays on top and survives Space switches.
 - Switching light/dark in System Settings updates icon and popover live.
 - Claude: the Keychain prompt appears once; after "Always Allow" and a rebuild with the self-signed identity, no new prompt.
-- Codex: works when the app is launched from Finder and at login, not just from Terminal.
+- Codex: works when the app is launched from Finder and at login, not just from Terminal; finds the CLI bundled in ChatGPT.app with no `codex` on `PATH`; ignores ChatGPT Classic.app.
 - An alert notification fires at a configured point.
 - Start at login works after a reboot.
 - Settings persist after quit and relaunch.
