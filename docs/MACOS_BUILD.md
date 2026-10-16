@@ -73,18 +73,24 @@ Principle: use system components and system styling, and drop Windows features w
 
 - `NSStatusItem` with a **template image** (monochrome, adapts to light/dark menu bar and to the active/inactive state automatically).
 - Usage arc: draw the arc as a template image at 18 pt using the same 5 % steps as `TrayIconRenderer`. The Windows 3-level state color does not fit a template icon; show warning/critical with a small colored badge dot instead. **Decision M3.**
-- Optional compact text next to the icon (for example `72%`), a common pattern in Mac menu bar utilities. Off by default.
+- **Menu bar text** next to the icon (for example `41%`), with the value picked in Settings → General (decided 2026-10-17). New macOS-only settings key `MenuBarText`:
+  - `Off`: icon only.
+  - `HighestWeekly` (**default**): the highest weekly main window across enabled providers (Codex `7d`, Claude `7d` and active scoped weekly rows). Non-Pro Codex users and Claude users mostly watch the weekly limit, and on Codex Pro the weekly window is the only main one anyway.
+  - `HighestOverall`: the highest main window of any length, the same value the arc draws.
+  - A specific row key (`codex|7d`, `claude|7d Fable`, …): any row the user can show, listed with its display name.
+  - The number follows the gauge metric setting (used or remaining), like the popup. If the chosen row is missing (provider offline, row gone), show `--` rather than silently switching rows.
 - Left click toggles the popover. Right click (or Control-click) opens an `NSMenu` with Refresh, Reconnect, Settings…, Quit, mirroring the Windows tray menu.
 - Hover tooltip lists remaining quota per window, as on Windows.
 
 ### 3.2 Popover
 
 - SwiftUI view hosted in an `NSPopover` anchored to the status item (arrow, system material background, light/dark automatic). Plain `MenuBarExtra(.window)` is simpler but gives no control over right-click and pinning, so use `NSStatusItem` + `NSPopover` from AppKit with SwiftUI content.
-- Provider sections with headers, rows using native controls: `Gauge` (`.accessoryCircularCapacity`) for gauges, capsule bars for bars, and the fill card as a rounded rectangle with a partial fill. Shapes, order, visibility, and columns come from the ported row resolution.
+- Provider sections with headers, rows using native controls: capsule bars (**default shape, decided 2026-10-17**, same `ShapeTheme` default `Bars` as Windows), `Gauge` (`.accessoryCircularCapacity`) for gauges, and the fill card as a rounded rectangle with a partial fill. Shapes, order, visibility, and columns come from the ported row resolution.
 - Header: last update, refresh button (SF Symbol `arrow.clockwise`), pin button (`pin` / `pin.fill`).
 - **Pinned** = detach the popover into a small floating panel (`NSPanel`, `.nonactivatingPanel`, `.floating` level), the native equivalent of the Windows pinned popup. Popover behavior `.transient` when unpinned.
-- Time text click toggles clock time / remaining time, as on Windows.
-- Typography: system font, `monospacedDigit()` for percentages and times.
+- Every row with a reset time shows it under the bar. Clicking the time text toggles clock time (`오후 4:00 초기화` / `resets at 4:00 PM`) and remaining time (`2시간 13분 뒤 초기화` / `resets in 2h 13m`), as on Windows. The choice is also in Settings → General and is stored in the existing `TimeDisplayMode` key (`ClockTime` / `RemainingTime`). The strings follow `Loc.cs` word for word. Remaining time ticks every minute while the popup is open.
+- Width: about 300 pt, one column by default. The label column must fit the longest label in both languages; today that is `전체 모델 · 주간` / `All models · Weekly`. Longer labels (a future model scope) truncate in the middle of the scope, never the window name, and show the full name in a tooltip.
+- Typography: the macOS system font (SF Pro, with Apple SD Gothic Neo for Korean through the system fallback), no bundled fonts. `monospacedDigit()` for percentages and times.
 
 ### 3.3 Settings window
 
@@ -103,7 +109,7 @@ Principle: use system components and system styling, and drop Windows features w
 | Global hotkeys (`Ctrl+Alt+U` default) | Carbon `RegisterEventHotKey` (no Accessibility permission needed) | Default `⌃⌥U` (same physical keys). Settings strings keep the `Ctrl+Alt+U` grammar, see 6.3 |
 | Tray notifications | `UNUserNotificationCenter` | Asks for permission on first alert **(verify that an ad-hoc signed app can request it)** |
 | Start with Windows (HKCU Run) | `SMAppService.mainApp.register()` (macOS 13+) | Shows up in System Settings → Login Items **(verify with ad-hoc signing)** |
-| EN/KO UI (`Loc.cs`) | String Catalog (`Localizable.xcstrings`) with en and ko | Language setting: System / English / Korean |
+| EN/KO UI (`Loc.cs`) | String Catalog (`Localizable.xcstrings`) with en and ko | Language setting: System / English / Korean. Row names, reset-time formats, and setting values reuse the `Loc.cs` wording; a `loc/` fixture folder pins row display names in both languages |
 | Reconnect opens `cmd /k claude /login` | Open Terminal.app running `claude /login` through a temporary `.command` file opened with `NSWorkspace` | Avoids the Automation permission that `osascript` would need |
 | Crash log next to exe | `~/Library/Logs/QuotaScope/` | |
 | Graphics adapter self-restart | Not needed | WinUI-specific (microsoft-ui-xaml#10844) |
@@ -275,7 +281,7 @@ Node-based shims also need `node` on `PATH`; start children with the login shell
 | Crash log | next to the exe | `~/Library/Logs/QuotaScope/` |
 | `claude_usage_last.json` diagnostic dump | next to the exe | `~/Library/Application Support/QuotaScope/` |
 
-- **Same JSON schema and key names** as `AppSettings.cs`, enforced by the `settings/` fixtures. No Windows key is renamed or dropped. macOS ignores Windows-only keys (`UiScale`, `Glassmorphism`, `GlassStrength`, `LastPopupX/Y`); keys added for macOS are ignored by Windows. Unknown keys are preserved on save where practical.
+- **Same JSON schema and key names** as `AppSettings.cs`, enforced by the `settings/` fixtures. No Windows key is renamed or dropped. macOS ignores Windows-only keys (`UiScale`, `Glassmorphism`, `GlassStrength`, `LastPopupX/Y`); keys added for macOS (`MenuBarText`) are ignored by Windows. Unknown keys are preserved on save where practical.
 - Hotkey strings keep the `Ctrl+Alt+U` grammar of `HotkeyDefinition`; the Mac UI shows `Ctrl→⌃`, `Alt→⌥`, `Shift→⇧`, and adds `Cmd→⌘`. Adding `Cmd` to the macOS parser must not change how Windows parses existing strings (the `hotkeys/` fixtures cover both).
 
 ## 7. Building on the Mac without an account
@@ -353,6 +359,9 @@ The README must not claim a macOS download, installer, Homebrew cask, or auto-up
 - An alert notification fires at a configured point.
 - Start at login works after a reboot.
 - Settings persist after quit and relaunch.
+- Menu bar text: each `MenuBarText` choice shows the right number; it follows the gauge metric; a missing row shows `--`.
+- Clicking the time text toggles clock time and remaining time on every row, and the choice survives a relaunch.
+- **Korean:** with the language set to Korean (and with macOS itself in Korean), no label, reset text, menu item, or settings label is clipped at the default popup width, in both time modes and with every row shown (Spark rows, per-model weekly rows, credits). Repeat in English. Check light and dark.
 - Quitting the app leaves no `codex` or `claude` child process behind.
 
 ## 11. Open decisions
@@ -367,6 +376,9 @@ The README must not claim a macOS download, installer, Homebrew cask, or auto-up
 | M6 | Bundle id | `io.github.evanhexx.quotascope` (no OpenAI/Anthropic naming) |
 | M7 | Prebuilt Mac binaries later? | Out of scope; would need a Developer ID and notarization |
 | M8 | Desktop / Notification Center widget? | **Deferred (decided 2026-10-17).** The menu bar item is the main surface and alert banners go to Notification Center. A WidgetKit widget may come after parity: it refreshes on a system budget (not live), can only show data the app writes to a shared container, likely needs an App Group (normally tied to a Team ID), and is an extension bundle that is awkward to build without Xcode. Check whether an ad-hoc or self-signed widget loads at all before planning it |
+| M9 | Menu bar text | **Decided:** user picks it (`MenuBarText`); default highest weekly window |
+| M10 | Default row shape | **Decided:** bars |
+| M11 | Font | **Decided:** macOS system font |
 
 ## 12. Risks
 
