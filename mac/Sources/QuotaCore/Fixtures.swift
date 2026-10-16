@@ -8,9 +8,9 @@ import Foundation
 public enum Fixtures {
     public static let tolerance = 1e-9
 
-    // The folders this port checks. hotkeys and renewer belong to code that
-    // is not ported yet (hotkey grammar, the session renewer in the providers).
-    public static let folders = ["codex", "claude", "rows", "alerts"]
+    // The folders this port checks. renewer belongs to code that is not
+    // ported yet (the session renewer in the providers).
+    public static let folders = ["codex", "claude", "rows", "alerts", "hotkeys"]
 
     public struct Failure: Error, CustomStringConvertible {
         public let description: String
@@ -53,6 +53,7 @@ public enum Fixtures {
         case "claude": return describe(mapClaude(input))
         case "rows": return try evaluateRows(input)
         case "alerts": return try evaluateAlerts(input)
+        case "hotkeys": return try evaluateHotkeys(input)
         default: throw Failure(description: "no evaluator for fixtures/\(folder)")
         }
     }
@@ -139,6 +140,25 @@ public enum Fixtures {
             })
         }
         return .object(result)
+    }
+
+    // Each text (null allowed) is answered by { "ok": false }, or by the parsed
+    // binding, its canonical text, and whether that text parses back to it.
+    static func evaluateHotkeys(_ input: JSONValue) throws -> JSONValue {
+        guard let texts = input["texts"]?.arrayValue else { throw Failure(description: "hotkeys input has no texts") }
+        return .object(JSONObject([("results", .array(texts.map { text in
+            guard let definition = HotkeyDefinition.parse(text.stringValue) else {
+                return .object(JSONObject([("ok", .bool(false))]))
+            }
+            let formatted = definition.format()
+            return .object(JSONObject([
+                ("ok", .bool(true)),
+                ("modifiers", .number(String(definition.modifiers))),
+                ("virtualKey", .number(String(definition.virtualKey))),
+                ("formatted", .string(formatted)),
+                ("reparses", .bool(HotkeyDefinition.parse(formatted) == definition)),
+            ]))
+        }))]))
     }
 
     // The fixture form of a mapped result: every field of every row.
