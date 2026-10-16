@@ -343,6 +343,7 @@ The README must not claim a macOS download, installer, Homebrew cask, or auto-up
 | M5 | Minimum macOS | 13 Ventura |
 | M6 | Bundle id | `io.github.evanhexx.quotascope` (no OpenAI/Anthropic naming) |
 | M7 | Prebuilt Mac binaries later? | Out of scope; would need a Developer ID and notarization |
+| M8 | Desktop / Notification Center widget? | **Deferred (decided 2026-10-17).** The menu bar item is the main surface and alert banners go to Notification Center. A WidgetKit widget may come after parity: it refreshes on a system budget (not live), can only show data the app writes to a shared container, likely needs an App Group (normally tied to a Team ID), and is an extension bundle that is awkward to build without Xcode. Check whether an ad-hoc or self-signed widget loads at all before planning it |
 
 ## 12. Risks
 
