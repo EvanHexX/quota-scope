@@ -1,6 +1,9 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 
 namespace QuotaScope.Providers.Claude;
@@ -247,38 +250,38 @@ internal sealed class ClaudeSessionRenewer : IDisposable
         return Directory.Exists(userProfile) ? userProfile : AppContext.BaseDirectory;
     }
 
-    public static bool RunSelfTest()
+    // Samples live in fixtures/renewer (docs/MACOS_BUILD.md, section 5).
+    public static bool RunSelfTest() => UsageFixtures.Run("renewer", EvaluateFixture);
+
+    // Each list in the input is answered by a list in the same order: expiry
+    // times (against "now") by whether they count as expiring, failure counts
+    // by their cooldown, attempts by the delay before the next one. Delays are
+    // minutes; null means the renewer has given up.
+    private static JsonNode EvaluateFixture(JsonElement input)
     {
-        var now = DateTimeOffset.Now;
-        var expiryChecks =
-            !IsExpiring(null, now)
-            && !IsExpiring(now + TimeSpan.FromHours(8), now)
-            && !IsExpiring(now + RenewLeadTime + TimeSpan.FromMinutes(1), now)
-            && IsExpiring(now + TimeSpan.FromMinutes(5), now)
-            && IsExpiring(now - TimeSpan.FromHours(1), now);
+        var result = new JsonObject();
+        if (UsageFixtures.Optional(input, "expiresAt") is { } expiries)
+        {
+            var now = UsageFixtures.ReadTimestamp(UsageFixtures.Optional(input, "now"))
+                ?? throw new InvalidOperationException("expiresAt needs a \"now\".");
+            result["expiring"] = new JsonArray(expiries.EnumerateArray()
+                .Select(expiresAt => (JsonNode)IsExpiring(UsageFixtures.ReadTimestamp(expiresAt), now)).ToArray());
+        }
+        if (UsageFixtures.Optional(input, "failures") is { } failures)
+        {
+            result["cooldownMinutes"] = new JsonArray(failures.EnumerateArray()
+                .Select(count => Minutes(CooldownAfter(count.GetInt32()))).ToArray());
+        }
+        if (UsageFixtures.Optional(input, "attempts") is { } attempts)
+        {
+            result["delayMinutes"] = new JsonArray(attempts.EnumerateArray()
+                .Select(attempt => Minutes(NextDelayAfter(
+                    attempt.GetProperty("renewed").GetBoolean(),
+                    attempt.GetProperty("recovery").GetBoolean(),
+                    attempt.GetProperty("failures").GetInt32()))).ToArray());
+        }
+        return result;
 
-        var cooldownChecks =
-            CooldownAfter(0) == TimeSpan.Zero
-            && CooldownAfter(1) == Cooldowns[0]
-            && CooldownAfter(2) == Cooldowns[1]
-            && CooldownAfter(3) == Cooldowns[2]
-            && CooldownAfter(4) == Cooldowns[^1]
-            && CooldownAfter(MaxConsecutiveFailures) is null;
-
-        // A proactive no-op must neither escalate nor ever give up: the token is
-        // still alive, so the trigger has not been shown to be broken.
-        var proactiveChecks =
-            NextDelayAfter(renewed: false, recovery: false, failures: 0) == ProactiveRetry
-            && NextDelayAfter(renewed: false, recovery: false, failures: MaxConsecutiveFailures) == ProactiveRetry
-            && NextDelayAfter(renewed: true, recovery: false, failures: 0) == TimeSpan.Zero;
-
-        // A recovery no-op is a real failure and escalates to the give-up point.
-        var recoveryChecks =
-            NextDelayAfter(renewed: false, recovery: true, failures: 1) == Cooldowns[0]
-            && NextDelayAfter(renewed: false, recovery: true, failures: 3) == Cooldowns[2]
-            && NextDelayAfter(renewed: false, recovery: true, failures: MaxConsecutiveFailures) is null
-            && NextDelayAfter(renewed: true, recovery: true, failures: 4) == TimeSpan.Zero;
-
-        return expiryChecks && cooldownChecks && proactiveChecks && recoveryChecks;
+        static JsonNode? Minutes(TimeSpan? delay) => delay is { } value ? value.TotalMinutes : null;
     }
 }

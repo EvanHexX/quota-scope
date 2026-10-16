@@ -1,0 +1,9 @@
+{
+  "parsed": [
+    { "ok": true, "points": [1500, 500, 0], "formatted": "1500, 500, 0" },
+    { "ok": false },
+    { "ok": false },
+    { "ok": false },
+    { "ok": true, "points": [2000, 500], "formatted": "2000, 500" }
+  ]
+}

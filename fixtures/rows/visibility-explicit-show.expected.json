@@ -1,0 +1,7 @@
+{
+  "rows": [
+    { "key": "codex|Spark 7d", "visible": true, "shape": "Bars" },
+    { "key": "codex|Spark 5h", "visible": false, "shape": "Bars" },
+    { "key": "codex|Credits", "visible": true, "shape": "Bars" }
+  ]
+}

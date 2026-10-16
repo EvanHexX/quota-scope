@@ -1,0 +1,7 @@
+{
+  "steps": [
+    { "alerts": [], "notification": null },
+    { "alerts": [{ "providerId": "codex", "label": "Spark 7d", "point": 55, "remaining": 50, "critical": false }], "notification": { "title": "Usage warning", "body": "Codex Spark · Weekly 50% left" } },
+    { "alerts": [], "notification": null }
+  ]
+}

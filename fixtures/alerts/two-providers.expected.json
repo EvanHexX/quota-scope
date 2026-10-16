@@ -1,0 +1,11 @@
+{
+  "steps": [
+    {
+      "alerts": [
+        { "providerId": "codex", "label": "5h", "point": 60, "remaining": 50, "critical": false },
+        { "providerId": "claude", "label": "5h", "point": 40, "remaining": 30, "critical": false }
+      ],
+      "notification": { "title": "Usage warning", "body": "Codex 5h 50% left\nClaude 5h 30% left" }
+    }
+  ]
+}

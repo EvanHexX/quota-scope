@@ -1,0 +1,4 @@
+{
+  "description": "Cooldown after 0 to 5 failed attempts in a row: none, then 2, 10 and 30 minutes, staying at 30, and at 5 failures the renewer gives up until the credentials file changes.",
+  "failures": [0, 1, 2, 3, 4, 5]
+}

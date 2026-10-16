@@ -1,0 +1,9 @@
+{
+  "description": "With no per-row choice, a primary row is always shown, and with the provider's secondary-rows and credits toggles off, Spark and credits rows are hidden. Credits rows carry a gauge but follow the credits toggle, not the secondary-rows one. The default shape theme draws every row as bars.",
+  "settings": { "Providers": { "codex": { "ShowSecondaryRows": false, "ShowCredits": false } } },
+  "rows": [
+    { "providerId": "codex", "label": "5h", "isPrimary": true },
+    { "providerId": "codex", "label": "Spark 5h", "isPrimary": false },
+    { "providerId": "codex", "label": "Credits", "isPrimary": false }
+  ]
+}

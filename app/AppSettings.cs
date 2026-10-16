@@ -99,19 +99,25 @@ internal sealed class AppSettings
 
         try
         {
-            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath)) ?? new AppSettings();
-            settings.GetProvider("codex");
-            // A hand-edited null would otherwise reach the alert checks that run
-            // on every usage update.
-            settings.AlertPoints ??= new();
-            settings.RowAlerts ??= new(StringComparer.OrdinalIgnoreCase);
-            settings.RowAlertPoints ??= new(StringComparer.OrdinalIgnoreCase);
-            return settings;
+            return FromJson(File.ReadAllText(SettingsPath));
         }
         catch
         {
             return new AppSettings();
         }
+    }
+
+    // Load without the file; the self-test fixtures read their settings here.
+    public static AppSettings FromJson(string json)
+    {
+        var settings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+        settings.GetProvider("codex");
+        // A hand-edited null would otherwise reach the alert checks that run
+        // on every usage update.
+        settings.AlertPoints ??= new();
+        settings.RowAlerts ??= new(StringComparer.OrdinalIgnoreCase);
+        settings.RowAlertPoints ??= new(StringComparer.OrdinalIgnoreCase);
+        return settings;
     }
 
     public void Save()

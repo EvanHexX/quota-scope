@@ -1,0 +1,6 @@
+{
+  "steps": [
+    { "alerts": [{ "providerId": "codex", "label": "usage", "point": 40, "remaining": 15, "critical": false }], "notification": { "title": "Usage warning", "body": "Codex usage 15% left" } },
+    { "alerts": [], "notification": null }
+  ]
+}

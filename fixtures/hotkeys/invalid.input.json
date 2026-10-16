@@ -1,0 +1,4 @@
+{
+  "description": "Refused: missing or blank text, a modifier with no key, a key with no modifier (a global hotkey without one would shadow normal typing), an unknown key, two keys, and an empty token.",
+  "texts": [null, "", "  ", "Ctrl+", "Ctrl", "U", "F5", "Ctrl+Foo", "Ctrl+A+B", "Ctrl++U"]
+}

@@ -1,0 +1,7 @@
+{
+  "rows": [
+    { "key": "codex|5h", "visible": true, "shape": "Fill" },
+    { "key": "codex|7d", "visible": true, "shape": "Circle" },
+    { "key": "claude|5h", "visible": true, "shape": "Circle" }
+  ]
+}
