@@ -35,4 +35,10 @@
     <Compile Include="..\app\Hotkeys\HotkeyDefinition.cs" Link="Shared\Hotkeys\HotkeyDefinition.cs" />
     <Compile Include="..\app\Providers\**\*.cs" Link="Shared\Providers\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Shared mapper fixtures (docs/MACOS_BUILD.md, section 5), embedded so
+         the self-test also runs from a release build. -->
+    <EmbeddedResource Include="..\fixtures\codex\*.json" LogicalName="fixtures/codex/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\fixtures\claude\*.json" LogicalName="fixtures/claude/%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

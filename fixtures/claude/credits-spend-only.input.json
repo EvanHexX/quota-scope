@@ -1,0 +1,7 @@
+{
+  "description": "Spend with no utilization is drawn against the configured 2500: 1300 left.",
+  "response": {
+    "five_hour": { "utilization": 10.0, "resets_at": "2026-04-11T07:00:00+00:00" },
+    "extra_usage": { "is_enabled": true, "monthly_limit": null, "used_credits": 1200, "utilization": null }
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "providerId": "claude",
+  "displayName": "Claude",
+  "state": "Ok",
+  "statusText": "Claude rate limit",
+  "overallUsedPercent": 55,
+  "rows": [
+    {
+      "label": "5h",
+      "scope": null,
+      "isPrimary": true,
+      "usedPercent": 20,
+      "resetsAt": "2026-07-22T17:19:59.607128Z",
+      "windowDurationMins": null,
+      "detailText": null,
+      "beyondFull": false,
+      "creditsLeft": null
+    },
+    {
+      "label": "7d",
+      "scope": null,
+      "isPrimary": true,
+      "usedPercent": 28,
+      "resetsAt": "2026-07-22T19:59:59.607147Z",
+      "windowDurationMins": null,
+      "detailText": null,
+      "beyondFull": false,
+      "creditsLeft": null
+    },
+    {
+      "label": "7d Fable",
+      "scope": null,
+      "isPrimary": true,
+      "usedPercent": 55,
+      "resetsAt": "2026-07-22T19:59:59.607376Z",
+      "windowDurationMins": null,
+      "detailText": null,
+      "beyondFull": false,
+      "creditsLeft": null
+    },
+    {
+      "label": "7d Sonnet",
+      "scope": null,
+      "isPrimary": false,
+      "usedPercent": 10,
+      "resetsAt": "2026-07-22T19:59:59.607376Z",
+      "windowDurationMins": null,
+      "detailText": null,
+      "beyondFull": false,
+      "creditsLeft": null
+    },
+    {
+      "label": "Credits",
+      "scope": null,
+      "isPrimary": false,
+      "usedPercent": 0,
+      "resetsAt": null,
+      "windowDurationMins": null,
+      "detailText": "2500 / 2500",
+      "beyondFull": false,
+      "creditsLeft": 2500
+    }
+  ]
+}

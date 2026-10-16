@@ -1,6 +1,6 @@
 # macOS Build Plan
 
-> Status as of 2026-10-17: **plan only. No macOS code exists yet, and nothing here has been run on a Mac.** Items marked **(verify)** are assumptions to check on the target Mac in phase 0.
+> Status as of 2026-10-17: **no macOS code exists yet, and nothing here has been run on a Mac.** Phase 1a (shared mapper fixtures, Windows side) is done. Items marked **(verify)** are assumptions to check on the target Mac in phase 0.
 
 ## 1. Goal and constraints
 
@@ -166,34 +166,51 @@ Each case is an **input plus the expected result**, not just a sample payload. R
 
 ```
 fixtures/
-  codex/
-    weekly-only.input.json              raw account/rateLimits/read result
-    weekly-only.expected.json
-    five-hour-and-weekly.input.json
-    five-hour-and-weekly.expected.json
-    sparse-update.input.json            { "read": {…}, "updates": [{…}, …] }
-    sparse-update.expected.json
+  codex/                                done: 19 cases (phase 1a)
+    weekly-only-pro.input.json          { "description", "options"?, "read": <account/rateLimits/read result> }
+    weekly-only-pro.expected.json
+    rolling-main-window.input.json      { "description", "read": {…}, "updates": [<account/rateLimits/updated params>, …] }
+    rolling-main-window.expected.json
     …
-  claude/
-    legacy-fields.input.json            raw /api/oauth/usage body
-    limits-array.input.json
-    credits-spend.input.json
-    …  (each with .expected.json)
-  alerts/
+  claude/                               done: 10 cases (phase 1a)
+    limits-array.input.json             { "description", "options"?, "response": <GET /api/oauth/usage body> }
+    limits-array.expected.json
+    …
+  alerts/                               phase 1b
     *.input.json                        { "settings": {…}, "usages": [ProviderUsage, …] }
     *.expected.json                     notifications fired per step, row alert levels
-  rows/
+  rows/                                 phase 1b
     *.input.json                        { "settings": {…}, "rows": [UsageRowRef, …] }
     *.expected.json                     resolved order, visibility, shape per row key
-  settings/
+  settings/                             phase 1b
     *.json + *.expected.json            settings.json files, including old ones, and the values they load to
-  hotkeys/
+  hotkeys/                              phase 1b
     cases.json                          [{ "text": "ctrl+alt+u", "ok": true, "formatted": "Ctrl+Alt+U" }, …]
 ```
 
-Each `*.input.json` may carry an optional `"options"` object for mapper inputs that come from settings (`showSecondaryRows`, `showCredits`, `creditsFullAmount`).
+Mapper inputs:
 
-Expected rows list every field of `UsageRow`: `label`, `scope`, `isPrimary`, `usedPercent`, `resetsAt` (ISO 8601 UTC), `windowDurationMins`, `detailText`, `beyondFull`, `creditsLeft`, plus `overallUsedPercent` and `state` for the provider. Percentages compare with a tolerance of 1e-9; strings compare exactly.
+- `description` says what the case pins down; it replaces the comment the C# test had.
+- `options.creditsFullAmount` is the configured credits full amount (default 2500 when absent). Other settings that affect mapping go in `options` too if they are ever added.
+- Codex: the `updates` are merged into `read` in order with `RateLimitMapper.MergeRollingUpdate`, then the result is mapped, the same path `CodexUsageProvider` takes. Without `updates` the read is mapped as is.
+
+Expected file (the output of `UsageFixtures.Describe` in C#):
+
+```json
+{
+  "providerId": "codex", "displayName": "Codex", "state": "Ok", "statusText": "Codex rate limit",
+  "overallUsedPercent": 30,
+  "rows": [
+    { "label": "5h", "scope": null, "isPrimary": true, "usedPercent": 25,
+      "resetsAt": "2030-01-01T12:00:00Z", "windowDurationMins": 300,
+      "detailText": null, "beyondFull": false, "creditsLeft": null }
+  ]
+}
+```
+
+- Every field of `UsageRow` is listed. `usedPercent` is `null` when the row has no window (a text-only credits row). `UpdatedAt` is wall-clock time and left out.
+- `resetsAt` is ISO 8601 UTC with trailing zero fractions dropped (`2026-04-11T07:00:00.528743Z`).
+- Comparison: numbers within 1e-9, strings and booleans exactly, and both sides must have the same keys, so a field added on one side fails the test.
 
 ### 5.2 Rules
 
@@ -204,13 +221,19 @@ Expected rows list every field of `UsageRow`: `label`, `scope`, `isPrimary`, `us
 
 ### 5.3 Windows-side change (phase 1)
 
-Moving the samples out of the C# self-tests is the only change to the Windows apps in this plan:
+Moving the samples out of the C# self-tests is the only change to the Windows apps in this plan.
 
-- Today the samples are string literals inside `RateLimitMapper.RunSelfTest`, `ClaudeUsageMapper.RunSelfTest`, `ClaudeSessionRenewer.RunSelfTest`, `HotkeyDefinition.RunSelfTest`, `RowShapes.RunSelfTest`, and `UsageAlerts.RunSelfTest`. They move to `fixtures/`, and each self-test loops over its folder and compares with the expected file.
-- `--self-test` also runs from a released exe, where no repository is present. The fixtures are therefore compiled in as **`EmbeddedResource`** items, read with `Assembly.GetManifestResourceStream`. No files ship next to the exe.
-- The legacy app (`app/Program.cs`) runs the mapper, renewer, and hotkey self-tests too, so **both** `app/QuotaScope.csproj` and `app-winui/QuotaScope.WinUI.csproj` embed the fixtures. The legacy project includes only the folders its self-tests use.
-- Keep any self-test assertion that is not a data comparison (for example, invariants checked across cases) in C# as it is.
-- Verification: build both projects and run `--self-test` on both, before and after, and confirm the number of cases did not drop.
+**Phase 1a, done (2026-10-17): mappers.**
+
+- The samples in `RateLimitMapper.RunSelfTest` and `ClaudeUsageMapper.RunSelfTest` moved to `fixtures/codex/` (19 cases) and `fixtures/claude/` (10 cases). Each assertion of the old tests is now a field in an expected file, and the expected files pin every row field, which the old tests did not.
+- `app/Providers/UsageFixtures.cs` (shared, compiled by both projects) loads the cases, maps each input, and compares. An empty folder or a missing expected file fails the test, so a resource that stops being embedded cannot pass silently. The first mismatch is written to stderr with its path, e.g. `fixtures/claude/limits-array: $.rows[3].label: expected "7d sonnet", got "7d Sonnet"`.
+- `--self-test` also runs from a released exe, where no repository is present, so the fixtures are compiled in as `EmbeddedResource` items with logical names `fixtures/<folder>/<file>`. No files ship next to the exe. Both `app/QuotaScope.csproj` and `app-winui/QuotaScope.WinUI.csproj` embed `codex/` and `claude/`, because the legacy app runs the mapper self-tests too.
+- One check stays in C#: `RunMainBucketMirrorSelfTest`. It asserts that an update moves both copies of the main bucket (`rateLimits` and its mirror in `rateLimitsByLimitId`). The mirror never becomes a row, so no fixture can see it.
+- Verified: both projects build with 0 warnings and `--self-test` exits 0. Corrupting one expected value in each folder, or removing an expected file, makes it exit 1 with the message above.
+
+**Phase 1b, open: the remaining self-tests.** `ClaudeSessionRenewer`, `HotkeyDefinition`, `RowShapes`, and `UsageAlerts` still keep their samples inline. They move to `fixtures/` the same way, each with its own input/expected format (5.1). The legacy project embeds only the folders its own self-tests use (renewer and hotkeys, not rows or alerts).
+
+**Adding a case.** Write the `.input.json`, then write the `.expected.json` by hand from what the behavior should be, and run `--self-test`. A mismatch prints the first differing path. Do not copy the current output into the expected file without reading it; a fixture written that way only proves that the code does what it already does.
 
 ## 6. macOS platform code
 
@@ -308,7 +331,7 @@ docs/MACOS_BUILD.md          this file
 | Phase | Deliverable | Verified by |
 |---|---|---|
 | **0. Spike on the Mac** | Answers to every **(verify)** item: Keychain item name and format, attributes read without prompt, `claude mcp list` refresh on macOS, `codex app-server` started from a Finder-launched app, `SMAppService` and notifications with ad-hoc vs self-signed, available Swift test framework | Notes added to this file |
-| **1. Fixtures (Windows)** | `fixtures/` extracted from the C# self-tests, embedded in both projects (5.3) | Both Windows projects build; `--self-test` passes on both; case count unchanged |
+| **1. Fixtures (Windows)** | `fixtures/` extracted from the C# self-tests, embedded in both projects (5.3). 1a (mappers) done; 1b (renewer, hotkeys, rows, alerts) open | Both Windows projects build; `--self-test` passes on both; case count unchanged |
 | **2. `QuotaCore` in Swift** | Models, mappers, credits gauge, row resolution, alerts, settings model, hotkey grammar | Swift `--self-test` passes every fixture |
 | **3. `QuotaProviders` in Swift** | Codex client, Claude client, Keychain source, renewer, command resolution | Behavior checklist (4.2) reviewed item by item; unit tests with fake clock/process; live run against both providers |
 | **4. Menu bar MVP** | Status item with arc icon, popover with bars, refresh, right-click menu, settings file | Manual smoke test (10) |

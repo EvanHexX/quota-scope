@@ -1,0 +1,29 @@
+{
+  "description": "codex-cli 0.145.0-alpha.27 schema: weekly-only primary, null secondary, fractional percents, credits balance. Weekly only: the main row carries the plan, Spark and Credits do not. 146.0874125 left of 2500 is 94.1565% spent.",
+  "read": {
+    "rateLimits": {
+      "limitId": "codex",
+      "limitName": null,
+      "planType": "pro",
+      "primary": { "usedPercent": 12.5, "resetsAt": 1785269431, "windowDurationMins": 10080 },
+      "secondary": null,
+      "credits": { "hasCredits": true, "unlimited": false, "balance": "146.0874125000" },
+      "spendControlReached": false,
+      "rateLimitReachedType": null
+    },
+    "rateLimitsByLimitId": {
+      "codex": {
+        "limitId": "codex",
+        "primary": { "usedPercent": 12.5, "resetsAt": 1785269431, "windowDurationMins": 10080 },
+        "secondary": null
+      },
+      "codex_bengalfox": {
+        "limitId": "codex_bengalfox",
+        "limitName": "GPT-5.3-Codex-Spark",
+        "primary": { "usedPercent": 4, "resetsAt": 1785269459, "windowDurationMins": 10080 },
+        "secondary": null
+      }
+    },
+    "rateLimitResetCredits": { "availableCount": 0, "credits": [] }
+  }
+}

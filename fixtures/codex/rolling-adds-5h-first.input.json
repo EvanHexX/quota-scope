@@ -1,0 +1,13 @@
+{
+  "description": "Weekly-only read; the update brings both windows, the weekly one in the other slot, 5h listed first. Each keeps its own reset time.",
+  "read": {
+    "rateLimits": {
+      "limitId": "codex",
+      "primary": { "usedPercent": 12.5, "resetsAt": 1785269431, "windowDurationMins": 10080 },
+      "secondary": null
+    }
+  },
+  "updates": [
+    { "rateLimits": { "limitId": "codex", "primary": { "usedPercent": 3, "resetsAt": 1785200000, "windowDurationMins": 300 }, "secondary": { "usedPercent": 13, "resetsAt": null, "windowDurationMins": 10080 } } }
+  ]
+}

@@ -9,4 +9,10 @@
     <RootNamespace>QuotaScope</RootNamespace>
     <ApplicationIcon>Assets\QuotaScope.ico</ApplicationIcon>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- Shared mapper fixtures (docs/MACOS_BUILD.md, section 5), embedded so
+         the self-test also runs from a release build. -->
+    <EmbeddedResource Include="..\fixtures\codex\*.json" LogicalName="fixtures/codex/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\fixtures\claude\*.json" LogicalName="fixtures/claude/%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

@@ -1,0 +1,17 @@
+{
+  "description": "A configured amount of zero has nothing to divide by, so the credits row drops the gauge instead of drawing against a ceiling of zero.",
+  "options": { "creditsFullAmount": 0 },
+  "response": {
+    "five_hour": { "utilization": 20.0, "resets_at": "2026-07-22T17:19:59.607128+00:00" },
+    "seven_day": { "utilization": 28.0, "resets_at": "2026-07-22T19:59:59.607147+00:00" },
+    "seven_day_opus": null,
+    "seven_day_sonnet": null,
+    "limits": [
+      { "kind": "session", "group": "session", "percent": 20, "severity": "normal", "resets_at": "2026-07-22T17:19:59.607128+00:00", "scope": null, "is_active": false },
+      { "kind": "weekly_all", "group": "weekly", "percent": 28, "severity": "normal", "resets_at": "2026-07-22T19:59:59.607147+00:00", "scope": null, "is_active": false },
+      { "kind": "weekly_scoped", "group": "weekly", "percent": 55, "severity": "normal", "resets_at": "2026-07-22T19:59:59.607376+00:00", "scope": { "model": { "id": null, "display_name": "Fable" }, "surface": null }, "is_active": true },
+      { "kind": "weekly_scoped", "group": "weekly", "percent": 10, "severity": "normal", "resets_at": "2026-07-22T19:59:59.607376+00:00", "scope": { "model": { "id": "sonnet", "display_name": "Sonnet" }, "surface": null }, "is_active": false }
+    ],
+    "extra_usage": { "is_enabled": false, "monthly_limit": null, "used_credits": null, "utilization": null }
+  }
+}

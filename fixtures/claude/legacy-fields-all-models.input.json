@@ -1,0 +1,11 @@
+{
+  "description": "Every legacy per-model window present, mapped generically. monthly_limit 100 with 25.5 spent: the ceiling the provider reports is used for the footer, not the configured 2500.",
+  "response": {
+    "five_hour":        { "utilization": 37.5, "resets_at": "2026-04-11T07:00:00+00:00" },
+    "seven_day":        { "utilization": 23.5, "resets_at": "2026-04-17T00:59:59+00:00" },
+    "seven_day_opus":   { "utilization": 50.0, "resets_at": "2026-04-17T00:59:59+00:00" },
+    "seven_day_sonnet": { "utilization": 1.0,  "resets_at": "2026-04-17T00:59:59+00:00" },
+    "seven_day_fable":  { "utilization": 12.5, "resets_at": "2026-04-17T00:59:59+00:00" },
+    "extra_usage":      { "is_enabled": true, "monthly_limit": 100, "used_credits": 25.5, "utilization": 25.5 }
+  }
+}

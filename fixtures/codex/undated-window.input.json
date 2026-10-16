@@ -1,0 +1,11 @@
+{
+  "description": "An undated window could be the 5h one, so the plan is not named.",
+  "read": {
+    "rateLimits": {
+      "limitId": "codex",
+      "planType": "pro",
+      "primary": { "usedPercent": 22 },
+      "secondary": { "usedPercent": 41, "windowDurationMins": 10080 }
+    }
+  }
+}

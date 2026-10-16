@@ -1,0 +1,29 @@
+{
+  "description": "An update for another bucket lands on that bucket only.",
+  "read": {
+    "rateLimits": {
+      "limitId": "codex",
+      "limitName": null,
+      "planType": "plus",
+      "primary": { "usedPercent": 20, "resetsAt": 1893499200, "windowDurationMins": 300 },
+      "secondary": { "usedPercent": 30, "resetsAt": 1894053600, "windowDurationMins": 10080 },
+      "credits": { "hasCredits": true, "unlimited": false, "balance": "500" }
+    },
+    "rateLimitsByLimitId": {
+      "codex": {
+        "limitId": "codex",
+        "primary": { "usedPercent": 20, "resetsAt": 1893499200, "windowDurationMins": 300 },
+        "secondary": { "usedPercent": 30, "resetsAt": 1894053600, "windowDurationMins": 10080 }
+      },
+      "codex_bengalfox": {
+        "limitId": "codex_bengalfox",
+        "limitName": "GPT-5.3-Codex-Spark",
+        "primary": { "usedPercent": 4, "resetsAt": 1893495600, "windowDurationMins": 300 },
+        "secondary": { "usedPercent": 8, "resetsAt": 1894053600, "windowDurationMins": 10080 }
+      }
+    }
+  },
+  "updates": [
+    { "rateLimits": { "limitId": "codex_bengalfox", "limitName": null, "primary": { "usedPercent": 9, "resetsAt": 1893495600, "windowDurationMins": 300 }, "secondary": null } }
+  ]
+}

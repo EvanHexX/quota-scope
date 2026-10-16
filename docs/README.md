@@ -26,6 +26,8 @@ dotnet run --project app-winui/QuotaScope.WinUI.csproj -- --self-test
 
 `--self-test` is handled in `app-winui/Program.cs` before any XAML initialization, so it stays headless.
 
+The Codex and Claude mapper self-tests read input/expected pairs from `fixtures/codex/` and `fixtures/claude/`. These files are embedded into the exe, so the self-test also runs from a release build. They are meant to be shared with the planned macOS port. A failing case prints its first mismatch to stderr. The format and rules for adding cases are in `docs/MACOS_BUILD.md`, section 5.
+
 In PowerShell environments where the `codex.ps1` shim is blocked by execution policy, the app resolves the Codex command through `cmd.exe /c codex app-server`.
 
 ## Codex connection

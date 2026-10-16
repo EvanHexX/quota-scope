@@ -1,0 +1,13 @@
+{
+  "description": "Same as rolling-adds-5h-first with the properties in the other order: the result must not depend on property order.",
+  "read": {
+    "rateLimits": {
+      "limitId": "codex",
+      "primary": { "usedPercent": 12.5, "resetsAt": 1785269431, "windowDurationMins": 10080 },
+      "secondary": null
+    }
+  },
+  "updates": [
+    { "rateLimits": { "limitId": "codex", "secondary": { "usedPercent": 13, "resetsAt": null, "windowDurationMins": 10080 }, "primary": { "usedPercent": 3, "resetsAt": 1785200000, "windowDurationMins": 300 } } }
+  ]
+}

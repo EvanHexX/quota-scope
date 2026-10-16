@@ -1,0 +1,21 @@
+{
+  "description": "Non-Pro plans (Plus) report a 5h window next to the weekly one; both are main windows, and the busier one drives the overall.",
+  "read": {
+    "rateLimits": {
+      "limitId": "codex",
+      "limitName": null,
+      "planType": "plus",
+      "primary": { "usedPercent": 22, "resetsAt": 1893499200, "windowDurationMins": 300 },
+      "secondary": { "usedPercent": 41, "resetsAt": 1894053600, "windowDurationMins": 10080 },
+      "credits": null,
+      "rateLimitReachedType": null
+    },
+    "rateLimitsByLimitId": {
+      "codex": {
+        "limitId": "codex",
+        "primary": { "usedPercent": 22, "resetsAt": 1893499200, "windowDurationMins": 300 },
+        "secondary": { "usedPercent": 41, "resetsAt": 1894053600, "windowDurationMins": 10080 }
+      }
+    }
+  }
+}

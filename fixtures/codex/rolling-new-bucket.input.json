@@ -1,0 +1,7 @@
+{
+  "description": "A bucket the read never had is created, along with the rateLimitsByLimitId map itself.",
+  "read": { "rateLimits": { "limitId": "codex", "primary": { "usedPercent": 20, "windowDurationMins": 300 } } },
+  "updates": [
+    { "rateLimits": { "limitId": "codex_bengalfox", "primary": { "usedPercent": 6, "windowDurationMins": 300 } } }
+  ]
+}
