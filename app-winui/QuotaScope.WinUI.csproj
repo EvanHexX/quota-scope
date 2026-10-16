@@ -36,9 +36,13 @@
     <Compile Include="..\app\Providers\**\*.cs" Link="Shared\Providers\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Shared mapper fixtures (docs/MACOS_BUILD.md, section 5), embedded so
+    <!-- Shared self-test fixtures (docs/MACOS_BUILD.md, section 5), embedded so
          the self-test also runs from a release build. -->
     <EmbeddedResource Include="..\fixtures\codex\*.json" LogicalName="fixtures/codex/%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\fixtures\claude\*.json" LogicalName="fixtures/claude/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\fixtures\renewer\*.json" LogicalName="fixtures/renewer/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\fixtures\hotkeys\*.json" LogicalName="fixtures/hotkeys/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\fixtures\rows\*.json" LogicalName="fixtures/rows/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\fixtures\alerts\*.json" LogicalName="fixtures/alerts/%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,8 @@
+{
+  "description": "A nudge sent while the token is still valid that changes nothing proves nothing: it retries on a flat 2 minutes, never escalates, and never gives up, even past the failure limit. A renewal clears the delay.",
+  "attempts": [
+    { "renewed": false, "recovery": false, "failures": 0 },
+    { "renewed": false, "recovery": false, "failures": 5 },
+    { "renewed": true, "recovery": false, "failures": 0 }
+  ]
+}

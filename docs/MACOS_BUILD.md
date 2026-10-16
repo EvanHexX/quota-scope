@@ -1,6 +1,6 @@
 # macOS Build Plan
 
-> Status as of 2026-10-17: **no macOS code exists yet, and nothing here has been run on a Mac.** Phase 1a (shared mapper fixtures, Windows side) is done. Items marked **(verify)** are assumptions to check on the target Mac in phase 0.
+> Status as of 2026-10-17: **no macOS code exists yet, and nothing here has been run on a Mac.** Phase 1 (shared fixtures, Windows side: 1a mappers, 1b renewer, hotkeys, rows, alerts) is done. Items marked **(verify)** are assumptions to check on the target Mac in phase 0.
 
 ## 1. Goal and constraints
 
@@ -176,17 +176,23 @@ fixtures/
     limits-array.input.json             { "description", "options"?, "response": <GET /api/oauth/usage body> }
     limits-array.expected.json
     …
-  alerts/                               phase 1b
-    *.input.json                        { "settings": {…}, "usages": [ProviderUsage, …] }
-    *.expected.json                     notifications fired per step, row alert levels
-  rows/                                 phase 1b
-    *.input.json                        { "settings": {…}, "rows": [UsageRowRef, …] }
-    *.expected.json                     resolved order, visibility, shape per row key
-  settings/                             phase 1b
+  renewer/                              done: 4 cases (phase 1b)
+    expiry.input.json                   { "description", "now"?, "expiresAt"?: [...], "failures"?: [...], "attempts"?: [...] }
+    expiry.expected.json                { "expiring"?: [bool, …], "cooldownMinutes"?: [...], "delayMinutes"?: [...] }
+  hotkeys/                              done: 3 cases (phase 1b)
+    invalid.input.json                  { "description", "texts": ["Ctrl+Alt+U", null, …] }
+    invalid.expected.json               { "results": [{ "ok", "modifiers"?, "virtualKey"?, "formatted"?, "reparses"? }, …] }
+  rows/                                 done: 9 cases (phase 1b)
+    shape-mix-match.input.json          { "description", "settings"?: {…}, "rows": [{ "providerId", "label", "isPrimary" }, …] }
+    shape-mix-match.expected.json       { "rows": [{ "key", "visible", "shape" }, …] }
+  alerts/                               done: 12 cases (phase 1b)
+    credits-points.input.json           { "description", "settings"?, "silentFirstSight"?, "parse"?: [...], "steps"?: [...] }
+    credits-points.expected.json        { "parsed"?: [...], "steps"?: [{ "alerts": [...], "notification" }, …] }
+  settings/                             not yet: no C# self-test to move; added with the settings model port
     *.json + *.expected.json            settings.json files, including old ones, and the values they load to
-  hotkeys/                              phase 1b
-    cases.json                          [{ "text": "ctrl+alt+u", "ok": true, "formatted": "Ctrl+Alt+U" }, …]
 ```
+
+Every folder uses the same `<case>.input.json` / `<case>.expected.json` pairs and the same comparison (below). Each input has a `description`. Settings, wherever an input carries them, are a `settings.json` fragment with the Windows key names (`"AlertPoints"`, `"RowShapes"`, `"Providers": { "codex": { "ShowCredits": … } }`); C# loads it through `AppSettings.FromJson`, the same path `settings.json` takes, so absent keys keep their defaults.
 
 Mapper inputs:
 
@@ -194,7 +200,7 @@ Mapper inputs:
 - `options.creditsFullAmount` is the configured credits full amount (default 2500 when absent). Other settings that affect mapping go in `options` too if they are ever added.
 - Codex: the `updates` are merged into `read` in order with `RateLimitMapper.MergeRollingUpdate`, then the result is mapped, the same path `CodexUsageProvider` takes. Without `updates` the read is mapped as is.
 
-Expected file (the output of `UsageFixtures.Describe` in C#):
+Mapper expected file (the output of `UsageFixtures.Describe` in C#):
 
 ```json
 {
@@ -211,6 +217,13 @@ Expected file (the output of `UsageFixtures.Describe` in C#):
 - Every field of `UsageRow` is listed. `usedPercent` is `null` when the row has no window (a text-only credits row). `UpdatedAt` is wall-clock time and left out.
 - `resetsAt` is ISO 8601 UTC with trailing zero fractions dropped (`2026-04-11T07:00:00.528743Z`).
 - Comparison: numbers within 1e-9, strings and booleans exactly, and both sides must have the same keys, so a field added on one side fails the test.
+
+The other folders answer lists in their input with lists in the same order. A key present in the input has its answer key in the expected file, and an absent one has none, so one case can cover one function or several.
+
+- `renewer/` (`ClaudeSessionRenewer`): `expiresAt` timestamps (null = unreadable) are checked against `now` and answered by `expiring`; `failures` (failed attempts in a row) by `cooldownMinutes`; `attempts` (`{ "renewed", "recovery", "failures" }`) by `delayMinutes`, the wait before the next attempt. A delay of `null` means the renewer has given up until the credentials file changes.
+- `hotkeys/` (`HotkeyDefinition`): each text (`null` allowed) gives `{ "ok": false }`, or the binding: `modifiers` as the Win32 `MOD_*` flags (Alt 1, Ctrl 2, Shift 4, Win 8), `virtualKey` as the Windows virtual-key code, the canonical `formatted` text, and `reparses`, whether that text parses back to the same binding. macOS keeps these numbers as the stored meaning and maps them to its own key codes.
+- `rows/` (`RowShapes`): each row under the case's settings gives its settings `key` (`<providerId>|<label>`), whether it is `visible`, and the `shape` it is drawn with (`Circle`, `Bars`, `Fill`). Display order (`RowOrder`) has no case yet.
+- `alerts/` (`UsageAlerts`, `UsageAlertTracker`): `parse` entries (`{ "text", "credits" }`) give the parsed points and how the box writes them back, or `{ "ok": false }`. `steps` run in order through one tracker (`silentFirstSight` for one created after a self-restart); each step's `usages` are `ProviderUsage` objects in the mapper expected form (only `label` is required per row; no `usedPercent` means no window). A step's own `settings` replace the case's from that step on. Each step gives its `alerts` (`providerId`, `label`, `point`, `remaining`, `critical`) and the `notification` they make, in English (`null` when there are none). The tray and row warning colors have no case yet.
 
 ### 5.2 Rules
 
@@ -231,7 +244,14 @@ Moving the samples out of the C# self-tests is the only change to the Windows ap
 - One check stays in C#: `RunMainBucketMirrorSelfTest`. It asserts that an update moves both copies of the main bucket (`rateLimits` and its mirror in `rateLimitsByLimitId`). The mirror never becomes a row, so no fixture can see it.
 - Verified: both projects build with 0 warnings and `--self-test` exits 0. Corrupting one expected value in each folder, or removing an expected file, makes it exit 1 with the message above.
 
-**Phase 1b, open: the remaining self-tests.** `ClaudeSessionRenewer`, `HotkeyDefinition`, `RowShapes`, and `UsageAlerts` still keep their samples inline. They move to `fixtures/` the same way, each with its own input/expected format (5.1). The legacy project embeds only the folders its own self-tests use (renewer and hotkeys, not rows or alerts).
+**Phase 1b, done (2026-10-17): the remaining self-tests.**
+
+- The samples in `ClaudeSessionRenewer.RunSelfTest`, `HotkeyDefinition.RunSelfTest`, `RowShapes.RunSelfTest`, and `UsageAlerts.RunSelfTest` moved to `fixtures/renewer/` (4 cases), `fixtures/hotkeys/` (3), `fixtures/rows/` (9), and `fixtures/alerts/` (12), in the formats of 5.1. Every assertion of the old tests is a value in an expected file; none stayed in C#, because each one compared data. The checks that only probed a property (a hotkey's Format→TryParse round trip, a notification body containing "450", two body lines) became full values (`reparses` on every parsed hotkey, the whole notification text).
+- Sequences that mutated one settings object between checks became either separate cases (one settings each) or steps with their own `settings`, so each expected value sits next to the settings it was computed under. Alert sequences that used fresh trackers on unrelated rows became separate cases.
+- The renewer's expiry checks take `now` from the input instead of `DateTimeOffset.Now`. The alerts self-test sets English before comparing notifications.
+- `UsageFixtures.Run` now takes any `JsonElement → JsonNode` evaluation; the mapper form is a wrapper over it. Its input readers (`ReadSettings`, `ReadUsage`, `ReadTimestamp`, `Optional`) are shared by the four tests. `AppSettings.FromJson` is `AppSettings.Load` without the file, so fixture settings load as `settings.json` does.
+- The legacy project embeds only the folders its own self-tests read: `codex/`, `claude/`, `renewer/`, `hotkeys/`. `rows/` and `alerts/` are embedded in the WinUI project only.
+- Verified: both projects build with 0 warnings and `--self-test` exits 0 on both exes. Corrupting one expected value in each new folder makes it exit 1 (both exes for `renewer/` and `hotkeys/`, WinUI for `rows/` and `alerts/`), e.g. `fixtures/hotkeys/canonical-format: $.results[3].formatted: expected "Ctrl+PgDn", got "Ctrl+PageDown"`.
 
 **Adding a case.** Write the `.input.json`, then write the `.expected.json` by hand from what the behavior should be, and run `--self-test`. A mismatch prints the first differing path. Do not copy the current output into the expected file without reading it; a fixture written that way only proves that the code does what it already does.
 
@@ -331,7 +351,7 @@ docs/MACOS_BUILD.md          this file
 | Phase | Deliverable | Verified by |
 |---|---|---|
 | **0. Spike on the Mac** | Answers to every **(verify)** item: Keychain item name and format, attributes read without prompt, `claude mcp list` refresh on macOS, `codex app-server` started from a Finder-launched app, `SMAppService` and notifications with ad-hoc vs self-signed, available Swift test framework | Notes added to this file |
-| **1. Fixtures (Windows)** | `fixtures/` extracted from the C# self-tests, embedded in both projects (5.3). 1a (mappers) done; 1b (renewer, hotkeys, rows, alerts) open | Both Windows projects build; `--self-test` passes on both; case count unchanged |
+| **1. Fixtures (Windows)** | `fixtures/` extracted from the C# self-tests, embedded in both projects (5.3). 1a (mappers) and 1b (renewer, hotkeys, rows, alerts) done | Both Windows projects build; `--self-test` passes on both; case count unchanged |
 | **2. `QuotaCore` in Swift** | Models, mappers, credits gauge, row resolution, alerts, settings model, hotkey grammar | Swift `--self-test` passes every fixture |
 | **3. `QuotaProviders` in Swift** | Codex client, Claude client, Keychain source, renewer, command resolution | Behavior checklist (4.2) reviewed item by item; unit tests with fake clock/process; live run against both providers |
 | **4. Menu bar MVP** | Status item with arc icon, popover with bars, refresh, right-click menu, settings file | Manual smoke test (10) |

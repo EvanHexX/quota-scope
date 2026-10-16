@@ -1,0 +1,9 @@
+{
+  "description": "With the provider's secondary-rows and credits toggles on and no per-row choice, Spark and credits rows are shown next to the primary row.",
+  "settings": { "Providers": { "codex": { "ShowSecondaryRows": true, "ShowCredits": true } } },
+  "rows": [
+    { "providerId": "codex", "label": "5h", "isPrimary": true },
+    { "providerId": "codex", "label": "Spark 5h", "isPrimary": false },
+    { "providerId": "codex", "label": "Credits", "isPrimary": false }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "description": "A secondary row stays quiet until switched on, and its own points replace the global ones: Spark at 50% left is recorded at 60 while off, and notifies its own 55 once on. A primary row switched off never notifies, even at 1% left.",
+  "settings": { "AlertPoints": [80, 60, 40] },
+  "steps": [
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "Spark 7d", "isPrimary": false, "usedPercent": 50, "windowDurationMins": 10080 }] }] },
+    {
+      "settings": { "AlertPoints": [80, 60, 40], "RowAlerts": { "codex|Spark 7d": true }, "RowAlertPoints": { "codex|Spark 7d": [55] } },
+      "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "Spark 7d", "isPrimary": false, "usedPercent": 50, "windowDurationMins": 10080 }] }]
+    },
+    {
+      "settings": { "AlertPoints": [80, 60, 40], "RowAlerts": { "codex|Spark 7d": true, "codex|5h": false }, "RowAlertPoints": { "codex|Spark 7d": [55] } },
+      "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "5h", "isPrimary": true, "usedPercent": 99, "windowDurationMins": 300 }] }]
+    }
+  ]
+}

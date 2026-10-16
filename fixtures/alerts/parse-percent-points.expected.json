@@ -1,0 +1,13 @@
+{
+  "parsed": [
+    { "ok": true, "points": [80, 60, 40], "formatted": "80, 60, 40" },
+    { "ok": true, "points": [20, 2.5], "formatted": "20, 2.5" },
+    { "ok": true, "points": [], "formatted": "" },
+    { "ok": true, "points": [40, 0], "formatted": "40, 0" },
+    { "ok": false },
+    { "ok": false },
+    { "ok": false },
+    { "ok": true, "points": [33.33], "formatted": "33.33" },
+    { "ok": false }
+  ]
+}

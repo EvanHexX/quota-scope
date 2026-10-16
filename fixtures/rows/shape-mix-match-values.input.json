@@ -1,0 +1,9 @@
+{
+  "description": "Per-row shape values: Bars is bars, a value is matched ignoring case (fill is Fill), and a value the app does not know (Ring) falls back to the circle gauge. The Spark rows are hidden by the default secondary-rows toggle, which does not affect their shape.",
+  "settings": { "ShapeTheme": "MixMatch", "RowShapes": { "codex|7d": "Bars", "codex|Spark 5h": "fill", "codex|Spark 7d": "Ring" } },
+  "rows": [
+    { "providerId": "codex", "label": "7d", "isPrimary": true },
+    { "providerId": "codex", "label": "Spark 5h", "isPrimary": false },
+    { "providerId": "codex", "label": "Spark 7d", "isPrimary": false }
+  ]
+}

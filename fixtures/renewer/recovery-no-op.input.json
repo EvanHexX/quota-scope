@@ -1,0 +1,9 @@
+{
+  "description": "A nudge for a token already dead that changes nothing is a real failure: it escalates through the cooldowns to the give-up point at 5 failures. A renewal clears the delay.",
+  "attempts": [
+    { "renewed": false, "recovery": true, "failures": 1 },
+    { "renewed": false, "recovery": true, "failures": 3 },
+    { "renewed": false, "recovery": true, "failures": 5 },
+    { "renewed": true, "recovery": true, "failures": 4 }
+  ]
+}

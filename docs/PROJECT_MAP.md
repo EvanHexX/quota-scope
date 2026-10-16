@@ -42,8 +42,10 @@
 - provider interface -> `app/Providers/IUsageProvider.cs`
 - shared usage models (ProviderUsage/UsageRow) -> `app/Providers/UsageModels.cs`
 - credits gauge denominator/percent helpers -> `app/Providers/CreditsGauge.cs`
-- mapper fixture loader/comparer (self-test) -> `app/Providers/UsageFixtures.cs`
+- self-test fixture loader/comparer, input readers -> `app/Providers/UsageFixtures.cs`
 - shared mapper fixtures (입력/기대 결과 쌍, 두 project에 EmbeddedResource로 포함, macOS 포트와 공유) -> `fixtures/codex/`, `fixtures/claude/`
+- shared renewer/hotkey fixtures (두 project에 포함) -> `fixtures/renewer/`, `fixtures/hotkeys/`
+- shared row visibility/shape, usage alert fixtures (WinUI project에만 포함) -> `fixtures/rows/`, `fixtures/alerts/`
 
 ## macOS (planned)
 

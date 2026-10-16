@@ -1,0 +1,12 @@
+{
+  "description": "Both providers in one check give one alert each, in one notification with a line per alert. A credits row with neither a gauge nor an amount left never alerts, even marked primary.",
+  "settings": { "AlertPoints": [80, 60, 40] },
+  "steps": [
+    {
+      "usages": [
+        { "providerId": "codex", "displayName": "Codex", "overallUsedPercent": 50, "rows": [{ "label": "5h", "isPrimary": true, "usedPercent": 50, "windowDurationMins": 300 }] },
+        { "providerId": "claude", "displayName": "Claude", "overallUsedPercent": 70, "rows": [{ "label": "5h", "isPrimary": true, "usedPercent": 70, "windowDurationMins": 300 }, { "label": "Credits", "isPrimary": true, "detailText": "12" }] }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "description": "Mix & match reads the per-row shape; a row without one is drawn as a circle gauge. The same label under another provider is a different row, so Claude's 5h does not take Codex's Fill.",
+  "settings": { "ShapeTheme": "MixMatch", "RowShapes": { "codex|5h": "Fill" } },
+  "rows": [
+    { "providerId": "codex", "label": "5h", "isPrimary": true },
+    { "providerId": "codex", "label": "7d", "isPrimary": true },
+    { "providerId": "claude", "label": "5h", "isPrimary": true }
+  ]
+}

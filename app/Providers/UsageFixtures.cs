@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -23,9 +24,15 @@ internal static class UsageFixtures
 
     internal sealed record Case(string Name, JsonElement Input, JsonNode? Expected);
 
+    // Mapper folders: the expected file is the mapped result in Describe form.
+    public static bool Run(string folder, Func<JsonElement, double, ProviderUsage> map) =>
+        Run(folder, input => Describe(map(input, CreditsFullAmount(input))));
+
     // Every case in the folder must match, and an empty folder fails: a
     // resource that silently stopped being embedded must not read as a pass.
-    public static bool Run(string folder, Func<JsonElement, double, ProviderUsage> map)
+    // Each folder has its own input shape; `evaluate` turns one input into
+    // the JSON its expected file holds.
+    public static bool Run(string folder, Func<JsonElement, JsonNode?> evaluate)
     {
         var cases = Load(folder);
         if (cases.Count == 0)
@@ -45,8 +52,7 @@ internal static class UsageFixtures
             string? mismatch;
             try
             {
-                var actual = Describe(map(fixture.Input, CreditsFullAmount(fixture.Input)));
-                mismatch = FindMismatch(fixture.Expected, actual, "$");
+                mismatch = FindMismatch(fixture.Expected, evaluate(fixture.Input), "$");
             }
             catch (Exception ex)
             {
@@ -118,6 +124,46 @@ internal static class UsageFixtures
         };
     }
 
+    // The reverse of Describe, for inputs that start from mapped usage (alerts).
+    // Only label is required; a row without usedPercent has no window.
+    public static ProviderUsage ReadUsage(JsonElement usage)
+    {
+        var rows = usage.GetProperty("rows").EnumerateArray().Select(row => new UsageRow(
+            row.GetProperty("label").GetString()!,
+            Number(row, "usedPercent") is { } used
+                ? new RateLimitWindow(used, ReadTimestamp(Optional(row, "resetsAt")), (long?)Number(row, "windowDurationMins"))
+                : null,
+            Optional(row, "isPrimary")?.GetBoolean() ?? false,
+            Optional(row, "detailText")?.GetString(),
+            Optional(row, "scope")?.GetString(),
+            Optional(row, "beyondFull")?.GetBoolean() ?? false,
+            Number(row, "creditsLeft"))).ToArray();
+        return new ProviderUsage(
+            usage.GetProperty("providerId").GetString()!,
+            usage.GetProperty("displayName").GetString()!,
+            rows,
+            Number(usage, "overallUsedPercent") ?? 0d,
+            Optional(usage, "statusText")?.GetString() ?? "",
+            DateTimeOffset.Now,
+            Optional(usage, "state") is { } state ? Enum.Parse<ProviderState>(state.GetString()!) : ProviderState.Ok);
+    }
+
+    // A settings.json fragment, loaded the way AppSettings.Load loads the file.
+    public static AppSettings ReadSettings(JsonElement? settings) =>
+        settings is { } value ? AppSettings.FromJson(value.GetRawText()) : new AppSettings();
+
+    // The "now" of a time-dependent case, or any other timestamp; null stays null.
+    public static DateTimeOffset? ReadTimestamp(JsonElement? value) =>
+        value is { ValueKind: JsonValueKind.String } text
+            ? DateTimeOffset.Parse(text.GetString()!, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+            : null;
+
+    // A property that is absent or null reads as null.
+    public static JsonElement? Optional(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind != JsonValueKind.Null ? value : null;
+
+    private static double? Number(JsonElement element, string name) => Optional(element, name)?.GetDouble();
+
     // ISO 8601 UTC, trailing zero fractions dropped: 2030-01-01T12:00:00Z.
     private static string? FormatTimestamp(DateTimeOffset? value) =>
         value?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'", CultureInfo.InvariantCulture);
@@ -173,7 +219,10 @@ internal static class UsageFixtures
     private static double ToDouble(JsonNode node) =>
         double.Parse(node.ToJsonString(), NumberStyles.Float, CultureInfo.InvariantCulture);
 
-    private static string Show(JsonNode? node) => node?.ToJsonString() ?? "null";
+    // Unescaped, so a mismatch reads "Ctrl+PgDn" rather than "Ctrl+PgDn".
+    private static readonly JsonSerializerOptions ShowOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
+    private static string Show(JsonNode? node) => node?.ToJsonString(ShowOptions) ?? "null";
 
     private static string? ReadResource(Assembly assembly, string name)
     {

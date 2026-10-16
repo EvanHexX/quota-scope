@@ -1,0 +1,13 @@
+{
+  "steps": [
+    { "alerts": [], "notification": null },
+    { "alerts": [], "notification": null },
+    { "alerts": [{ "providerId": "codex", "label": "Credits", "point": 0, "remaining": 0, "critical": true }], "notification": { "title": "Usage critical", "body": "Codex Credits 0 left" } },
+    { "alerts": [], "notification": null },
+    { "alerts": [{ "providerId": "codex", "label": "Credits", "point": 500, "remaining": 450, "critical": false }], "notification": { "title": "Usage warning", "body": "Codex Credits 450 left" } },
+    { "alerts": [{ "providerId": "codex", "label": "Credits", "point": 0, "remaining": 0, "critical": true }], "notification": { "title": "Usage critical", "body": "Codex Credits 0 left" } },
+    { "alerts": [], "notification": null },
+    { "alerts": [{ "providerId": "codex", "label": "Credits", "point": 0, "remaining": 0, "critical": true }], "notification": { "title": "Usage critical", "body": "Codex Credits 0 left" } },
+    { "alerts": [], "notification": null }
+  ]
+}

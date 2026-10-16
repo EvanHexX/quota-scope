@@ -1,0 +1,12 @@
+{
+  "description": "An explicit per-row choice shows a Spark row while the secondary-rows toggle is off. The credits row follows its own toggle, which is on, even with secondary rows off.",
+  "settings": {
+    "Providers": { "codex": { "ShowSecondaryRows": false, "ShowCredits": true } },
+    "RowVisibility": { "codex|5h": false, "codex|Spark 5h": false, "codex|Spark 7d": true }
+  },
+  "rows": [
+    { "providerId": "codex", "label": "Spark 7d", "isPrimary": false },
+    { "providerId": "codex", "label": "Spark 5h", "isPrimary": false },
+    { "providerId": "codex", "label": "Credits", "isPrimary": false }
+  ]
+}

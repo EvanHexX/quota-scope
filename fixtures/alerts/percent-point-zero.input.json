@@ -1,0 +1,8 @@
+{
+  "description": "A percent point of 0 is passed once a window reads as used up: 99% used is 1% left and quiet, 99.7% reads as 100, so 0% left, and is critical.",
+  "settings": { "AlertPoints": [0] },
+  "steps": [
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "5h", "isPrimary": true, "usedPercent": 99, "windowDurationMins": 300 }] }] },
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "5h", "isPrimary": true, "usedPercent": 99.7, "windowDurationMins": 300 }] }] }
+  ]
+}

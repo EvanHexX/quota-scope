@@ -1,0 +1,8 @@
+{
+  "description": "Two undated windows share the label \"usage\" and so one settings key: only the first in payload order is tracked, so the second cannot re-arm it on every check.",
+  "settings": { "AlertPoints": [80, 60, 40] },
+  "steps": [
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "overallUsedPercent": 85, "rows": [{ "label": "usage", "isPrimary": true, "usedPercent": 85 }, { "label": "usage", "isPrimary": true, "usedPercent": 30 }] }] },
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "overallUsedPercent": 85, "rows": [{ "label": "usage", "isPrimary": true, "usedPercent": 85 }, { "label": "usage", "isPrimary": true, "usedPercent": 30 }] }] }
+  ]
+}

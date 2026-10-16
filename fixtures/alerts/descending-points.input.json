@@ -1,0 +1,15 @@
+{
+  "description": "One weekly row passing points 80, 60, 40 (remaining %). Each point notifies once; a jump past several notifies the deepest only; climbing back above all of them (a reset) re-arms them; climbing back above a shallower point without clearing them all re-arms the deeper ones, so 60 notifies again at 59% left.",
+  "settings": { "AlertPoints": [80, 60, 40] },
+  "steps": [
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "7d", "isPrimary": true, "usedPercent": 10, "windowDurationMins": 10080 }] }] },
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "7d", "isPrimary": true, "usedPercent": 25, "windowDurationMins": 10080 }] }] },
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "7d", "isPrimary": true, "usedPercent": 30, "windowDurationMins": 10080 }] }] },
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "7d", "isPrimary": true, "usedPercent": 65, "windowDurationMins": 10080 }] }] },
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "7d", "isPrimary": true, "usedPercent": 70, "windowDurationMins": 10080 }] }] },
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "7d", "isPrimary": true, "usedPercent": 5, "windowDurationMins": 10080 }] }] },
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "7d", "isPrimary": true, "usedPercent": 45, "windowDurationMins": 10080 }] }] },
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "7d", "isPrimary": true, "usedPercent": 30, "windowDurationMins": 10080 }] }] },
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "7d", "isPrimary": true, "usedPercent": 41, "windowDurationMins": 10080 }] }] }
+  ]
+}

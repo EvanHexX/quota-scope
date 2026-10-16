@@ -1,0 +1,8 @@
+{
+  "description": "The whole-popup theme Fill wins over a per-row shape: both rows are drawn as Fill, including the one set to Fill.",
+  "settings": { "ShapeTheme": "Fill", "RowShapes": { "codex|5h": "Fill" } },
+  "rows": [
+    { "providerId": "codex", "label": "5h", "isPrimary": true },
+    { "providerId": "codex", "label": "7d", "isPrimary": true }
+  ]
+}

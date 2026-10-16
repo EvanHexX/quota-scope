@@ -1,0 +1,17 @@
+{
+  "description": "A point already passed is not notified again after an offline gap (a reconnect: the row goes missing and comes back), nor after the row's notifications are switched off and on again.",
+  "settings": { "AlertPoints": [80, 60, 40] },
+  "steps": [
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "7d", "isPrimary": true, "usedPercent": 65, "windowDurationMins": 10080 }] }] },
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "state": "Unavailable", "statusText": "Connecting to Codex...", "rows": [] }] },
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "7d", "isPrimary": true, "usedPercent": 65, "windowDurationMins": 10080 }] }] },
+    {
+      "settings": { "AlertPoints": [80, 60, 40], "RowAlerts": { "codex|7d": false } },
+      "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "7d", "isPrimary": true, "usedPercent": 65, "windowDurationMins": 10080 }] }]
+    },
+    {
+      "settings": { "AlertPoints": [80, 60, 40], "RowAlerts": { "codex|7d": true } },
+      "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "7d", "isPrimary": true, "usedPercent": 65, "windowDurationMins": 10080 }] }]
+    }
+  ]
+}

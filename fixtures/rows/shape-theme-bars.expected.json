@@ -1,0 +1,6 @@
+{
+  "rows": [
+    { "key": "codex|5h", "visible": true, "shape": "Bars" },
+    { "key": "codex|7d", "visible": true, "shape": "Bars" }
+  ]
+}
