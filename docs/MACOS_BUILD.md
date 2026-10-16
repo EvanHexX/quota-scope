@@ -384,7 +384,7 @@ No Accessibility, Screen Recording, Full Disk Access, or Automation permission s
 ```
 fixtures/                    shared input/expected pairs (section 5); used by C# and Swift
 mac/Package.swift            SwiftPM package: QuotaCore and quotascope-selftest today; QuotaProviders and QuotaScope (macOS only) later
-mac/Sources/QuotaCore/…      exists: models, mappers, rows, alerts, settings model (7.3)
+mac/Sources/QuotaCore/…      exists: models, mappers, rows, alerts, settings model, hotkey grammar (7.3)
 mac/Sources/quotascope-selftest/…  exists: runs QuotaCore against ../fixtures
 mac/Sources/QuotaProviders/…
 mac/Sources/QuotaScope/…
@@ -402,7 +402,7 @@ docs/MACOS_BUILD.md          this file
 |---|---|---|
 | **0. Spike on the Mac** | Answers to every **(verify)** item: Keychain item name and format, attributes read without prompt, `claude mcp list` refresh on macOS, `codex app-server` started from a Finder-launched app, `SMAppService` and notifications with ad-hoc vs self-signed, available Swift test framework | Notes added to this file |
 | **1. Fixtures (Windows)** | `fixtures/` extracted from the C# self-tests, embedded in both projects (5.3). 1a (mappers) and 1b (renewer, hotkeys, rows, alerts) done | Both Windows projects build; `--self-test` passes on both; case count unchanged |
-| **2. `QuotaCore` in Swift** | Models, mappers, credits gauge, row resolution, alerts, settings model, hotkey grammar. **Done (2026-10-17)** on Windows (7.3) | Swift self-test passes every fixture |
+| **2. `QuotaCore` in Swift** | Models, mappers, credits gauge, row resolution, alerts, settings model, hotkey grammar. **Done (2026-10-17)** on Windows (7.3) | Swift self-test passes every `QuotaCore` fixture: 53 cases (codex 19, claude 10, rows 9, alerts 12, hotkeys 3). `renewer/` waits for phase 3 |
 | **3. `QuotaProviders` in Swift** | Codex client, Claude client, Keychain source, renewer, command resolution | Behavior checklist (4.2) reviewed item by item; unit tests with fake clock/process; live run against both providers |
 | **4. Menu bar MVP** | Status item with arc icon, popover with bars, refresh, right-click menu, settings file | Manual smoke test (10) |
 | **5. Parity** | Gauges / fill / mix & match, columns, order and visibility, pin panel, time toggle, alerts + notifications, hotkeys, login item, EN/KO, settings window | Manual smoke test (10) |
