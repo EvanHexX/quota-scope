@@ -46,7 +46,12 @@ final class SettingsModel: ObservableObject {
     func reload() {
         settings = store.settings
         menuBarText = store.menuBarText
-        claudeCredentialsFound = PreferredCredentialSource.standard().exists
+        // Off the main thread: a Keychain lookup waits while an access prompt
+        // is up.
+        Task.detached {
+            let found = PreferredCredentialSource.standard().exists
+            await MainActor.run { self.claudeCredentialsFound = found }
+        }
         refreshAutostart()
         resolveCodex()
     }

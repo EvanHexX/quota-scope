@@ -110,11 +110,11 @@ public actor ClaudeUsageProvider: UsageProvider {
 
         if authPaused && !force {
             // Resume only after Claude Code rewrites the credentials.
-            if credentials.stamp() == authPausedStamp {
+            if await keychainStamp() == authPausedStamp {
                 // An item without a Claude Code sign-in has no session to renew.
                 if autoRenew && !signedOut { renewer.requestRenewal(recovery: true) }
                 // Re-emitted, so a renewal that started (or gave up) shows.
-                return pauseForAuth()
+                return await pauseForAuth()
             }
             // Something rewrote the credentials: clear any renewal backoff.
             authPaused = false
@@ -131,15 +131,15 @@ public actor ClaudeUsageProvider: UsageProvider {
             // session: on macOS it is the Keychain prompt, denied or still
             // waiting. Retry on the next poll instead of pausing for a
             // sign-in that would never come.
-            if credentials.exists {
+            if await keychainStamp() != nil {
                 nextFetchAt = now.addingTimeInterval(minPollInterval)
                 return remember(withFallback(.unavailable, Self.unreadableStatus))
             }
-            return pauseForAuth()
+            return await pauseForAuth()
         }
         let expiresAt = current.expiresAt
         if (current.accessToken ?? "").isEmpty && expiresAt == nil {
-            return pauseForAuth(signedOut: true)
+            return await pauseForAuth(signedOut: true)
         }
         signedOut = false
 
@@ -149,7 +149,7 @@ public actor ClaudeUsageProvider: UsageProvider {
             renewer.requestRenewal(recovery: expiresAt.map { $0 <= now } ?? true)
         }
 
-        guard let token = current.accessToken, !token.isEmpty else { return pauseForAuth() }
+        guard let token = current.accessToken, !token.isEmpty else { return await pauseForAuth() }
 
         do {
             let response = try await transport.get(Self.usageEndpoint, headers: [
@@ -161,7 +161,7 @@ public actor ClaudeUsageProvider: UsageProvider {
                 // The token died before the proactive window could fire (the
                 // Mac slept, the clock jumped); ask Claude Code to renew now.
                 if autoRenew { renewer.requestRenewal(recovery: true) }
-                return pauseForAuth()
+                return await pauseForAuth()
             }
             if response.status == 429 {
                 let delay = Self.backoffDelays[min(backoffStep, Self.backoffDelays.count - 1)]
@@ -200,20 +200,49 @@ public actor ClaudeUsageProvider: UsageProvider {
         guard !closed, watchTask == nil else { return }
         let interval = Self.changePollInterval, debounce = Self.changeDebounce
         watchTask = Task { [weak self] in
-            var last = await self?.currentStamp()
+            var last: Date? = nil
+            if let first = await self?.watchedStamp() { last = first }
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
                 guard let self, !Task.isCancelled else { return }
-                let stamp = await self.currentStamp()
+                // nil: a data read is waiting on the Keychain prompt; skip the tick.
+                guard let stamp = await self.watchedStamp() else { continue }
                 guard stamp != last else { continue }
                 try? await Task.sleep(nanoseconds: UInt64(debounce * 1_000_000_000))
-                last = await self.currentStamp()
+                last = await self.watchedStamp() ?? stamp
                 await self.credentialsChanged()
             }
         }
     }
 
-    private func currentStamp() -> Date? { credentials.stamp() }
+    // While a data read waits on the Keychain prompt, the login keychain
+    // holds a lock that blocks attribute lookups too (seen on the Mac with
+    // sample: stamp() parked in a Security mutex). So every Keychain call runs
+    // on one serial queue off the actor, and the watcher skips its tick
+    // instead of queueing behind the prompt.
+    private static let keychainQueue = DispatchQueue(label: "QuotaScope.ClaudeCredentials", qos: .utility)
+    private var readInFlight = false
+    // Whether credentials existed at the last lookup, for the status text.
+    private var knownToExist = false
+
+    private func onKeychain<T: Sendable>(_ work: @escaping @Sendable () -> T) async -> T {
+        await withCheckedContinuation { continuation in
+            Self.keychainQueue.async { continuation.resume(returning: work()) }
+        }
+    }
+
+    private func keychainStamp() async -> Date? {
+        let source = credentials
+        let stamp = await onKeychain { source.stamp() }
+        knownToExist = stamp != nil
+        return stamp
+    }
+
+    // Outer nil means "not now": a read is waiting on the prompt.
+    private func watchedStamp() async -> Date?? {
+        if readInFlight { return nil }
+        return .some(await keychainStamp())
+    }
 
     private func credentialsChanged() async {
         guard !closed else { return }
@@ -222,22 +251,19 @@ public actor ClaudeUsageProvider: UsageProvider {
         updateHandler?(usage)
     }
 
-    // The secret read runs off the actor: until the user answers the Keychain
-    // prompt, SecItemCopyMatching blocks its thread, and that must not be one
-    // of the concurrency pool's few threads.
+    // Until the user answers the Keychain prompt, SecItemCopyMatching blocks
+    // its thread, and that must not be one of the concurrency pool's threads.
     private func readCredentials() async -> ClaudeCredentials? {
         let source = credentials
-        return await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .utility).async {
-                continuation.resume(returning: source.read())
-            }
-        }
+        readInFlight = true
+        defer { readInFlight = false }
+        return await onKeychain { source.read() }
     }
 
-    private func pauseForAuth(signedOut: Bool? = nil) -> ProviderUsage {
+    private func pauseForAuth(signedOut: Bool? = nil) async -> ProviderUsage {
         if let signedOut { self.signedOut = signedOut }
         authPaused = true
-        authPausedStamp = credentials.stamp()
+        authPausedStamp = await keychainStamp()
         return remember(.offline(id, displayName, authPausedStatus(), .unauthenticated))
     }
 
@@ -245,7 +271,7 @@ public actor ClaudeUsageProvider: UsageProvider {
     // worded by whether credentials exist at all.
     private func authPausedStatus() -> String {
         if renewer.isRenewing { return "Renewing Claude session" }
-        return credentials.exists && !signedOut ? "Claude session expired. Run Claude Code and sign in" : "Run Claude Code and sign in"
+        return knownToExist && !signedOut ? "Claude session expired. Run Claude Code and sign in" : "Run Claude Code and sign in"
     }
 
     // The OAuth session next to the usage rows: renewal in flight, or a
