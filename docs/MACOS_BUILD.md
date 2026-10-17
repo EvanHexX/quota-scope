@@ -559,6 +559,7 @@ The README must not claim a macOS download, installer, Homebrew cask, or auto-up
 | M9 | Menu bar text | **Decided:** user picks it (`MenuBarText`); default highest weekly window |
 | M10 | Default row shape | **Decided:** bars |
 | M11 | Font | **Decided:** macOS system font |
+| M12 | Default gauge metric | **Decided (2026-10-17):** `Remaining` on macOS when settings.json has no `GaugeMetric`; the shared default in `AppSettings.cs` stays `Used` |
 
 ## 12. Risks
 

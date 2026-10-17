@@ -29,21 +29,30 @@ final class SettingsStore {
     func load() {
         loadWarning = nil
         guard let data = try? Data(contentsOf: Self.file), let text = String(data: data, encoding: .utf8) else {
-            settings = AppSettings()
+            settings = Self.macDefaults(AppSettings(), raw: JSONObject())
             raw = JSONObject()
             return
         }
         do {
             let json = try JSONValue.parse(text)
-            settings = try AppSettings.fromJSON(json)
             raw = json.objectValue ?? JSONObject()
+            settings = Self.macDefaults(try AppSettings.fromJSON(json), raw: raw)
         } catch {
             // A broken file is left untouched: defaults run, and nothing is
             // saved over it until the user fixes it.
-            settings = AppSettings()
+            settings = Self.macDefaults(AppSettings(), raw: JSONObject())
             raw = JSONObject()
             loadWarning = "settings.json could not be read (\(error)); using defaults."
         }
+    }
+
+    // Mac defaults that differ from the shared model, applied only when the
+    // file does not set the key: remaining capacity, as the maintainer reads
+    // the Windows app (2026-10-17). AppSettings.cs keeps "Used".
+    private static func macDefaults(_ settings: AppSettings, raw: JSONObject) -> AppSettings {
+        var settings = settings
+        if raw["GaugeMetric"] == nil { settings.gaugeMetric = "Remaining" }
+        return settings
     }
 
     var timeDisplayMode: String {
