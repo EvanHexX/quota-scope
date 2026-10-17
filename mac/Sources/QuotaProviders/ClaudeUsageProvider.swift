@@ -220,7 +220,8 @@ public actor ClaudeUsageProvider: UsageProvider {
     // sample: stamp() parked in a Security mutex). So every Keychain call runs
     // on one serial queue off the actor, and the watcher skips its tick
     // instead of queueing behind the prompt.
-    private static let keychainQueue = DispatchQueue(label: "QuotaScope.ClaudeCredentials", qos: .utility)
+    // The renewer's end-of-attempt lookup uses it too.
+    static let keychainQueue = DispatchQueue(label: "QuotaScope.ClaudeCredentials", qos: .utility)
     private var readInFlight = false
     // Whether credentials existed at the last lookup, for the status text.
     private var knownToExist = false

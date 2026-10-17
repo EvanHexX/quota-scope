@@ -72,7 +72,9 @@ Note: ad-hoc signatures change on every build, so the Keychain prompt for
 "Claude Code-credentials" comes back after each rebuild. To make "Always Allow"
 stick, create a self-signed code-signing certificate once (Keychain Access >
 Certificate Assistant > Create a Certificate..., type "Code Signing", e.g.
-"QuotaScope Local"); this script then signs with it by itself.
+"QuotaScope Local"), then open it in the login keychain and set
+Trust > Code Signing to "Always Trust" (untrusted identities are skipped).
+This script then signs with it by itself.
 HINT
 fi
 
