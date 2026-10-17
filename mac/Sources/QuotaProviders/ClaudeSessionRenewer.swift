@@ -70,7 +70,10 @@ public final class ClaudeSessionRenewer: @unchecked Sendable {
 
         schedule { [self] in
             let ran = runner(self)
-            let renewed = ran && credentials.stamp() != attemptStampValue()
+            // On the provider's Keychain queue, behind its reads rather than
+            // racing them for the login keychain lock.
+            let stamp = ClaudeUsageProvider.keychainQueue.sync { credentials.stamp() }
+            let renewed = ran && stamp != attemptStampValue()
             complete(renewed: renewed)
         }
         return true

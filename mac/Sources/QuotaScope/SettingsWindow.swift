@@ -9,7 +9,7 @@ import QuotaProviders
 // toolbar tabs, grouped forms, and immediate apply. Every control writes
 // settings.json through SettingsStore.update and tells the controller what
 // changed; there is no OK/Cancel. Only settings the Mac app acts on are shown:
-// row shapes, columns, notifications, and hotkeys come with their features.
+// row shapes, columns, and hotkeys come with their features.
 
 enum SettingsChange {
     case general
@@ -29,9 +29,14 @@ final class SettingsModel: ObservableObject {
     @Published var claudeCredentialsFound = false
     @Published var autostartEnabled = false
     @Published var autostartMessage: String?
+    @Published var notificationPermission = NotificationPermission.unknown
+    // One message for every alert points box; only the box that raised it
+    // clears it, as the Windows InfoBar.
+    @Published var pointsError: (owner: String, message: String)?
 
     var onChange: (SettingsChange) -> Void = { _ in }
     var onReconnect: () -> Void = {}
+    var onOpenNotificationSettings: () -> Void = {}
 
     init(store: SettingsStore) {
         self.store = store
@@ -632,11 +637,153 @@ private struct AlertsPage: View {
                           range: 0...99, step: 0.5)
             }
             Section {
-                Text(loc.t("Notifications at alert points come in a later version of the Mac app.",
-                           "알림 지점에서 보내는 알림은 Mac 앱의 다음 버전에서 추가됩니다."))
+                Toggle(isOn: model.binding(.general, \.notifyOnThreshold)) {
+                    RowLabel(title: loc.t("Notifications", "알림"),
+                             detail: loc.t("Show a notification when a row passes one of its alert points.",
+                                           "행이 알림 지점을 지나면 알림을 표시합니다."))
+                }
+                permissionNote(loc)
+                LabeledContent {
+                    PointsField(owner: "", current: model.settings.alertPoints,
+                                placeholder: loc.t("e.g. 80, 60, 40", "예: 80, 60, 40"), credits: false) { parsed in
+                        model.update(.general) { $0.alertPoints = parsed }
+                    }
+                } label: {
+                    RowLabel(title: loc.t("Alert points", "알림 지점"),
+                             detail: loc.t("Remaining percents to be notified at, e.g. 80, 60, 40; 0 means once nothing is left. Each row notifies once per point; climbing back above a point (usually a window reset) re-arms it. Leave empty to be notified at the warning and critical levels. Credits rows take amounts of credits instead, below.",
+                                           "알림을 받을 남은 양 %입니다. 예: 80, 60, 40. 0은 다 쓴 순간입니다. 행마다 지점별로 한 번씩 알리고, 남은 양이 다시 그 지점 위로 올라가면(보통 한도 초기화) 다시 알립니다. 비우면 경고·위험 단계에서 알립니다. 크레딧 행은 아래에서 크레딧 수량으로 따로 정합니다."))
+                }
+                if let error = model.pointsError {
+                    Text(error.message)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+            RowAlertList()
+        }
+    }
+
+    @ViewBuilder
+    private func permissionNote(_ loc: Loc) -> some View {
+        if model.settings.notifyOnThreshold {
+            switch model.notificationPermission {
+            case .denied:
+                HStack {
+                    Text(loc.t("Notifications for QuotaScope are off in System Settings.",
+                               "시스템 설정에서 QuotaScope 알림이 꺼져 있습니다."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button(loc.t("Open System Settings", "시스템 설정 열기")) { model.onOpenNotificationSettings() }
+                }
+            case .unavailable:
+                Text(loc.t("Notifications need the app bundle (mac/build.sh).",
+                           "알림은 앱 번들(mac/build.sh)로 실행할 때만 표시됩니다."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            case .unknown, .allowed:
+                EmptyView()
             }
+        }
+    }
+}
+
+// Every row the providers report: check the ones to be notified for, and
+// optionally give one its own points. Unchecked rows keep their points.
+private struct RowAlertList: View {
+    @EnvironmentObject var model: SettingsModel
+
+    var body: some View {
+        let loc = model.loc
+        let placeholder = loc.t("Default: ", "기본: ") + UsageAlerts.formatPoints(UsageAlerts.defaultPoints(model.settings))
+        Section {
+            if model.rows.isEmpty {
+                Text(loc.t("No rows yet. Open the popup once so providers report their rows.",
+                           "아직 표시할 행이 없습니다. 팝업을 한 번 열어 프로바이더 행을 받아오세요."))
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(providerIds, id: \.self) { providerId in
+                let rows = RowShapes.order(model.settings, providerId,
+                                           model.rows.filter { $0.providerId.caseInsensitiveCompare(providerId) == .orderedSame }) { $0.label }
+                Text(rows.first?.providerName ?? providerId)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                // Indices: two undated Codex windows can share a label.
+                ForEach(rows.indices, id: \.self) { index in
+                    line(rows[index], placeholder: placeholder, loc)
+                }
+            }
+        } header: {
+            Text(loc.t("Alerts per row", "행별 알림"))
+        } footer: {
+            Text(loc.t("Checked rows are notified; by default only each provider's main rows are. Points typed for a row replace the ones above for that row. A credits row takes amounts of credits left (e.g. 500, 200, 0), written without thousands separators: the Codex balance, or what is left of Claude's monthly limit (of the gauge amount when Claude reports none). Empty means when it runs out.",
+                       "체크한 행만 알림을 받으며, 기본값은 프로바이더의 주 행만 켜져 있습니다. 행에 지점을 따로 적으면 그 행은 위 설정 대신 그 값을 씁니다. 크레딧 행은 남은 크레딧 수량을 천 단위 쉼표 없이 적습니다(예: 500, 200, 0). Codex는 실제 잔액, Claude는 월 한도(보고하지 않으면 게이지 기준량)에서 남은 양과 비교합니다. 비우면 크레딧을 다 쓴 순간 알립니다."))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var providerIds: [String] {
+        var seen: [String] = []
+        for row in model.rows where !seen.contains(where: { $0.caseInsensitiveCompare(row.providerId) == .orderedSame }) {
+            seen.append(row.providerId)
+        }
+        return seen
+    }
+
+    private func line(_ row: UsageRowRef, placeholder: String, _ loc: Loc) -> some View {
+        let key = RowShapes.key(row.providerId, row.label)
+        let on = UsageAlerts.isEnabled(model.settings, row.providerId, row.label, row.isPrimary)
+        // A credits row's points are credits left, not percents, so it has its
+        // own default.
+        let credits = RowShapes.isCreditsRow(row.label)
+        return HStack {
+            Toggle(loc.rowLabel(row.providerId, row.label, scope: row.scope),
+                   isOn: Binding(get: { on }, set: { value in model.update(.general) { $0.rowAlerts[key] = value } }))
+                .toggleStyle(.checkbox)
+            Spacer()
+            PointsField(owner: key, current: model.settings.rowAlertPoints[key] ?? [],
+                        placeholder: credits
+                            ? loc.t("Credits left, default: ", "남은 크레딧, 기본: ") + UsageAlerts.formatPoints(UsageAlerts.defaultCreditPoints)
+                            : placeholder,
+                        credits: credits) { parsed in
+                model.update(.general) { $0.rowAlertPoints[key] = parsed.isEmpty ? nil : parsed }
+            }
+            .disabled(!on)
+        }
+    }
+}
+
+// Parses on Enter and when focus leaves; a bad entry is reported and not
+// saved. Empty text means "use the default".
+private struct PointsField: View {
+    let owner: String
+    let current: [Double]
+    let placeholder: String
+    let credits: Bool
+    let apply: ([Double]) -> Void
+    @EnvironmentObject var model: SettingsModel
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField("", text: $text, prompt: Text(placeholder))
+            .labelsHidden()
+            .frame(width: 180)
+            .focused($focused)
+            .onAppear { text = UsageAlerts.formatPoints(current) }
+            .onSubmit(commit)
+            .onChange(of: focused) { if !$0 { commit() } }
+    }
+
+    private func commit() {
+        switch UsageAlerts.parsePoints(text, credits: credits) {
+        case .failure(let error):
+            model.pointsError = (owner, error.message(model.loc))
+        case .success(let parsed):
+            if model.pointsError?.owner == owner { model.pointsError = nil }
+            text = UsageAlerts.formatPoints(parsed)
+            if parsed != current { apply(parsed) }
         }
     }
 }

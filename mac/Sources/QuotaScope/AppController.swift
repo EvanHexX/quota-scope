@@ -6,7 +6,7 @@ import QuotaProviders
 
 // Port of app-winui/TrayController.cs for the menu bar MVP (phase 4): owns the
 // providers, polling, the status item, the popover, and the pinned panel.
-// Alerts, hotkeys, the settings window, and the login item come in phase 5.
+// Hotkeys come later in phase 5.
 @MainActor
 final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
     private let store = SettingsStore()
@@ -23,6 +23,8 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
     private var rebuildPending: DispatchWorkItem?
     private lazy var settingsModel = SettingsModel(store: store)
     private lazy var settingsWindow = SettingsWindowController(model: settingsModel)
+    private let alertTracker = UsageAlertTracker()
+    private let notifier = Notifier()
 
     func start() {
         model.settings = store.settings
@@ -37,6 +39,11 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         settingsModel.loc = model.loc
         settingsModel.onChange = { [weak self] kind in self?.settingsChanged(kind) }
         settingsModel.onReconnect = { [weak self] in self?.reconnect() }
+        settingsModel.onOpenNotificationSettings = { [weak self] in self?.notifier.openSystemSettings() }
+        settingsModel.notificationPermission = notifier.permission
+        notifier.onPermissionChange = { [weak self] in self?.settingsModel.notificationPermission = $0 }
+        notifier.onActivate = { [weak self] in self?.showPopover() }
+        if store.settings.notifyOnThreshold { notifier.prepare() }
         applyTheme()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -81,6 +88,8 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         }
         applyTheme()
         applyVisuals()
+        // Switching notifications on asks for the permission if it never was.
+        if kind == .general, store.settings.notifyOnThreshold { notifier.prepare() }
         // Providers rebuild on change, as on Windows; typing a number fires
         // once per keystroke, so the rebuild waits for the last one.
         if kind == .providers {
@@ -204,6 +213,7 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         model.refreshing = false
         model.lastUpdate = Date()
         pollInFlight = nil
+        checkAlerts()
     }
 
     private func update(_ usage: ProviderUsage) {
@@ -212,6 +222,22 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         usages[usage.providerId] = usage
         applyVisuals()
         settingsModel.rows = rowRefs()
+        // A poll checks once after its last provider, so both providers'
+        // alerts share one notification; an update pushed between polls (a
+        // Codex rolling update) is checked as it arrives.
+        if !model.refreshing { checkAlerts() }
+    }
+
+    // Runs when usage arrives, never on a settings edit, as on Windows: the
+    // next update is checked against the edited levels and points.
+    private func checkAlerts() {
+        let settings = store.settings
+        // Tracked even with notifications off, so switching them on does not
+        // replay every point already passed.
+        let alerts = alertTracker.evaluate(settings, currentUsages)
+        guard settings.notifyOnThreshold, !alerts.isEmpty else { return }
+        let built = UsageAlerts.buildNotification(alerts, model.loc)
+        notifier.show(title: built.title, body: built.body)
     }
 
     // MARK: menu bar item
@@ -279,6 +305,16 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
     }
 
     // MARK: popover and pinned panel
+
+    // A notification click: bring the usage up without closing it.
+    private func showPopover() {
+        if let panel {
+            panel.orderFrontRegardless()
+            return
+        }
+        if popover?.isShown == true { return }
+        togglePopover()
+    }
 
     func togglePopover() {
         if let panel {
