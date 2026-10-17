@@ -1,0 +1,33 @@
+{
+  "steps": [
+    {
+      "alerts": [
+        {
+          "providerId": "codex",
+          "label": "7d",
+          "point": 40,
+          "remaining": 35,
+          "critical": false
+        },
+        {
+          "providerId": "claude",
+          "label": "7d Fable",
+          "point": 40,
+          "remaining": 1,
+          "critical": true
+        },
+        {
+          "providerId": "claude",
+          "label": "Credits",
+          "point": 0,
+          "remaining": 0,
+          "critical": true
+        }
+      ],
+      "notification": {
+        "title": "사용량 위험",
+        "body": "Codex Pro · 주간 35% 남음\nClaude Fable · 주간 1% 남음\nClaude 크레딧 0 남음"
+      }
+    }
+  ]
+}

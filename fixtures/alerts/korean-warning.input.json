@@ -1,0 +1,38 @@
+{
+  "description": "Korean notification below the critical level is titled warning; durations are spelled out (5시간) and Spark rows read 'Spark · 주간'.",
+  "language": "Korean",
+  "settings": {
+    "AlertPoints": [
+      80,
+      60,
+      40
+    ],
+    "RowAlerts": {
+      "codex|Spark 7d": true
+    }
+  },
+  "steps": [
+    {
+      "usages": [
+        {
+          "providerId": "codex",
+          "displayName": "Codex",
+          "rows": [
+            {
+              "label": "5h",
+              "isPrimary": true,
+              "usedPercent": 50,
+              "windowDurationMins": 300
+            },
+            {
+              "label": "Spark 7d",
+              "isPrimary": false,
+              "usedPercent": 45,
+              "windowDurationMins": 10080
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

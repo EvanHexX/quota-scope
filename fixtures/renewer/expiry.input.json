@@ -1,0 +1,11 @@
+{
+  "description": "Expiry is near once it is 15 minutes away or less, including already past. An unreadable expiry (null) is never near, so it cannot turn into a nudge on every poll.",
+  "now": "2030-01-01T12:00:00Z",
+  "expiresAt": [
+    null,
+    "2030-01-01T20:00:00Z",
+    "2030-01-01T12:16:00Z",
+    "2030-01-01T12:05:00Z",
+    "2030-01-01T11:00:00Z"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "description": "Utilization stands on its own as a percentage, but with no limit and no configured amount there is nothing to measure CreditsLeft against.",
+  "options": { "creditsFullAmount": 0 },
+  "response": {
+    "five_hour": { "utilization": 10.0, "resets_at": "2026-04-11T07:00:00+00:00" },
+    "extra_usage": { "is_enabled": true, "monthly_limit": null, "used_credits": null, "utilization": 60 }
+  }
+}

@@ -9,4 +9,13 @@
     <RootNamespace>QuotaScope</RootNamespace>
     <ApplicationIcon>Assets\QuotaScope.ico</ApplicationIcon>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- Shared self-test fixtures (docs/MACOS_BUILD.md, section 5), embedded so
+         the self-test also runs from a release build. Only the folders this
+         app's own self-tests read; rows/ and alerts/ are WinUI-only. -->
+    <EmbeddedResource Include="..\fixtures\codex\*.json" LogicalName="fixtures/codex/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\fixtures\claude\*.json" LogicalName="fixtures/claude/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\fixtures\renewer\*.json" LogicalName="fixtures/renewer/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\fixtures\hotkeys\*.json" LogicalName="fixtures/hotkeys/%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

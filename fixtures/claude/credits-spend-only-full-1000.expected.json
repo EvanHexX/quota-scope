@@ -1,0 +1,31 @@
+{
+  "providerId": "claude",
+  "displayName": "Claude",
+  "state": "Ok",
+  "statusText": "Claude rate limit",
+  "overallUsedPercent": 10,
+  "rows": [
+    {
+      "label": "5h",
+      "scope": null,
+      "isPrimary": true,
+      "usedPercent": 10,
+      "resetsAt": "2026-04-11T07:00:00Z",
+      "windowDurationMins": null,
+      "detailText": null,
+      "beyondFull": false,
+      "creditsLeft": null
+    },
+    {
+      "label": "Credits",
+      "scope": null,
+      "isPrimary": false,
+      "usedPercent": 100,
+      "resetsAt": null,
+      "windowDurationMins": null,
+      "detailText": "0 / 1000",
+      "beyondFull": true,
+      "creditsLeft": 0
+    }
+  ]
+}

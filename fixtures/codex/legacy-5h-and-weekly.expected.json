@@ -1,0 +1,53 @@
+{
+  "providerId": "codex",
+  "displayName": "Codex",
+  "state": "Ok",
+  "statusText": "Codex rate limit",
+  "overallUsedPercent": 37,
+  "rows": [
+    {
+      "label": "5h",
+      "scope": null,
+      "isPrimary": true,
+      "usedPercent": 37,
+      "resetsAt": "2030-01-01T12:00:00Z",
+      "windowDurationMins": 300,
+      "detailText": null,
+      "beyondFull": false,
+      "creditsLeft": null
+    },
+    {
+      "label": "7d",
+      "scope": null,
+      "isPrimary": true,
+      "usedPercent": 12,
+      "resetsAt": "2030-01-07T22:00:00Z",
+      "windowDurationMins": 10080,
+      "detailText": null,
+      "beyondFull": false,
+      "creditsLeft": null
+    },
+    {
+      "label": "Spark 5h",
+      "scope": null,
+      "isPrimary": false,
+      "usedPercent": 4,
+      "resetsAt": "2030-01-01T11:00:00Z",
+      "windowDurationMins": 300,
+      "detailText": null,
+      "beyondFull": false,
+      "creditsLeft": null
+    },
+    {
+      "label": "Spark 7d",
+      "scope": null,
+      "isPrimary": false,
+      "usedPercent": 8,
+      "resetsAt": "2030-01-07T22:00:00Z",
+      "windowDurationMins": 10080,
+      "detailText": null,
+      "beyondFull": false,
+      "creditsLeft": null
+    }
+  ]
+}

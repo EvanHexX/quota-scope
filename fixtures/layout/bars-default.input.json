@@ -1,0 +1,39 @@
+{
+  "description": "Default settings: every row is a bar, bars never pair, and with no gauges Auto stays one column. Spark rows are hidden by the default secondary-rows toggle.",
+  "providers": [
+    {
+      "providerId": "codex",
+      "rows": [
+        {
+          "label": "5h",
+          "isPrimary": true
+        },
+        {
+          "label": "7d",
+          "isPrimary": true
+        },
+        {
+          "label": "Spark 5h",
+          "isPrimary": false
+        }
+      ]
+    },
+    {
+      "providerId": "claude",
+      "rows": [
+        {
+          "label": "5h",
+          "isPrimary": true
+        },
+        {
+          "label": "7d",
+          "isPrimary": true
+        },
+        {
+          "label": "7d Fable",
+          "isPrimary": true
+        }
+      ]
+    }
+  ]
+}

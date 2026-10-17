@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using QuotaScope.Providers;
 
 namespace QuotaScope.Hotkeys;
 
@@ -142,33 +146,29 @@ internal sealed record HotkeyDefinition(uint Modifiers, uint VirtualKey)
         ["DEL"] = 0x2E
     };
 
-    public static bool RunSelfTest()
+    // Samples live in fixtures/hotkeys (docs/MACOS_BUILD.md, section 5).
+    public static bool RunSelfTest() => UsageFixtures.Run("hotkeys", EvaluateFixture);
+
+    // Each text (null allowed) is answered by { "ok": false }, or by the parsed
+    // binding, its canonical text, and whether that text parses back to it.
+    private static JsonNode EvaluateFixture(JsonElement input) => new JsonObject
     {
-        // Round trip of the default binding.
-        if (!TryParse("Ctrl+Alt+U", out var toggle)
-            || toggle.Modifiers != (ModControl | ModAlt)
-            || toggle.VirtualKey != 'U'
-            || toggle.Format() != "Ctrl+Alt+U")
+        ["results"] = new JsonArray(input.GetProperty("texts").EnumerateArray()
+            .Select(text => (JsonNode)Describe(text.ValueKind == JsonValueKind.Null ? null : text.GetString()))
+            .ToArray())
+    };
+
+    private static JsonObject Describe(string? text)
+    {
+        if (!TryParse(text, out var definition)) return new JsonObject { ["ok"] = false };
+        var formatted = definition.Format();
+        return new JsonObject
         {
-            return false;
-        }
-
-        // Case- and order-insensitive parse; canonical format output.
-        if (!TryParse("shift + ctrl + a", out var canonical) || canonical.Format() != "Ctrl+Shift+A") return false;
-        if (!TryParse("WIN+SPACE", out var named) || named.Format() != "Win+Space") return false;
-        if (!TryParse("alt+f12", out var fn) || fn.VirtualKey != 0x7B || fn.Format() != "Alt+F12") return false;
-        if (!TryParse("Ctrl+PgDn", out var paging) || paging.Format() != "Ctrl+PageDown") return false;
-
-        // Invalid inputs must fail: empty, modifier-only, missing modifier,
-        // unknown key, two keys.
-        foreach (var invalid in new[] { null, "", "  ", "Ctrl+", "Ctrl", "U", "F5", "Ctrl+Foo", "Ctrl+A+B", "Ctrl++U" })
-        {
-            if (TryParse(invalid, out _)) return false;
-        }
-
-        // Format -> TryParse round trip equality.
-        if (!TryParse(fn.Format(), out var reparsed) || reparsed != fn) return false;
-
-        return true;
+            ["ok"] = true,
+            ["modifiers"] = definition.Modifiers,
+            ["virtualKey"] = definition.VirtualKey,
+            ["formatted"] = formatted,
+            ["reparses"] = TryParse(formatted, out var reparsed) && reparsed == definition
+        };
     }
 }

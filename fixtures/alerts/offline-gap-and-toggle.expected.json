@@ -1,0 +1,9 @@
+{
+  "steps": [
+    { "alerts": [{ "providerId": "codex", "label": "7d", "point": 40, "remaining": 35, "critical": false }], "notification": { "title": "Usage warning", "body": "Codex Weekly 35% left" } },
+    { "alerts": [], "notification": null },
+    { "alerts": [], "notification": null },
+    { "alerts": [], "notification": null },
+    { "alerts": [], "notification": null }
+  ]
+}

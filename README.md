@@ -2,16 +2,16 @@
 
 # QuotaScope
 
-![Platform](https://img.shields.io/badge/platform-Windows-0078D4?logo=windows&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-0078D4)
 ![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)
-![UI](https://img.shields.io/badge/UI-WinUI%203-0078D4)
+![UI](https://img.shields.io/badge/UI-WinUI%203%20%7C%20SwiftUI-0078D4)
 ![Providers](https://img.shields.io/badge/providers-Codex%20%7C%20Claude-111827)
 ![Privacy](https://img.shields.io/badge/privacy-local--only-10B981)
 ![Status](https://img.shields.io/badge/status-unofficial-6B7280)
 
-QuotaScope is a small Windows tray utility for checking Codex and Claude usage limits without keeping each provider's app, CLI, or dashboard view open.
+QuotaScope is a small Windows tray and macOS menu bar utility for checking Codex and Claude usage limits without keeping each provider's app, CLI, or dashboard view open.
 
-For Codex it starts `codex app-server` locally and reads rate limit data through stdio JSON-RPC. For Claude it reads the local Claude Code sign-in and polls Anthropic's usage endpoint. Results show in a compact tray popup.
+For Codex it starts `codex app-server` locally and reads rate limit data through stdio JSON-RPC. For Claude it reads the local Claude Code sign-in and polls Anthropic's usage endpoint. Results show in a compact tray popup (a menu bar popover on macOS).
 
 ## Screenshots
 
@@ -25,6 +25,12 @@ Layout is configurable per row — which rows show, gauges, bars, ordering, and 
 
 <img src="docs/images/quota-scope-settings.png" alt="Appearance settings with mix and match shapes per row" width="640">
 
+On macOS the same rows open from the menu bar as a native popover, here in Korean:
+
+| Menu bar popover (bars) | Pinned panel (gauges, two columns) |
+|---|---|
+| <img src="docs/images/quota-scope-mac.png" alt="QuotaScope menu bar popover on macOS showing Codex and Claude usage as bars" width="300"> | <img src="docs/images/quota-scope-mac-gauges.png" alt="QuotaScope pinned panel on macOS showing usage as gauges in two columns" width="340"> |
+
 ## Install
 
 1. Download `QuotaScope-win-x64.zip` from the [latest release](https://github.com/EvanHexX/quota-scope/releases/latest).
@@ -32,6 +38,20 @@ Layout is configurable per row — which rows show, gauges, bars, ordering, and 
 3. Run `QuotaScopeWinUI.exe`.
 
 The build is self-contained: no .NET or Windows App SDK runtime install is required. Windows 11 is recommended (Windows 10 works, but the popup gets square corners instead of rounded ones).
+
+### macOS
+
+There is no prebuilt Mac download. Build it on the Mac that runs it (no Apple Developer account needed):
+
+```sh
+xcode-select --install          # once, if the Command Line Tools are missing
+git clone https://github.com/EvanHexX/quota-scope.git
+cd quota-scope
+mac/build.sh --release --install
+open ~/Applications/QuotaScope.app
+```
+
+The script runs the self-tests, signs the app, and installs it to `~/Applications`. See [docs/MACOS_BUILD.md](docs/MACOS_BUILD.md) for details, including the optional local signing certificate.
 
 ## Features
 
@@ -50,7 +70,8 @@ The build is self-contained: no .NET or Windows App SDK runtime install is requi
 - Themes: Dark, Light, Midnight, optional system-theme following, and glassmorphism with four strength levels
 - UI scale (80–150%) and English / Korean interface
 - Configurable global hotkeys: toggle popup (default `Ctrl+Alt+U`), refresh all, toggle pin
-- Dedicated settings window; pinned popup mode; start with Windows
+- Dedicated settings window; pinned popup mode; start with Windows (start at login on macOS)
+- macOS: native menu bar app with no Dock icon, light/dark following the system, macOS notifications, and the same rows, shapes, alerts, and hotkeys (the Windows key maps to ⌘)
 - Local settings persistence; no separate credential required
 
 ## How it works
@@ -64,7 +85,7 @@ Codex:
 
 Claude:
 
-1. The app reads the access token from the local Claude Code credentials file (`%USERPROFILE%\.claude\.credentials.json`) on each poll. The token is never stored, copied, or logged.
+1. The app reads the access token from the local Claude Code credentials file (`%USERPROFILE%\.claude\.credentials.json`) on each poll; on macOS, from Claude Code's `Claude Code-credentials` item in the login Keychain. The token is never stored, copied, or logged.
 2. It polls Anthropic's OAuth usage endpoint (the same data behind Claude Code's `/usage` command) at most once per 60 seconds.
 3. Claude Code access tokens last 8 hours. Shortly before one expires the app runs `claude mcp list` in the background so Claude Code refreshes its own token; the app never performs the refresh itself and never writes to the credentials file. That command is read-only and consumes no usage.
 4. On failure it keeps showing the last successful data marked as stale.
@@ -78,6 +99,13 @@ Each provider is isolated: one provider failing does not affect the other. The a
 - Claude Code signed in on this machine (optional, only for Claude usage)
 - .NET 10 SDK only if you want to build from source
 
+macOS:
+
+- macOS 13 Ventura or later, with the Xcode Command Line Tools to build
+- Codex: the ChatGPT app (its bundled Codex CLI is found without `codex` on `PATH`) or a `codex` command (optional)
+- Claude: Claude Code signed in with `/login` on this Mac (optional). The copy of Claude Code that the Claude desktop app downloads is found too
+- Each new build asks once for access to Claude Code's Keychain item; choose **Always Allow**. Relaunching the same build or rebooting does not ask again
+
 ## Usage
 
 - Left-click the tray icon to open or close the popup.
@@ -88,12 +116,13 @@ Each provider is isolated: one provider failing does not affect the other. The a
 - Click the time text to switch between clock time and remaining time.
 - Right-click the tray icon for refresh, reconnect, settings, and exit.
 - Right-click the popup for the same menu.
+- On macOS, the menu bar icon takes the place of the tray icon, and the default popup hotkey is `⌃⌥U`.
 
 When Claude needs a sign-in, `Reconnect` opens a terminal running the Claude Code login flow; finish the browser sign-in and usage resumes automatically.
 
 ## Settings
 
-Everything is configured in the settings window (tray icon → `Settings…`), applied immediately, and stored in `settings.json` next to the executable.
+Everything is configured in the settings window (tray icon → `Settings…`), applied immediately, and stored in `settings.json` next to the executable (on macOS, in `~/Library/Application Support/QuotaScope`).
 
 - **General**: language, start with Windows, popup position (including "last position"), time display
 - **Providers**: per-provider enable, refresh interval, secondary rows, credits row, Codex command, Claude credential status, Claude session auto-renew, reconnect
@@ -121,7 +150,7 @@ QuotaScope is designed as a local utility.
 
 ## Current limitations
 
-- Windows-only.
+- The macOS app is built from source only; there is no signed or notarized Mac download. UI scale, glassmorphism, and the Midnight theme are Windows-only.
 - The app depends on Codex app-server behavior and the rate limit fields it exposes.
 - Claude usage relies on an undocumented Anthropic endpoint that may change or stop working without notice.
 - Claude usage requires being signed in to Claude Code on the same machine.
@@ -141,7 +170,7 @@ QuotaScope is designed as a local utility.
 dotnet build app-winui/QuotaScope.WinUI.csproj
 ```
 
-Run the built-in self-tests (usage mappers, Claude session renewer, hotkey parser, row shapes, usage alerts, fill-card contrast, localization):
+Run the built-in self-tests (usage mappers, Claude session renewer, hotkey parser, row shapes and layout, usage alerts, reset-time text, fill-card contrast, localization):
 
 ```powershell
 dotnet run --project app-winui/QuotaScope.WinUI.csproj -- --self-test
@@ -151,6 +180,14 @@ Publish a self-contained build:
 
 ```powershell
 dotnet publish app-winui/QuotaScope.WinUI.csproj -c Release -r win-x64 --self-contained true
+```
+
+On macOS, `mac/build.sh` builds the app and runs both self-test suites (shared fixtures, and the providers against fakes). To run them alone:
+
+```sh
+cd mac
+swift run quotascope-selftest
+swift run quotascope-providertest
 ```
 
 ## Disclaimer
@@ -169,5 +206,6 @@ Project notes live under `docs/`.
 - `docs/PROJECT_MAP.md`: module and file map
 - `docs/MODERNIZATION_PLAN.md`: .NET / WinUI modernization plan
 - `docs/WINUI3_PARITY.md`: WinUI 3 port notes, parity checklist, and window/backdrop findings
+- `docs/MACOS_BUILD.md`: macOS app design, build, Keychain and signing notes, and the Mac smoke test
 - `docs/modules/codex_rate_limits.md`: Codex app-server rate limit schema and mapping notes
 - `docs/modules/claude_rate_limits.md`: Claude usage endpoint schema and mapping notes

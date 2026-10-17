@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using QuotaScope.Providers;
 
@@ -134,179 +136,84 @@ internal static partial class UsageAlerts
         return (title, body.Length <= 255 ? body : body[..255]);
     }
 
+    // Samples live in fixtures/alerts (docs/MACOS_BUILD.md, section 5).
+    // Notifications are compared in English unless a case asks for Korean;
+    // Loc.RunSelfTest sets its own language after this.
     public static bool RunSelfTest()
     {
-        if (!TryParsePoints("80, 60,40%", false, out var parsed, out _) || FormatPoints(parsed) != "80, 60, 40") return false;
-        if (!TryParsePoints("2.5 20;20", false, out parsed, out _) || FormatPoints(parsed) != "20, 2.5") return false;
-        if (!TryParsePoints("  ", false, out parsed, out _) || parsed.Count != 0) return false;
-        if (!TryParsePoints("40, 0", false, out parsed, out _) || FormatPoints(parsed) != "40, 0") return false;
-        if (TryParsePoints("80, abc", false, out _, out _) || TryParsePoints("-1", false, out _, out _)
-            || TryParsePoints("100", false, out _, out _))
-        {
-            return false;
-        }
-        // Rounded to what the box shows before the range check: 99.999 is 100.
-        if (!TryParsePoints("33.333", false, out parsed, out _) || parsed[0] != 33.33 || TryParsePoints("99.999", false, out _, out _))
-        {
-            return false;
-        }
-        // Credits points are amounts: past 100 is fine, below 0 is not.
-        if (!TryParsePoints("500, 1500, 0", true, out parsed, out _) || FormatPoints(parsed) != "1500, 500, 0") return false;
-        if (TryParsePoints("-5", true, out _, out _) || TryParsePoints("2000000", true, out _, out _)) return false;
-
-        return RunTrackerSelfTest() && RunDefaultsSelfTest() && RunEdgeCasesSelfTest() && RunCreditsSelfTest();
+        Loc.SetLanguage("English");
+        return UsageFixtures.Run("alerts", EvaluateFixture);
     }
 
-    // Credits rows compare their amount left against points in credits, with
-    // or without a gauge, and default to the moment they run out.
-    private static bool RunCreditsSelfTest()
+    // "parse": point texts, answered by the points they give and how the box
+    // writes them back, or { "ok": false }. "steps": checks of one tracker in
+    // order, each with the usage it sees, answered by the alerts it raises and
+    // the notification they make (null when there are none). A step's
+    // "settings" apply from that step on; the case's own apply before it.
+    // "language": "Korean" compares the notification in Korean; English
+    // otherwise, and English again afterwards.
+    private static JsonNode EvaluateFixture(JsonElement input)
     {
-        var settings = new AppSettings();
-        var tracker = new UsageAlertTracker();
-        var key = RowShapes.Key("codex", "Credits");
-        IReadOnlyList<UsageAlert> Step(double left) =>
-            tracker.Evaluate(settings, new[] { Usage(new UsageRow("Credits", null, IsPrimary: false, "--", CreditsLeft: left)) });
-
-        // Off by default, like every non-primary row.
-        if (Step(0).Count != 0) return false;
-        settings.RowAlerts[key] = true;
-        if (Step(600).Count != 0 || Step(0) is not [{ Point: 0, Critical: true }]) return false;
-
-        settings.RowAlertPoints[key] = new List<double> { 500, 0 };
-        if (Step(600).Count != 0) return false;
-        var low = Step(450);
-        if (low is not [{ Point: 500, Critical: false }] || !BuildNotification(low).Body.Contains("450")) return false;
-        if (Step(0) is not [{ Point: 0, Critical: true }]) return false;
-
-        // Compared as shown: a remainder the footer prints as 0 has passed 0.
-        if (Step(600).Count != 0 || Step(0.003) is not [{ Point: 0 }]) return false;
-
-        // A credits row with a gauge but no amount (Claude with no ceiling to
-        // measure against) has nothing to compare and stays quiet.
-        var noAmount = new UsageRow("Credits", Window(99), IsPrimary: false, null);
-        if (tracker.Evaluate(settings, new[] { Usage(noAmount) }).Count != 0) return false;
-
-        // Thousands separators are refused, not split into two points.
-        if (TryParsePoints("2,000", true, out _, out _) || !TryParsePoints("2000, 500", true, out var amounts, out _)
-            || FormatPoints(amounts) != "2000, 500")
+        Loc.SetLanguage(UsageFixtures.Optional(input, "language")?.GetString() ?? "English");
+        try
         {
-            return false;
+            return EvaluateFixtureCore(input);
         }
-
-        // A percent point of 0 is passed once a window reads as used up.
-        var exhausted = new AppSettings { AlertPoints = new List<double> { 0 } };
-        return new UsageAlertTracker().Evaluate(exhausted, new[] { Usage(new UsageRow("5h", Window(99), IsPrimary: true)) }).Count == 0
-            && new UsageAlertTracker().Evaluate(exhausted, new[] { Usage(new UsageRow("5h", Window(99.7), IsPrimary: true)) })
-                is [{ Point: 0, Critical: true }];
+        finally
+        {
+            Loc.SetLanguage("English");
+        }
     }
 
-    private static bool RunEdgeCasesSelfTest()
+    private static JsonNode EvaluateFixtureCore(JsonElement input)
     {
-        var settings = new AppSettings { AlertPoints = new List<double> { 80, 60, 40 } };
-        var tracker = new UsageAlertTracker();
-        var weekly = Usage(new UsageRow("7d", Window(65), IsPrimary: true));
-        var offline = ProviderUsage.Offline("codex", "Codex", "Connecting to Codex...", ProviderState.Unavailable);
-
-        // An offline gap (a reconnect) does not replay a point already passed.
-        if (tracker.Evaluate(settings, new[] { weekly }).Count != 1) return false;
-        if (tracker.Evaluate(settings, new[] { offline }).Count != 0) return false;
-        if (tracker.Evaluate(settings, new[] { weekly }).Count != 0) return false;
-
-        // Switching a row off and on again does not replay it either.
-        settings.RowAlerts[RowShapes.Key("codex", "7d")] = false;
-        if (tracker.Evaluate(settings, new[] { weekly }).Count != 0) return false;
-        settings.RowAlerts[RowShapes.Key("codex", "7d")] = true;
-        if (tracker.Evaluate(settings, new[] { weekly }).Count != 0) return false;
-
-        // Two undated windows share the "usage" key: only the first is tracked,
-        // so the second cannot re-arm it on every check.
-        var twins = new ProviderUsage("codex", "Codex", new[]
+        var result = new JsonObject();
+        if (UsageFixtures.Optional(input, "parse") is { } texts)
         {
-            new UsageRow("usage", new RateLimitWindow(85, null, null), IsPrimary: true),
-            new UsageRow("usage", new RateLimitWindow(30, null, null), IsPrimary: true)
-        }, 85, "", DateTimeOffset.Now, ProviderState.Ok);
-        if (tracker.Evaluate(settings, new[] { twins }).Count != 1 || tracker.Evaluate(settings, new[] { twins }).Count != 0) return false;
-
-        // Both providers in one check give one alert each, in one notification;
-        // a row with neither a gauge nor a credits amount never alerts.
-        var both = new[]
-        {
-            Usage(new UsageRow("5h", Window(50), IsPrimary: true)),
-            new ProviderUsage("claude", "Claude", new[]
+            result["parsed"] = new JsonArray(texts.EnumerateArray().Select(item =>
             {
-                new UsageRow("5h", Window(70), IsPrimary: true),
-                new UsageRow("Credits", null, IsPrimary: true, "12")
-            }, 70, "", DateTimeOffset.Now, ProviderState.Ok)
-        };
-        var alerts = tracker.Evaluate(settings, both);
-        if (alerts.Count != 2 || BuildNotification(alerts).Body.Split('\n').Length != 2) return false;
-
-        // After a self-restart, a point already passed is recorded, not
-        // notified again; a deeper one passed later still is.
-        var twoPoints = new AppSettings { AlertPoints = new List<double> { 60, 20 } };
-        var restarted = new UsageAlertTracker(silentFirstSight: true);
-        if (restarted.Evaluate(twoPoints, new[] { weekly }).Count != 0) return false;
-        if (restarted.Evaluate(twoPoints, new[] { Usage(new UsageRow("7d", Window(90), IsPrimary: true)) }) is not [{ Point: 20 }])
-        {
-            return false;
+                if (!TryParsePoints(UsageFixtures.Optional(item, "text")?.GetString(), item.GetProperty("credits").GetBoolean(), out var points, out _))
+                {
+                    return (JsonNode)new JsonObject { ["ok"] = false };
+                }
+                return new JsonObject
+                {
+                    ["ok"] = true,
+                    ["points"] = new JsonArray(points.Select(point => (JsonNode)point).ToArray()),
+                    ["formatted"] = FormatPoints(points)
+                };
+            }).ToArray());
         }
-
-        // A custom point past the critical level is reported as critical.
-        var deep = new AppSettings { AlertPoints = new List<double> { 1 } };
-        return new UsageAlertTracker().Evaluate(deep, new[] { Usage(new UsageRow("5h", Window(99.5), IsPrimary: true)) })
-            is [{ Point: 1, Critical: true }];
+        if (UsageFixtures.Optional(input, "steps") is { } steps)
+        {
+            var settings = UsageFixtures.ReadSettings(UsageFixtures.Optional(input, "settings"));
+            var tracker = new UsageAlertTracker(UsageFixtures.Optional(input, "silentFirstSight")?.GetBoolean() ?? false);
+            result["steps"] = new JsonArray(steps.EnumerateArray().Select(step =>
+            {
+                if (UsageFixtures.Optional(step, "settings") is { } stepSettings) settings = UsageFixtures.ReadSettings(stepSettings);
+                var alerts = tracker.Evaluate(settings, step.GetProperty("usages").EnumerateArray().Select(UsageFixtures.ReadUsage).ToArray());
+                JsonNode? notification = null;
+                if (alerts.Count > 0)
+                {
+                    var (title, body) = BuildNotification(alerts);
+                    notification = new JsonObject { ["title"] = title, ["body"] = body };
+                }
+                return (JsonNode)new JsonObject
+                {
+                    ["alerts"] = new JsonArray(alerts.Select(alert => (JsonNode)new JsonObject
+                    {
+                        ["providerId"] = alert.ProviderId,
+                        ["label"] = alert.Row.Label,
+                        ["point"] = alert.Point,
+                        ["remaining"] = alert.Remaining,
+                        ["critical"] = alert.Critical
+                    }).ToArray()),
+                    ["notification"] = notification
+                };
+            }).ToArray());
+        }
+        return result;
     }
-
-    // One row descending through 80, 60, 40: each point notifies once, a jump
-    // past several notifies the deepest only, and a reset re-arms them.
-    private static bool RunTrackerSelfTest()
-    {
-        var settings = new AppSettings { AlertPoints = new List<double> { 80, 60, 40 } };
-        var tracker = new UsageAlertTracker();
-        double? Step(double used) =>
-            tracker.Evaluate(settings, new[] { Usage(new UsageRow("7d", Window(used), IsPrimary: true)) }) is { Count: 1 } alerts
-                ? alerts[0].Point
-                : null;
-
-        if (Step(10) is not null || Step(25) != 80 || Step(30) is not null) return false;
-        if (Step(65) != 40 || Step(70) is not null) return false;
-        if (Step(5) is not null || Step(45) != 60) return false;
-
-        // Recovering past a shallower point without clearing them all re-arms
-        // the deeper ones: 60 again after climbing back to 70% remaining.
-        if (Step(30) is not null || Step(41) != 60) return false;
-
-        // Secondary rows stay quiet until switched on; their own points win.
-        var spark = new UsageRow("Spark 7d", Window(50), IsPrimary: false);
-        if (tracker.Evaluate(settings, new[] { Usage(spark) }).Count != 0) return false;
-        settings.RowAlerts[RowShapes.Key("codex", spark.Label)] = true;
-        settings.RowAlertPoints[RowShapes.Key("codex", spark.Label)] = new List<double> { 55 };
-        if (tracker.Evaluate(settings, new[] { Usage(spark) }) is not [{ Point: 55 }]) return false;
-
-        // A primary row switched off never notifies.
-        settings.RowAlerts[RowShapes.Key("codex", "5h")] = false;
-        return tracker.Evaluate(settings, new[] { Usage(new UsageRow("5h", Window(99), IsPrimary: true)) }).Count == 0;
-    }
-
-    // With no points set, notifications come at the warning and critical
-    // levels, and the critical one carries the critical title.
-    private static bool RunDefaultsSelfTest()
-    {
-        var settings = new AppSettings();
-        var tracker = new UsageAlertTracker();
-        if (tracker.Evaluate(settings, new[] { Usage(new UsageRow("5h", Window(70), IsPrimary: true)) }).Count != 0) return false;
-        var warning = tracker.Evaluate(settings, new[] { Usage(new UsageRow("5h", Window(85), IsPrimary: true)) });
-        if (warning is not [{ Point: 20, Critical: false }]) return false;
-        var critical = tracker.Evaluate(settings, new[] { Usage(new UsageRow("5h", Window(98), IsPrimary: true)) });
-        if (critical is not [{ Point: 2.5, Critical: true }]) return false;
-        return BuildNotification(critical).Title == Loc.T("Usage critical", "사용량 위험")
-            && BuildNotification(warning).Title == Loc.T("Usage warning", "사용량 경고");
-    }
-
-    private static RateLimitWindow Window(double used) => new(used, null, 10080);
-
-    private static ProviderUsage Usage(UsageRow row) =>
-        new("codex", "Codex", new[] { row }, row.Window?.UsedPercent ?? 0, "", DateTimeOffset.Now, ProviderState.Ok);
 
     [GeneratedRegex(@"\d,\d{3}(?!\d)")]
     private static partial Regex ThousandsSeparator();

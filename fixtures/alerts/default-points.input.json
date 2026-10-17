@@ -1,0 +1,8 @@
+{
+  "description": "With no points set, a row notifies at the warning level (20% left) and the critical level (2.5% left). The critical one carries the critical title.",
+  "steps": [
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "5h", "isPrimary": true, "usedPercent": 70, "windowDurationMins": 300 }] }] },
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "5h", "isPrimary": true, "usedPercent": 85, "windowDurationMins": 300 }] }] },
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "5h", "isPrimary": true, "usedPercent": 98, "windowDurationMins": 300 }] }] }
+  ]
+}

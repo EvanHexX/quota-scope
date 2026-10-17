@@ -1,0 +1,31 @@
+{
+  "providerId": "codex",
+  "displayName": "Codex",
+  "state": "Ok",
+  "statusText": "Codex rate limit",
+  "overallUsedPercent": 41,
+  "rows": [
+    {
+      "label": "7d",
+      "scope": null,
+      "isPrimary": true,
+      "usedPercent": 41,
+      "resetsAt": null,
+      "windowDurationMins": 10080,
+      "detailText": null,
+      "beyondFull": false,
+      "creditsLeft": null
+    },
+    {
+      "label": "usage",
+      "scope": null,
+      "isPrimary": true,
+      "usedPercent": 22,
+      "resetsAt": null,
+      "windowDurationMins": null,
+      "detailText": null,
+      "beyondFull": false,
+      "creditsLeft": null
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "steps": [
+    { "alerts": [], "notification": null },
+    { "alerts": [{ "providerId": "codex", "label": "5h", "point": 20, "remaining": 15, "critical": false }], "notification": { "title": "Usage warning", "body": "Codex 5h 15% left" } },
+    { "alerts": [{ "providerId": "codex", "label": "5h", "point": 2.5, "remaining": 2, "critical": true }], "notification": { "title": "Usage critical", "body": "Codex 5h 2% left" } }
+  ]
+}

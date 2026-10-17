@@ -49,3 +49,8 @@ docs/HANDOFF_QUOTASCOPE.md
 # Keep sample settings files explicit, for example `settings.example.json`.
 settings.json
 app/settings.json
+
+# Swift Package Manager (mac/)
+mac/.build/
+mac/.swiftpm/
+mac/Package.resolved

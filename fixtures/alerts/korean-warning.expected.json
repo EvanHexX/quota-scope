@@ -1,0 +1,26 @@
+{
+  "steps": [
+    {
+      "alerts": [
+        {
+          "providerId": "codex",
+          "label": "5h",
+          "point": 60,
+          "remaining": 50,
+          "critical": false
+        },
+        {
+          "providerId": "codex",
+          "label": "Spark 7d",
+          "point": 60,
+          "remaining": 55,
+          "critical": false
+        }
+      ],
+      "notification": {
+        "title": "사용량 경고",
+        "body": "Codex 5시간 50% 남음\nCodex Spark · 주간 55% 남음"
+      }
+    }
+  ]
+}

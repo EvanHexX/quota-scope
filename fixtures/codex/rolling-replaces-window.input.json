@@ -1,0 +1,13 @@
+{
+  "description": "A 5h window replacing the weekly one in its slot does not inherit the weekly reset time: no reset time beats a wrong one.",
+  "read": {
+    "rateLimits": {
+      "limitId": "codex",
+      "primary": { "usedPercent": 12.5, "resetsAt": 1785269431, "windowDurationMins": 10080 },
+      "secondary": null
+    }
+  },
+  "updates": [
+    { "rateLimits": { "limitId": "codex", "primary": { "usedPercent": 3, "resetsAt": null, "windowDurationMins": 300 } } }
+  ]
+}

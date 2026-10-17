@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using QuotaScope.Providers;
 
 namespace QuotaScope.WinUI;
@@ -64,67 +66,30 @@ internal static class RowShapes
     public static bool IsVisible(AppSettings settings, UsageRowRef row) =>
         IsVisible(settings, row.ProviderId, row.Label, row.IsPrimary);
 
-    // Pure-logic self-test for row visibility: provider defaults first, then an
-    // explicit per-row choice overriding them in both directions.
-    public static bool RunSelfTest()
+    // Samples live in fixtures/rows (docs/MACOS_BUILD.md, section 5): row
+    // visibility (provider defaults, then an explicit per-row choice in both
+    // directions) and the shape each row is drawn with.
+    public static bool RunSelfTest() => UsageFixtures.Run("rows", EvaluateFixture);
+
+    // Each row ({ providerId, label, isPrimary }) under the case's settings is
+    // answered by its settings key, whether it is shown, and its shape.
+    private static JsonNode EvaluateFixture(JsonElement input)
     {
-        var settings = new AppSettings();
-        var codex = settings.GetProvider("codex");
-        var window = new RateLimitWindow(10d, null, 300);
-        var main = new UsageRow("5h", window, IsPrimary: true);
-        var spark5h = new UsageRow("Spark 5h", window, IsPrimary: false);
-        var sparkWeekly = new UsageRow("Spark 7d", window, IsPrimary: false);
-        // Credits now arrive with a window, which must not push the row into the
-        // secondary-rows bucket.
-        var credits = new UsageRow("Credits", window, IsPrimary: false, "12 / 2500");
-
-        codex.ShowSecondaryRows = false;
-        codex.ShowCredits = false;
-        if (!IsVisible(settings, "codex", main)) return false;
-        if (IsVisible(settings, "codex", spark5h) || IsVisible(settings, "codex", credits)) return false;
-
-        codex.ShowSecondaryRows = true;
-        codex.ShowCredits = true;
-        if (!IsVisible(settings, "codex", spark5h) || !IsVisible(settings, "codex", credits)) return false;
-
-        settings.RowVisibility[Key("codex", main.Label)] = false;
-        settings.RowVisibility[Key("codex", spark5h.Label)] = false;
-        if (IsVisible(settings, "codex", main) || IsVisible(settings, "codex", spark5h)) return false;
-
-        codex.ShowSecondaryRows = false;
-        settings.RowVisibility[Key("codex", sparkWeekly.Label)] = true;
-        if (!IsVisible(settings, "codex", sparkWeekly)) return false;
-
-        return RunResolveSelfTest();
-    }
-
-    // A whole-popup theme wins over any per-row choice; only mix & match reads
-    // RowShapes, and a value it does not know falls back to a gauge.
-    private static bool RunResolveSelfTest()
-    {
-        var settings = new AppSettings();
-        var window = new RateLimitWindow(10d, null, 300);
-        var fiveHour = new UsageRow("5h", window, IsPrimary: true);
-        var weekly = new UsageRow("7d", window, IsPrimary: true);
-        settings.RowShapes[Key("codex", fiveHour.Label)] = Fill;
-
-        foreach (var (theme, expected) in new[] { ("Bars", Bars), ("BentoCircles", Circle), ("Fill", Fill) })
+        var settings = UsageFixtures.ReadSettings(UsageFixtures.Optional(input, "settings"));
+        return new JsonObject
         {
-            settings.ShapeTheme = theme;
-            if (Resolve(settings, "codex", fiveHour) != expected || Resolve(settings, "codex", weekly) != expected) return false;
-        }
-
-        settings.ShapeTheme = "MixMatch";
-        if (Resolve(settings, "codex", fiveHour) != Fill || Resolve(settings, "codex", weekly) != Circle) return false;
-        // The same label under another provider is a different row.
-        if (Resolve(settings, "claude", fiveHour) != Circle) return false;
-
-        settings.RowShapes[Key("codex", weekly.Label)] = Bars;
-        if (Resolve(settings, "codex", weekly) != Bars) return false;
-        settings.RowShapes[Key("codex", weekly.Label)] = "fill";
-        if (Resolve(settings, "codex", weekly) != Fill) return false;
-        settings.RowShapes[Key("codex", weekly.Label)] = "Ring";
-        return Resolve(settings, "codex", weekly) == Circle;
+            ["rows"] = new JsonArray(input.GetProperty("rows").EnumerateArray().Select(item =>
+            {
+                var providerId = item.GetProperty("providerId").GetString()!;
+                var row = new UsageRow(item.GetProperty("label").GetString()!, null, item.GetProperty("isPrimary").GetBoolean());
+                return (JsonNode)new JsonObject
+                {
+                    ["key"] = Key(providerId, row.Label),
+                    ["visible"] = IsVisible(settings, providerId, row),
+                    ["shape"] = Resolve(settings, providerId, row)
+                };
+            }).ToArray())
+        };
     }
 
     public static string Resolve(AppSettings settings, string providerId, UsageRow row)

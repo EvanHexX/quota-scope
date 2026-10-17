@@ -1,0 +1,10 @@
+{
+  "description": "Credits points are amounts of credits left: past 100 is fine, below 0 or above 1,000,000 is not. A comma followed by three digits is refused as a thousands separator instead of being split into two points.",
+  "parse": [
+    { "text": "500, 1500, 0", "credits": true },
+    { "text": "-5", "credits": true },
+    { "text": "2000000", "credits": true },
+    { "text": "2,000", "credits": true },
+    { "text": "2000, 500", "credits": true }
+  ]
+}

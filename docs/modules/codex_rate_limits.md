@@ -126,6 +126,7 @@ app-server가 LSP/MCP식 2단계 핸드셰이크를 요구하도록 바뀌었다
 - `credits.hasCredits == true`이면 잔액을 `Credits` row로 표시할 수 있다 (per-provider 표시 옵션, 기본 off). Claude의 `extra_usage`와 대칭 구조다.
 - `balance`는 **남은** 잔액이고 상한이 없으므로, gauge는 provider 설정 `CreditsFullAmount`(기본 2500)를 100% 기준으로 삼아 usedPercent = `(1 - balance / 기준값) * 100`으로 그린다. `unlimited`이거나 기준값이 0이거나 `balance` 파싱에 실패하면 gauge 없이 잔액 텍스트만 표시한다. 잔액이 기준값보다 크면 usedPercent를 0으로 고정하고(잔여량 지표에서 gauge가 가득 참) `UsageRow.BeyondFull`을 세워, 팝업 퍼센트가 `100%` 대신 `>100%`로 나오게 한다 (잔여량 지표일 때. 사용량 지표에서는 `0%`). 보조 텍스트는 실제 잔액을 그대로 쓴다 (예: `3000 / 2500`).
 - `Credits` row는 `IsPrimary: false`이므로 overall 수치와 트레이 아이콘에 반영되지 않고, 트레이 툴팁의 window 목록에서도 제외된다.
+- 위 규칙은 `fixtures/codex/`의 입력/기대 결과 쌍(read + 순서대로 merge할 update)으로 고정되어 있고, `RateLimitMapper.RunSelfTest()`가 이를 검사한다. 규칙을 바꾸면 같은 commit에서 fixture도 바꾼다. macOS 포트도 같은 파일로 검사한다 (`docs/MACOS_BUILD.md` 5장).
 
 ## Failure Handling
 

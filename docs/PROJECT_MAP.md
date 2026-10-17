@@ -16,6 +16,7 @@
 - global hotkey native window -> `app-winui/Hotkeys/HotkeyWindow.cs`
 - hotkey capture control -> `app-winui/Controls/HotkeyCaptureBox.cs`
 - row shape/order/visibility resolution -> `app-winui/RowShapes.cs`
+- popup row layout (visible rows in order, 2열 판단, card pairing) -> `app-winui/RowLayout.cs`
 - usage alert levels, points, and per-row notification tracking -> `app-winui/UsageAlerts.cs`
 - EN/KO localization helper -> `app-winui/Loc.cs`
 - start-with-Windows registration -> `app-winui/Autostart.cs`
@@ -42,6 +43,19 @@
 - provider interface -> `app/Providers/IUsageProvider.cs`
 - shared usage models (ProviderUsage/UsageRow) -> `app/Providers/UsageModels.cs`
 - credits gauge denominator/percent helpers -> `app/Providers/CreditsGauge.cs`
+- self-test fixture loader/comparer, input readers -> `app/Providers/UsageFixtures.cs`
+- shared mapper fixtures (입력/기대 결과 쌍, 두 project에 EmbeddedResource로 포함, macOS 포트와 공유) -> `fixtures/codex/`, `fixtures/claude/`
+- shared renewer/hotkey fixtures (두 project에 포함) -> `fixtures/renewer/`, `fixtures/hotkeys/`
+- shared row visibility/shape, usage alert, row layout, reset-time text fixtures (WinUI project에만 포함) -> `fixtures/rows/`, `fixtures/alerts/`, `fixtures/layout/`, `fixtures/resettext/`
+
+## macOS (planned)
+
+- build plan, shared fixture format -> `docs/MACOS_BUILD.md`
+- Swift package (QuotaCore, Windows에서도 빌드) -> `mac/Package.swift`
+- shared logic port: models, Codex/Claude mappers, row shapes and layout, usage alerts, reset-time text, settings model, hotkey grammar -> `mac/Sources/QuotaCore/`
+- fixture runner (`swift run quotascope-selftest`) -> `mac/Sources/quotascope-selftest/main.swift`, `mac/Sources/QuotaCore/Fixtures.swift`
+- providers: Codex app-server client, Claude usage poller, session renewer, command/credential lookup (Keychain는 macOS 전용) -> `mac/Sources/QuotaProviders/`
+- provider checks against fakes (`swift run quotascope-providertest`) -> `mac/Sources/quotascope-providertest/main.swift`, `mac/Sources/fake-codex-app-server/main.swift`
 
 ## Codex Rate Limits
 

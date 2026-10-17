@@ -1,0 +1,4 @@
+{
+  "description": "Parsing ignores case, spaces and modifier order; formatting always writes Ctrl+Alt+Shift+Win+Key with canonical key names (PgDn becomes PageDown). Every formatted text parses back to the same binding.",
+  "texts": ["shift + ctrl + a", "WIN+SPACE", "alt+f12", "Ctrl+PgDn"]
+}
