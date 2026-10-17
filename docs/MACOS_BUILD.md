@@ -113,7 +113,7 @@ Principle: use system components and system styling, and drop Windows features w
 | Global hotkeys (`Ctrl+Alt+U` default) | Carbon `RegisterEventHotKey` (no Accessibility permission needed) | Default `⌃⌥U` (same physical keys). Settings strings keep the `Ctrl+Alt+U` grammar, see 6.3 |
 | Tray notifications | `UNUserNotificationCenter` | Asks for permission on first alert **(verify that an ad-hoc signed app can request it)** |
 | Start with Windows (HKCU Run) | `SMAppService.mainApp.register()` (macOS 13+) | Shows up in System Settings → Login Items **(verify with ad-hoc signing)** |
-| EN/KO UI (`Loc.cs`) | String Catalog (`Localizable.xcstrings`) with en and ko | Language setting: System / English / Korean. Row names, reset-time formats, and setting values reuse the `Loc.cs` wording; a `loc/` fixture folder pins row display names in both languages |
+| EN/KO UI (`Loc.cs`) | `Loc` in `QuotaCore`, as on Windows (**decision M14**, 2026-10-17: no String Catalog) | Language setting: System / English / Korean, applied live. Every app string goes through `Loc.t` with the `Loc.cs` wording. A String Catalog would follow only the system language, change only after a relaunch, and needs Xcode's `xcstringstool` to compile, which the Command Line Tools lack. `Info.plist` declares `en` and `ko` so system-drawn text (text field menus, the permission prompts) follows the system language |
 | Reconnect opens `cmd /k claude /login` | Open Terminal.app running `claude /login` through a temporary `.command` file opened with `NSWorkspace` | Avoids the Automation permission that `osascript` would need |
 | Crash log next to exe | `~/Library/Logs/QuotaScope/` | |
 | Graphics adapter self-restart | Not needed | WinUI-specific (microsoft-ui-xaml#10844) |
