@@ -1,4 +1,5 @@
 #if os(macOS)
+import AppKit
 import SwiftUI
 import QuotaCore
 
@@ -104,7 +105,7 @@ struct PopoverView: View {
         HStack(alignment: .firstTextBaseline) {
             Text(usage.displayName)
                 .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(UsageBar.accent)
             Spacer(minLength: 12)
             Text(usage.statusText)
                 .font(.caption)
@@ -136,6 +137,12 @@ struct PopoverView: View {
 struct UsageBar: View {
     let percent: Int
     let color: Color
+
+    // The user's accent color resolved to fixed sRGB: Color.accentColor also
+    // turns gray in a window that is not key.
+    static var accent: Color {
+        Color(nsColor: NSColor.controlAccentColor.usingColorSpace(.sRGB) ?? .systemBlue)
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -211,7 +218,7 @@ struct BarRow: View {
     private func accent(_ used: Int) -> Color {
         if Double(used) >= UsageAlerts.criticalAtUsed(model.settings) { return Color(red: 235 / 255, green: 68 / 255, blue: 56 / 255) }
         if Double(used) >= UsageAlerts.warningAtUsed(model.settings) { return Color(red: 1, green: 126 / 255, blue: 91 / 255) }
-        return .accentColor
+        return UsageBar.accent
     }
 }
 #endif
