@@ -9,7 +9,8 @@ import QuotaProviders
 // toolbar tabs, grouped forms, and immediate apply. Every control writes
 // settings.json through SettingsStore.update and tells the controller what
 // changed; there is no OK/Cancel. Only settings the Mac app acts on are shown:
-// row shapes, columns, and hotkeys come with their features.
+// the Windows glass, palette, scale, and popup position have no Mac popover
+// counterpart.
 
 enum SettingsChange {
     case general
@@ -33,10 +34,18 @@ final class SettingsModel: ObservableObject {
     // One message for every alert points box; only the box that raised it
     // clears it, as the Windows InfoBar.
     @Published var pointsError: (owner: String, message: String)?
+    @Published var hotkeyErrors: [HotkeyAction: String] = [:]
+    // Bindings that could not be applied at launch.
+    @Published var hotkeyWarnings: [String] = []
+    @Published private(set) var recordingHotkey: HotkeyAction?
+    private var keyMonitor: Any?
 
     var onChange: (SettingsChange) -> Void = { _ in }
     var onReconnect: () -> Void = {}
     var onOpenNotificationSettings: () -> Void = {}
+    // Registers (nil: unregisters) a binding; an error message when refused.
+    var onRegisterHotkey: (HotkeyAction, HotkeyDefinition?) -> String? = { _, _ in nil }
+    var onRecordingHotkey: (Bool) -> Void = { _ in }
 
     init(store: SettingsStore) {
         self.store = store
@@ -146,6 +155,54 @@ final class SettingsModel: ObservableObject {
         }
     }
 
+    // Registered hotkeys are let go while recording, so pressing one records
+    // it instead of running it.
+    func startRecording(_ action: HotkeyAction) {
+        stopRecording()
+        hotkeyErrors[action] = nil
+        recordingHotkey = action
+        onRecordingHotkey(true)
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.record(event)
+            return nil
+        }
+    }
+
+    func stopRecording() {
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        keyMonitor = nil
+        guard recordingHotkey != nil else { return }
+        recordingHotkey = nil
+        onRecordingHotkey(false)
+    }
+
+    private func record(_ event: NSEvent) {
+        guard let action = recordingHotkey else { return }
+        let modifiers = MacKeys.modifiers(event.modifierFlags)
+        if event.keyCode == MacKeys.escapeKeyCode && modifiers == 0 {
+            stopRecording()
+            return
+        }
+        // A binding without a modifier would take the key from every app.
+        guard modifiers != 0, let virtualKey = MacKeys.virtualKey(event.keyCode) else {
+            hotkeyErrors[action] = loc.t("Use a letter, digit, F-key, arrow, or Space with at least one of ⌃ ⌥ ⇧ ⌘.",
+                                         "문자, 숫자, F키, 화살표, Space 중 하나를 ⌃ ⌥ ⇧ ⌘ 중 하나 이상과 함께 누르세요.")
+            return
+        }
+        stopRecording()
+        setHotkey(action, HotkeyDefinition(modifiers: modifiers, virtualKey: virtualKey))
+    }
+
+    // A refused binding is not saved and the previous one stays, as on Windows.
+    func setHotkey(_ action: HotkeyAction, _ definition: HotkeyDefinition?) {
+        if let error = onRegisterHotkey(action, definition) {
+            hotkeyErrors[action] = error
+            return
+        }
+        hotkeyErrors[action] = nil
+        update(.general) { $0[keyPath: action.settingsPath] = definition?.format() ?? "" }
+    }
+
     func openSettingsFile() {
         store.ensureFileExists()
         NSWorkspace.shared.open(SettingsStore.file)
@@ -163,6 +220,14 @@ private func option(_ value: String, _ loc: Loc) -> String {
     case "System": return loc.t("System", "시스템")
     case "Light": return loc.t("Light", "라이트")
     case "Dark": return loc.t("Dark", "다크")
+    case "Bars": return loc.t("Bars", "막대")
+    case "BentoCircles": return loc.t("Gauges", "게이지")
+    case "Fill": return loc.t("Fill", "채우기")
+    case "MixMatch": return loc.t("Mix & match", "믹스 & 매치")
+    case "Circle": return loc.t("Gauge", "게이지")
+    case "Auto": return loc.t("Auto", "자동")
+    case "OneColumn": return loc.t("One column", "1열")
+    case "TwoColumns": return loc.t("Two columns", "2열")
     case MenuBarText.off: return loc.t("Off", "끔")
     case MenuBarText.highestWeekly: return loc.t("Highest weekly", "가장 높은 주간")
     case MenuBarText.highestOverall: return loc.t("Highest overall", "가장 높은 전체")
@@ -183,6 +248,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         ("Providers", "server.rack"),
         ("Appearance", "paintbrush"),
         ("Alerts", "exclamationmark.triangle"),
+        ("Hotkeys", "keyboard"),
         ("About", "info.circle"),
     ]
 
@@ -235,13 +301,17 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         case "Providers": return loc.t("Providers", "프로바이더")
         case "Appearance": return loc.t("Appearance", "모양")
         case "Alerts": return loc.t("Alerts", "경고")
+        case "Hotkeys": return loc.t("Hotkeys", "단축키")
         default: return loc.t("About", "정보")
         }
     }
 
     // Commits a number field that still has focus.
     nonisolated func windowWillClose(_ notification: Notification) {
-        Task { @MainActor in self.window?.makeFirstResponder(nil) }
+        Task { @MainActor in
+            self.window?.makeFirstResponder(nil)
+            self.model.stopRecording()
+        }
     }
 }
 
@@ -261,6 +331,7 @@ private struct SettingsPage: View {
             case "Providers": ProvidersPage()
             case "Appearance": AppearancePage()
             case "Alerts": AlertsPage()
+            case "Hotkeys": HotkeysPage()
             case "About": AboutPage()
             default: GeneralPage()
             }
@@ -521,13 +592,32 @@ private struct AppearancePage: View {
                                            "팝업과 설정 창에 적용됩니다. 시스템은 macOS의 라이트/다크를 따릅니다."))
                 }
             }
+            Section {
+                Picker(selection: model.binding(.appearance, \.shapeTheme)) {
+                    ForEach(["Bars", "BentoCircles", "Fill", "MixMatch"], id: \.self) { Text(option($0, loc)).tag($0) }
+                } label: {
+                    RowLabel(title: loc.t("Shape theme", "게이지 모양"),
+                             detail: loc.t("Bars, gauges, fill (a two-line card whose background fills up to the percentage), or mix & match per row.",
+                                           "막대, 게이지, 채우기(카드 배경이 퍼센트만큼 차오르는 두 줄 카드), 또는 행별 믹스 & 매치."))
+                }
+                // Applies to every shape theme: it sets the popover width and
+                // pairs gauge and fill cards.
+                Picker(selection: model.binding(.appearance, \.layoutColumns)) {
+                    ForEach(["Auto", "OneColumn", "TwoColumns"], id: \.self) { Text(option($0, loc)).tag($0) }
+                } label: {
+                    RowLabel(title: loc.t("Columns", "열 수"),
+                             detail: loc.t("Sets the popup width. Auto pairs gauges only when a provider has two; in two columns, neighbouring fill cards pair up too.",
+                                           "팝업 너비를 정합니다. 자동은 한 프로바이더에 게이지가 2개 이상일 때만 2열로 배치하고, 2열에서는 이웃한 채우기 카드도 두 개씩 배치합니다."))
+                }
+            }
             RowList()
         }
     }
 }
 
-// Every row the providers report: check the ones to show and order them.
-// Ordering is per provider, and each provider keeps at least one row.
+// Every row the providers report: check the ones to show, order them, and in
+// mix & match pick a shape each. Ordering is per provider, and each provider
+// keeps at least one row.
 private struct RowList: View {
     @EnvironmentObject var model: SettingsModel
 
@@ -550,13 +640,23 @@ private struct RowList: View {
                 }
             }
         } header: {
-            Text(loc.t("Rows to show", "표시할 행"))
+            Text(mixMatch ? loc.t("Rows and shapes", "행별 표시와 모양") : loc.t("Rows to show", "표시할 행"))
         } footer: {
-            Text(loc.t("Clear a checkbox to drop that row from the popup and the menu bar tooltip. Every provider keeps at least one row, so its last checked row cannot be cleared.",
-                       "체크를 해제하면 해당 행이 팝업과 메뉴 막대 툴팁에서 빠집니다. 프로바이더마다 최소 한 행은 남아야 해서, 마지막으로 체크된 행은 해제할 수 없습니다."))
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(loc.t("Clear a checkbox to drop that row from the popup and the menu bar tooltip. Every provider keeps at least one row, so its last checked row cannot be cleared.",
+                           "체크를 해제하면 해당 행이 팝업과 메뉴 막대 툴팁에서 빠집니다. 프로바이더마다 최소 한 행은 남아야 해서, 마지막으로 체크된 행은 해제할 수 없습니다."))
+                if mixMatch {
+                    Text(loc.t("Bars take the full popup width; gauges sit two per line when they are next to each other, so reorder rows to pair the gauges you want side by side. Fill cards are two lines tall: they take the full width, or pair with a neighbouring fill card when the popup is in two columns, never with a gauge.",
+                               "막대는 팝업 전체 폭을 쓰고, 게이지는 서로 이웃할 때만 한 줄에 두 개씩 배치됩니다. 나란히 두고 싶은 게이지는 순서를 옮겨 붙여 주세요. 채우기는 두 줄 높이 카드로, 전체 폭을 쓰거나 팝업이 2열일 때 이웃한 채우기 카드와만 짝을 이루며 게이지와는 짝을 이루지 않습니다."))
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
+    }
+
+    private var mixMatch: Bool {
+        model.settings.shapeTheme.caseInsensitiveCompare("MixMatch") == .orderedSame
     }
 
     private var providerIds: [String] {
@@ -586,6 +686,14 @@ private struct RowList: View {
             .toggleStyle(.checkbox)
             .disabled(visible && shown <= 1)
             Spacer()
+            if mixMatch {
+                Picker("", selection: Binding(get: { shapeChoice(model.settings.rowShapes[key]) },
+                                              set: { value in model.update(.appearance) { $0.rowShapes[key] = value } })) {
+                    ForEach([RowShapes.circle, RowShapes.bars, RowShapes.fill], id: \.self) { Text(option($0, loc)).tag($0) }
+                }
+                .labelsHidden()
+                .frame(width: 110)
+            }
             Button { move(rows, index, -1) } label: { Image(systemName: "chevron.up") }
                 .buttonStyle(.borderless)
                 .disabled(index == 0)
@@ -595,6 +703,13 @@ private struct RowList: View {
                 .disabled(index == rows.count - 1)
                 .help(loc.t("Move down", "아래로"))
         }
+    }
+
+    // What RowShapes.resolve makes of a stored value: unknown means gauge.
+    private func shapeChoice(_ stored: String?) -> String {
+        guard let stored else { return RowShapes.circle }
+        if stored.caseInsensitiveCompare(RowShapes.bars) == .orderedSame { return RowShapes.bars }
+        return stored.caseInsensitiveCompare(RowShapes.fill) == .orderedSame ? RowShapes.fill : RowShapes.circle
     }
 
     // Persists the whole provider's order so later rows stay put.
@@ -784,6 +899,72 @@ private struct PointsField: View {
             if model.pointsError?.owner == owner { model.pointsError = nil }
             text = UsageAlerts.formatPoints(parsed)
             if parsed != current { apply(parsed) }
+        }
+    }
+}
+
+private struct HotkeysPage: View {
+    @EnvironmentObject var model: SettingsModel
+
+    var body: some View {
+        let loc = model.loc
+        let unbound = loc.t("Unbound by default.", "기본값은 지정 안 함입니다.")
+        Form {
+            if !model.hotkeyWarnings.isEmpty {
+                Section {
+                    ForEach(model.hotkeyWarnings, id: \.self) { warning in
+                        Text(warning).font(.caption).foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text(loc.t("Hotkey load warnings", "단축키 불러오기 경고"))
+                }
+            }
+            Section {
+                HotkeyRow(action: .togglePopup, title: loc.t("Toggle popup", "팝업 토글"),
+                          detail: loc.t("Default ⌃⌥U.", "기본값 ⌃⌥U."))
+                HotkeyRow(action: .refreshAll, title: loc.t("Refresh all", "전체 새로 고침"), detail: unbound)
+                HotkeyRow(action: .togglePin, title: loc.t("Toggle pin", "핀 토글"), detail: unbound)
+            } footer: {
+                Text(loc.t("Click a shortcut, then press the new keys with at least one of ⌃ ⌥ ⇧ ⌘. Esc cancels. The settings file keeps the Windows names (Ctrl, Alt, Shift, Win = ⌘).",
+                           "단축키를 누른 뒤 ⌃ ⌥ ⇧ ⌘ 중 하나 이상과 함께 새 키를 누르세요. Esc는 취소입니다. 설정 파일에는 Windows 이름(Ctrl, Alt, Shift, Win = ⌘)으로 저장됩니다."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+// Click to record: the next key press with a modifier becomes the binding.
+private struct HotkeyRow: View {
+    let action: HotkeyAction
+    let title: String
+    let detail: String
+    @EnvironmentObject var model: SettingsModel
+
+    var body: some View {
+        let loc = model.loc
+        let current = model.settings[keyPath: action.settingsPath]
+        let recording = model.recordingHotkey == action
+        LabeledContent {
+            VStack(alignment: .trailing, spacing: 4) {
+                HStack {
+                    Button(recording ? loc.t("Press keys...", "키를 누르세요...")
+                                     : current.isEmpty ? loc.t("Not set", "지정 안 함") : MacKeys.display(current)) {
+                        recording ? model.stopRecording() : model.startRecording(action)
+                    }
+                    .frame(minWidth: 130)
+                    Button(loc.t("Clear", "지우기")) {
+                        model.stopRecording()
+                        model.setHotkey(action, nil)
+                    }
+                    .disabled(current.isEmpty)
+                }
+                if let error = model.hotkeyErrors[action] {
+                    Text(error).font(.caption).foregroundStyle(.red)
+                }
+            }
+        } label: {
+            RowLabel(title: title, detail: detail)
         }
     }
 }

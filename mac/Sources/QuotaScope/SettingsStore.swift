@@ -159,11 +159,17 @@ enum SettingsFields {
         .init("Autostart", \.autostart),
         .init("RowOrder", \.rowOrder) { .number(Int64($0)) },
         .init("RowVisibility", \.rowVisibility) { .bool($0) },
+        .init("RowShapes", \.rowShapes) { .string($0) },
+        .init("ShapeTheme", \.shapeTheme),
+        .init("LayoutColumns", \.layoutColumns),
         .init("GaugeMetric", \.gaugeMetric),
         .init("Language", \.language),
         .init("NotifyOnThreshold", \.notifyOnThreshold),
         .init("TimeDisplayMode", \.timeDisplayMode),
         .init("IsPinned", \.isPinned),
+        .init("Hotkey", \.hotkey),
+        .init("HotkeyRefreshAll", \.hotkeyRefreshAll),
+        .init("HotkeyTogglePin", \.hotkeyTogglePin),
     ]
 
     static let provider: [SettingsField<ProviderSettings>] = [

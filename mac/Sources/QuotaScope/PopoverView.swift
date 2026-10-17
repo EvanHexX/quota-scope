@@ -20,18 +20,26 @@ final class UsageModel: ObservableObject {
     var onSignIn: () -> Void = {}
 
     // Visible rows per provider in the user's order, as the Windows popup.
-    var sections: [(usage: ProviderUsage, rows: [UsageRow])] {
-        usages.map { usage in
-            let visible = usage.rows.filter { RowShapes.isVisible(settings, usage.providerId, $0) }
-            return (usage, RowShapes.order(settings, usage.providerId, visible) { $0.label })
-        }
+    var sections: [LayoutSection] { RowLayout.sections(settings, usages) }
+
+    // UsagePopupWindow.PositionAndSize, scaled to the popover: two columns
+    // get the wide popover; a forced single column or a lone gauge the
+    // compact one; anything else the bar width.
+    var width: CGFloat {
+        let sections = sections
+        if RowLayout.usesTwoColumns(settings, sections) { return 340 }
+        let forcedOneColumn = settings.layoutColumns.caseInsensitiveCompare("OneColumn") == .orderedSame
+        let singleGaugeOnly = sections.reduce(0) { $0 + $1.rows.count } == 1
+            && settings.layoutColumns.caseInsensitiveCompare("TwoColumns") != .orderedSame
+            && sections.allSatisfy { section in
+                section.rows.allSatisfy { RowShapes.resolve(settings, section.usage.providerId, $0) == RowShapes.circle }
+            }
+        return forcedOneColumn || singleGaugeOnly ? 190 : 300
     }
 }
 
 struct PopoverView: View {
     @ObservedObject var model: UsageModel
-
-    static let width: CGFloat = 300
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -43,7 +51,7 @@ struct PopoverView: View {
             }
         }
         .padding(12)
-        .frame(width: Self.width)
+        .frame(width: model.width)
         .contextMenu { contextMenu }
     }
 
@@ -89,15 +97,41 @@ struct PopoverView: View {
                 .foregroundStyle(.secondary)
                 .padding(.vertical, 12)
         } else {
+            // Which cards share a line is RowLayout's (fixtures/layout).
+            let twoColumn = RowLayout.usesTwoColumns(model.settings, sections)
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(Array(sections.enumerated()), id: \.offset) { index, section in
                     if index > 0 { Divider().padding(.vertical, 2) }
                     sectionHeader(section.usage)
-                    ForEach(Array(section.rows.enumerated()), id: \.offset) { _, row in
-                        BarRow(providerId: section.usage.providerId, row: row, model: model, now: now)
+                    let providerId = section.usage.providerId
+                    let lines = RowLayout.lines(model.settings, providerId, section.rows, twoColumn: twoColumn)
+                    ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                        lineView(providerId, line, now: now)
                     }
                 }
             }
+        }
+    }
+
+    // A bar row, or one or two cards of one shape.
+    @ViewBuilder
+    private func lineView(_ providerId: String, _ line: LayoutLine, now: Date) -> some View {
+        if line.shape == RowShapes.bars {
+            BarRow(providerId: providerId, row: line.left, model: model, now: now)
+        } else {
+            HStack(alignment: .top, spacing: line.shape == RowShapes.fill ? 8 : 10) {
+                card(providerId, line.shape, line.left, now: now)
+                if let right = line.right { card(providerId, line.shape, right, now: now) }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func card(_ providerId: String, _ shape: String, _ row: UsageRow, now: Date) -> some View {
+        if shape == RowShapes.fill {
+            FillCard(providerId: providerId, row: row, model: model, now: now)
+        } else {
+            GaugeCard(providerId: providerId, row: row, model: model, now: now)
         }
     }
 
@@ -182,7 +216,7 @@ struct BarRow: View {
             }
             if let window = row.window {
                 UsageBar(percent: Display.percent(window.usedPercent, settings),
-                         color: accent(Display.roundedUsed(window.usedPercent)))
+                         color: RowText.accent(row, settings))
             }
             footer
         }
@@ -191,13 +225,37 @@ struct BarRow: View {
         .background(RoundedRectangle(cornerRadius: 9).fill(Color.primary.opacity(0.05)))
     }
 
-    private var percentText: String {
+    private var percentText: String { RowText.percent(row, model.settings) }
+
+    private var footer: some View {
+        RowFooter(row: row, model: model, now: now)
+    }
+}
+
+// The texts and colors every row shape shares.
+enum RowText {
+    static func percent(_ row: UsageRow, _ settings: AppSettings) -> String {
         guard let window = row.window else { return row.detailText ?? "--" }
-        return Display.percentText(row, Display.percent(window.usedPercent, model.settings))
+        return Display.percentText(row, Display.percent(window.usedPercent, settings))
     }
 
-    @ViewBuilder
-    private var footer: some View {
+    // PopupPalette.AccentFor: the band follows usage, whatever the gauge shows.
+    static func accent(_ row: UsageRow, _ settings: AppSettings) -> Color {
+        let used = Double(Display.roundedUsed(row.window?.usedPercent ?? 0))
+        if used >= UsageAlerts.criticalAtUsed(settings) { return Color(red: 235 / 255, green: 68 / 255, blue: 56 / 255) }
+        if used >= UsageAlerts.warningAtUsed(settings) { return Color(red: 1, green: 126 / 255, blue: 91 / 255) }
+        return UsageBar.accent
+    }
+}
+
+// Reset time (or the credits detail); clicking it toggles clock time and
+// remaining time.
+struct RowFooter: View {
+    let row: UsageRow
+    @ObservedObject var model: UsageModel
+    let now: Date
+
+    var body: some View {
         let text = row.window == nil ? "" : Display.rowFooter(row, model.settings, model.loc, now: now)
         if !text.isEmpty {
             let label = Text(text)
@@ -208,17 +266,110 @@ struct BarRow: View {
             if RowShapes.isCreditsRow(row.label) {
                 label
             } else {
-                // Clicking the time toggles clock time and remaining time.
                 label.contentShape(Rectangle()).onTapGesture(perform: model.onToggleTimeMode)
             }
         }
     }
+}
 
-    // PopupPalette.AccentFor: the band follows usage, whatever the bar shows.
-    private func accent(_ used: Int) -> Color {
-        if Double(used) >= UsageAlerts.criticalAtUsed(model.settings) { return Color(red: 235 / 255, green: 68 / 255, blue: 56 / 255) }
-        if Double(used) >= UsageAlerts.warningAtUsed(model.settings) { return Color(red: 1, green: 126 / 255, blue: 91 / 255) }
-        return UsageBar.accent
+// Gauges (BentoCircles): label, a ring with the percent inside, the reset time.
+struct GaugeCard: View {
+    let providerId: String
+    let row: UsageRow
+    @ObservedObject var model: UsageModel
+    let now: Date
+
+    var body: some View {
+        let label = model.loc.rowLabel(providerId, row.label, scope: row.scope)
+        VStack(spacing: 8) {
+            Text(label)
+                .font(.system(size: 12, weight: .bold))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help(label)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 0)
+            if let window = row.window {
+                let display = Display.percent(window.usedPercent, model.settings)
+                ZStack {
+                    Circle().stroke(Color.primary.opacity(0.12), lineWidth: 9)
+                    Circle()
+                        .trim(from: 0, to: CGFloat(min(max(display, 0), 100)) / 100)
+                        .stroke(RowText.accent(row, model.settings), style: StrokeStyle(lineWidth: 9, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    Text(RowText.percent(row, model.settings))
+                        .font(.system(size: 20, weight: .bold))
+                        .monospacedDigit()
+                }
+                .frame(width: 96, height: 96)
+                RowFooter(row: row, model: model, now: now)
+            } else {
+                Text(row.detailText ?? "--")
+                    .font(.system(size: 20, weight: .bold))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .frame(height: 176)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.05)))
+    }
+}
+
+// Fill: the bar row without its bar; the card's own background fills up to
+// the displayed percent, with a stronger edge where it ends so the value reads
+// without a bar. Text stays on a tint, never on solid accent.
+struct FillCard: View {
+    let providerId: String
+    let row: UsageRow
+    @ObservedObject var model: UsageModel
+    let now: Date
+
+    private static let radius: CGFloat = 9
+    private static let edgeWidth: CGFloat = 2
+
+    var body: some View {
+        let label = model.loc.rowLabel(providerId, row.label, scope: row.scope)
+        VStack(alignment: .trailing, spacing: 2) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(label)
+                    .font(.system(size: 13, weight: .bold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(label)
+                Spacer(minLength: 8)
+                Text(RowText.percent(row, model.settings))
+                    .font(.system(size: 14, weight: .bold))
+                    .monospacedDigit()
+            }
+            RowFooter(row: row, model: model, now: now)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity)
+        .background(fill)
+        .background(RoundedRectangle(cornerRadius: Self.radius).fill(Color.primary.opacity(0.05)))
+        .clipShape(RoundedRectangle(cornerRadius: Self.radius))
+    }
+
+    @ViewBuilder
+    private var fill: some View {
+        if let window = row.window {
+            let display = CGFloat(min(max(Display.percent(window.usedPercent, model.settings), 0), 100)) / 100
+            let color = RowText.accent(row, model.settings)
+            GeometryReader { geometry in
+                let width = geometry.size.width * display
+                // A value narrower than the edge is drawn as all edge; at 100%
+                // the card's own border is where the fill ends.
+                let edge = display >= 1 ? 0 : min(width, Self.edgeWidth)
+                HStack(spacing: 0) {
+                    Rectangle().fill(color.opacity(0.24)).frame(width: width - edge)
+                    Rectangle().fill(color.opacity(0.85)).frame(width: edge)
+                    Spacer(minLength: 0)
+                }
+            }
+        }
     }
 }
 #endif
