@@ -256,7 +256,8 @@ public actor ClaudeUsageProvider: UsageProvider {
     }
 
     // Until the user answers a Keychain prompt, the read (the security tool,
-    // or SecItemCopyMatching for the stamp) blocks its thread, and that must not be one of the concurrency pool's threads.
+    // or SecItemCopyMatching for the stamp) blocks its thread, and that must
+    // not be one of the concurrency pool's threads.
     private func readCredentials() async -> ClaudeCredentials? {
         let source = credentials
         readInFlight = true

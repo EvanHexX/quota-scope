@@ -74,11 +74,12 @@ public final class FileCredentialSource: ClaudeCredentialSource {
 // by service only (verified 2026-10-17).
 //
 // The secret is read through /usr/bin/security, the tool Claude Code itself
-// uses to write the item. Claude Code rewrites the item's access list on every
-// token refresh, which dropped an "Always Allow" given to QuotaScope and asked
-// again about every 8 hours (measured 2026-10-17); the tool stays on that list,
-// so reading through it asks nothing. The token only passes through a pipe to
-// this process and is dropped after parsing, as before.
+// uses to write the item (decision M15). A token refresh resets the item's
+// partition list to apple-tool:, which dropped an "Always Allow" given to
+// QuotaScope and asked again about every 8 hours (measured 2026-10-17); the
+// tool is on the item's ACL and under apple-tool:, so reading through it asks
+// nothing. The token only passes through a pipe to this process and is
+// dropped after parsing, as before.
 public final class KeychainCredentialSource: ClaudeCredentialSource {
     public static let service = "Claude Code-credentials"
 
