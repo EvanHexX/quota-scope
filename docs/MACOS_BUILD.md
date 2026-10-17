@@ -587,6 +587,8 @@ The README must not claim a macOS download, installer, Homebrew cask, or auto-up
 | M10 | Default row shape | **Decided:** bars |
 | M11 | Font | **Decided:** macOS system font |
 | M12 | Default gauge metric | **Decided (2026-10-17):** `Remaining` on macOS when settings.json has no `GaugeMetric`; the shared default in `AppSettings.cs` stays `Used` |
+| M13 | Hotkey modifier for ⌘ | **Decided (2026-10-17):** `Win` maps to ⌘; no new `Cmd` token, so the hotkey grammar stays the same on both platforms (6.3) |
+| M14 | EN/KO strings on macOS | **Decided (2026-10-17):** `Loc` in `QuotaCore`, as on Windows, not a String Catalog: the language switches live, and the Command Line Tools cannot compile a catalog (3.4) |
 
 ## 12. Risks
 
