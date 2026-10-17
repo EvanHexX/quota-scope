@@ -40,6 +40,9 @@ public actor ClaudeUsageProvider: UsageProvider {
     private var backoffStep = 0
     private var authPaused = false
     private var authPausedStamp: Date?
+    // The item has no Claude Code sign-in at all (only MCP connector tokens):
+    // the hint drops "expired", and there is no session to renew.
+    private var signedOut = false
     private var fetchTail: Task<Void, Never>?
     private var watchTask: Task<Void, Never>?
     private var updateHandler: (@Sendable (ProviderUsage) -> Void)?
@@ -122,7 +125,7 @@ public actor ClaudeUsageProvider: UsageProvider {
         // The secret is read only for a request that is actually sent. On
         // macOS every read is a Keychain data access, and until the user picks
         // "Always Allow" each one shows the access prompt again.
-        guard let current = credentials.read() else {
+        guard let current = await readCredentials() else {
             // Credentials that exist but cannot be read are not a signed-out
             // session: on macOS it is the Keychain prompt, denied or still
             // waiting. Retry on the next poll instead of pausing for a
@@ -134,6 +137,10 @@ public actor ClaudeUsageProvider: UsageProvider {
             return pauseForAuth()
         }
         let expiresAt = current.expiresAt
+        if (current.accessToken ?? "").isEmpty && expiresAt == nil {
+            return pauseForAuth(signedOut: true)
+        }
+        signedOut = false
 
         // Proactive renewal: hand the refresh back to Claude Code before the
         // token dies. Past the expiry stamp the nudge is no longer speculative.
@@ -214,7 +221,20 @@ public actor ClaudeUsageProvider: UsageProvider {
         updateHandler?(usage)
     }
 
-    private func pauseForAuth() -> ProviderUsage {
+    // The secret read runs off the actor: until the user answers the Keychain
+    // prompt, SecItemCopyMatching blocks its thread, and that must not be one
+    // of the concurrency pool's few threads.
+    private func readCredentials() async -> ClaudeCredentials? {
+        let source = credentials
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                continuation.resume(returning: source.read())
+            }
+        }
+    }
+
+    private func pauseForAuth(signedOut: Bool? = nil) -> ProviderUsage {
+        if let signedOut { self.signedOut = signedOut }
         authPaused = true
         authPausedStamp = credentials.stamp()
         return remember(.offline(id, displayName, authPausedStatus(), .unauthenticated))
@@ -224,7 +244,7 @@ public actor ClaudeUsageProvider: UsageProvider {
     // worded by whether credentials exist at all.
     private func authPausedStatus() -> String {
         if renewer.isRenewing { return "Renewing Claude session" }
-        return credentials.exists ? "Claude session expired. Run Claude Code and sign in" : "Run Claude Code and sign in"
+        return credentials.exists && !signedOut ? "Claude session expired. Run Claude Code and sign in" : "Run Claude Code and sign in"
     }
 
     // The OAuth session next to the usage rows: renewal in flight, or a
