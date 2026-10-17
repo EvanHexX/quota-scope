@@ -1,0 +1,50 @@
+{
+  "description": "Korean notification: a plan-scoped Codex row, Claude's active per-model row past the critical level, and a credits row run dry give one notification titled critical, one line each, with row names and amounts as the popup shows them.",
+  "language": "Korean",
+  "settings": {
+    "AlertPoints": [
+      80,
+      60,
+      40
+    ],
+    "RowAlerts": {
+      "claude|Credits": true
+    }
+  },
+  "steps": [
+    {
+      "usages": [
+        {
+          "providerId": "codex",
+          "displayName": "Codex",
+          "rows": [
+            {
+              "label": "7d",
+              "scope": "Pro",
+              "isPrimary": true,
+              "usedPercent": 65,
+              "windowDurationMins": 10080
+            }
+          ]
+        },
+        {
+          "providerId": "claude",
+          "displayName": "Claude",
+          "rows": [
+            {
+              "label": "7d Fable",
+              "isPrimary": true,
+              "usedPercent": 99
+            },
+            {
+              "label": "Credits",
+              "isPrimary": false,
+              "usedPercent": 100,
+              "creditsLeft": 0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

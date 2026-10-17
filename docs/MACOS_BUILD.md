@@ -193,9 +193,15 @@ fixtures/
   rows/                                 done: 9 cases (phase 1b)
     shape-mix-match.input.json          { "description", "settings"?: {…}, "rows": [{ "providerId", "label", "isPrimary" }, …] }
     shape-mix-match.expected.json       { "rows": [{ "key", "visible", "shape" }, …] }
-  alerts/                               done: 12 cases (phase 1b)
-    credits-points.input.json           { "description", "settings"?, "silentFirstSight"?, "parse"?: [...], "steps"?: [...] }
+  alerts/                               done: 14 cases (phase 1b; 2 Korean cases added in phase 5)
+    credits-points.input.json           { "description", "language"?: "Korean", "settings"?, "silentFirstSight"?, "parse"?: [...], "steps"?: [...] }
     credits-points.expected.json        { "parsed"?: [...], "steps"?: [{ "alerts": [...], "notification" }, …] }
+  layout/                               done: 6 cases (phase 5)
+    mix-match-pairing.input.json        { "description", "settings"?, "providers": [{ "providerId", "rows": [{ "label", "isPrimary" }] }] }
+    mix-match-pairing.expected.json     { "twoColumn", "sections": [{ "providerId", "lines": [{ "shape", "rows": [label, label?] }] }] }
+  resettext/                            done: 1 case, 8 reset times (phase 5)
+    seoul-afternoon.input.json          { "description", "now": "<ISO with the local offset>", "resetsAt": [ISO | null, …] }
+    seoul-afternoon.expected.json       { "results": [{ "clock": { "en", "ko" }, "remaining": { "en", "ko" } }, …] }
   settings/                             not yet: no C# self-test to move; added with the settings model port
     *.json + *.expected.json            settings.json files, including old ones, and the values they load to
 ```
@@ -404,7 +410,8 @@ What exists (`mac/Sources/QuotaCore`):
 | `RowShapes.swift` | `RowShapes.cs` | `rows/` (9 cases) |
 | `UsageAlerts.swift` | `UsageAlerts.cs`, including the tracker | `alerts/` (12 cases) |
 | `HotkeyDefinition.swift` | `Hotkeys/HotkeyDefinition.cs`: parse, canonical format, the named-key table. The model stays Windows `MOD_*` flags and virtual-key codes; Carbon key codes come with the app | `hotkeys/` (3 cases) |
-| `Loc.swift` | the row naming in `Loc.cs` (`RowLabel`) | `alerts/` notification bodies |
+| `Loc.swift` | the row naming (`RowLabel`) and the reset-time text (`ResetText`, `ResetClock`, `ResetIn`) in `Loc.cs`, formatted by hand rather than with `DateFormatter`, so the text does not depend on the system's locale data | `alerts/` notification bodies (English and Korean), `resettext/` |
+| `RowLayout.swift` | `app-winui/RowLayout.cs`: visible rows in the user's order, the two-column decision, and which cards share a line | `layout/` (6 cases) |
 | `JSON.swift`, `Timestamp.swift`, `NumberText.swift` | the System.Text.Json, DateTimeOffset, and number-format behavior the C# code relies on | all of the above |
 | `Fixtures.swift` | `UsageFixtures.cs` and the per-folder evaluators | — |
 
@@ -417,7 +424,13 @@ Matching .NET took deliberate code in four places:
 
 The renewer's timing rules are now `ClaudeRenewalPolicy.swift` in QuotaCore, checked by `fixtures/renewer` (4 cases). That brings the self-test to 57 cases in 6 folders.
 
-Not ported yet: `Loc.ResetClock` / `ResetIn` (the reset and remaining-time text). These come with the UI. `fixtures/` has no cases for them yet, so add cases on the C# side first.
+Phase 5 shared work (2026-10-17):
+
+- The column decision and the card pairing moved out of the WinUI popup into `app-winui/RowLayout.cs`. The popup now draws what `RowLayout.Lines` returns, and its behavior does not change.
+- The reset-time text takes "now" as an argument: `Loc.ResetText(resetsAt, now, remaining)`. The popup passes `DateTimeOffset.Now`.
+- Two Korean notification cases joined `fixtures/alerts`. An input may set `"language": "Korean"`, and English is restored after each case.
+- Both new folders (`layout`, `resettext`) are embedded in the WinUI project only, since the legacy app has neither the layout nor the reset text.
+- The Swift port passes all 8 folders (66 cases).
 
 Checked: a corrupted expected value in each folder, or a missing expected file, makes the self-test exit 1.
 
@@ -530,7 +543,7 @@ docs/MACOS_BUILD.md          this file
 | **2. `QuotaCore` in Swift** | Models, mappers, credits gauge, row resolution, alerts, settings model, hotkey grammar. **Done (2026-10-17)** on Windows (7.3) | Swift self-test passes every `QuotaCore` fixture: 53 cases (codex 19, claude 10, rows 9, alerts 12, hotkeys 3). `renewer/` waits for phase 3 |
 | **3. `QuotaProviders` in Swift** | Codex client, Claude client, Keychain source, renewer, command resolution. **Written and checked against fakes (2026-10-17):** 42/42 on Windows and on macOS (7.3). Open until the app exists: the four checks that touch real credentials (Keychain payload, attribute-read prompt, `mdat` on refresh, real `claude mcp list`), each with the maintainer's approval, and the live run | Behavior checklist (4.2) reviewed item by item; unit tests with fake clock/process; live run against both providers |
 | **4. Menu bar MVP** | Status item with arc icon, popover with bars, refresh, right-click menu, settings file. **Built (2026-10-17, merged at 7ef321a):** status item with arc and warning/critical dot, popover with bars, click-to-toggle reset time, pinned panel, right-click menu, settings window (General, Providers, Appearance, Alerts, About; only changed keys are written), and `mac/build.sh`. The Mac session reports it running with real Codex and Claude data | Manual smoke test (10), not yet run by the maintainer |
-| **5. Parity** | Gauges / fill / mix & match, columns, order and visibility, pin panel, time toggle, alerts + notifications, hotkeys, login item, EN/KO, settings window | Manual smoke test (10) |
+| **5. Parity** | Gauges / fill / mix & match, columns, order and visibility, pin panel, time toggle, alerts + notifications, hotkeys, login item, EN/KO, settings window. **Split (decided 2026-10-17):** the QuotaScope thread handles shared logic and review: `RowLayout` + `fixtures/layout`, reset text + `fixtures/resettext`, Korean alert cases (all three done, 7.3), and merging the Mac branches. The Mac thread handles the app: notifications, global hotkeys (Windows virtual-key codes mapped to Mac key codes, plus the recorder), gauge, fill, and mix-and-match shapes and columns through `RowLayout`, start at login, the EN/KO String Catalog, and their settings tabs | Manual smoke test (10) |
 | **6. Docs** | README / README.ko "Build on macOS" section, platform badge, limitations; PROJECT_MAP entries for `mac/` and `fixtures/` | Review |
 
 The README must not claim a macOS download, installer, Homebrew cask, or auto-update; only "build from source on your Mac".

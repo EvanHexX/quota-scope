@@ -1,0 +1,41 @@
+{
+  "description": "A row pinned to a position comes first, rows without one keep payload order after it, a hidden row is left out, and a forced single column puts every gauge on its own line.",
+  "settings": {
+    "ShapeTheme": "BentoCircles",
+    "LayoutColumns": "OneColumn",
+    "RowOrder": {
+      "claude|7d Fable": 0
+    },
+    "RowVisibility": {
+      "claude|5h": false
+    }
+  },
+  "providers": [
+    {
+      "providerId": "codex",
+      "rows": [
+        {
+          "label": "7d",
+          "isPrimary": true
+        }
+      ]
+    },
+    {
+      "providerId": "claude",
+      "rows": [
+        {
+          "label": "5h",
+          "isPrimary": true
+        },
+        {
+          "label": "7d",
+          "isPrimary": true
+        },
+        {
+          "label": "7d Fable",
+          "isPrimary": true
+        }
+      ]
+    }
+  ]
+}

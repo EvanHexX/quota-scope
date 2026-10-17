@@ -141,7 +141,7 @@ QuotaScope is designed as a local utility.
 dotnet build app-winui/QuotaScope.WinUI.csproj
 ```
 
-Run the built-in self-tests (usage mappers, Claude session renewer, hotkey parser, row shapes, usage alerts, fill-card contrast, localization):
+Run the built-in self-tests (usage mappers, Claude session renewer, hotkey parser, row shapes and layout, usage alerts, reset-time text, fill-card contrast, localization):
 
 ```powershell
 dotnet run --project app-winui/QuotaScope.WinUI.csproj -- --self-test

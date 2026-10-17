@@ -44,5 +44,7 @@
     <EmbeddedResource Include="..\fixtures\hotkeys\*.json" LogicalName="fixtures/hotkeys/%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\fixtures\rows\*.json" LogicalName="fixtures/rows/%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\fixtures\alerts\*.json" LogicalName="fixtures/alerts/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\fixtures\layout\*.json" LogicalName="fixtures/layout/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\fixtures\resettext\*.json" LogicalName="fixtures/resettext/%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

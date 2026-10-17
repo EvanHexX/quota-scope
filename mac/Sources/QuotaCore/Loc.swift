@@ -63,6 +63,57 @@ public struct Loc: Equatable {
         return durationLabel(label)
     }
 
+    // Port of Loc.ResetText: a row's reset time as the popup shows it, the
+    // clock time of the reset or how long until it. `utcOffsetSeconds` is the
+    // local offset of `now`; the reset is shown in that offset. Formatted by
+    // hand rather than with DateFormatter, so the text matches the C# side
+    // exactly (fixtures/resettext) whatever the system locale data.
+    public func resetText(_ resetsAt: Timestamp?, now: Timestamp, utcOffsetSeconds: Int, remaining: Bool) -> String {
+        guard let reset = resetsAt else { return t("reset --", "재설정 --") }
+        return remaining
+            ? resetIn(reset.ticks - now.ticks)
+            : resetClock(reset, now: now, utcOffsetSeconds: utcOffsetSeconds)
+    }
+
+    // Same-day windows show only the time, longer ones (weekly) also the date.
+    func resetClock(_ reset: Timestamp, now: Timestamp, utcOffsetSeconds: Int) -> String {
+        let offset = Int64(utcOffsetSeconds) * Timestamp.ticksPerSecond
+        let ticksPerDay = 86_400 * Timestamp.ticksPerSecond
+        let local = reset.ticks + offset
+        let day = local.floorDiv(ticksPerDay)
+        let isToday = day == (now.ticks + offset).floorDiv(ticksPerDay)
+        let minuteOfDay = (local - day * ticksPerDay) / (60 * Timestamp.ticksPerSecond)
+        let hour = Int(minuteOfDay / 60), minute = Int(minuteOfDay % 60)
+        let hour12 = hour % 12 == 0 ? 12 : hour % 12
+        let time = "\(hour12):" + (minute < 10 ? "0\(minute)" : "\(minute)")
+        let (_, month, dayOfMonth) = Timestamp.civil(fromDays: day)
+        if isKorean {
+            let clock = "\(hour < 12 ? "오전" : "오후") \(time)"
+            return isToday ? "\(clock) 초기화" : "\(month)월 \(dayOfMonth)일 \(clock) 초기화"
+        }
+        let clock = "\(time) \(hour < 12 ? "AM" : "PM")"
+        let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        return isToday ? "resets at \(clock)" : "resets \(months[Int(month) - 1]) \(dayOfMonth), \(clock)"
+    }
+
+    // TimeSpan semantics: whole days and the hour within the day from a day
+    // up, whole hours and the minute within the hour from an hour up, else
+    // minutes, at least 1.
+    func resetIn(_ remainingTicks: Int64) -> String {
+        if remainingTicks <= 0 { return t("resets now", "곧 초기화") }
+        let minute = 60 * Timestamp.ticksPerSecond, hourTicks = 60 * minute, dayTicks = 24 * hourTicks
+        if remainingTicks >= dayTicks {
+            let days = remainingTicks / dayTicks, hours = remainingTicks / hourTicks % 24
+            return t("resets in \(days)d \(hours)h", "\(days)일 \(hours)시간 뒤 초기화")
+        }
+        if remainingTicks >= hourTicks {
+            let hours = remainingTicks / hourTicks, minutes = remainingTicks / minute % 60
+            return t("resets in \(hours)h \(minutes)m", "\(hours)시간 \(minutes)분 뒤 초기화")
+        }
+        let minutes = max(1, remainingTicks / minute % 60)
+        return t("resets in \(minutes)m", "\(minutes)분 뒤 초기화")
+    }
+
     // (\d+)([hdw])\b, with h/d/w spelled out in Korean.
     private func durationLabel(_ label: String) -> String {
         guard isKorean else { return label }

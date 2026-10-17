@@ -10,7 +10,7 @@ public enum Fixtures {
 
     // Every shared fixture folder. The renewer's timing rules live in
     // ClaudeRenewalPolicy; the process-running part is in QuotaProviders.
-    public static let folders = ["codex", "claude", "rows", "alerts", "hotkeys", "renewer"]
+    public static let folders = ["codex", "claude", "rows", "alerts", "hotkeys", "renewer", "layout", "resettext"]
 
     public struct Failure: Error, CustomStringConvertible {
         public let description: String
@@ -55,6 +55,8 @@ public enum Fixtures {
         case "alerts": return try evaluateAlerts(input)
         case "hotkeys": return try evaluateHotkeys(input)
         case "renewer": return try evaluateRenewer(input)
+        case "layout": return try evaluateLayout(input)
+        case "resettext": return try evaluateResetText(input)
         default: throw Failure(description: "no evaluator for fixtures/\(folder)")
         }
     }
@@ -90,6 +92,58 @@ public enum Fixtures {
             })
         }
         return .object(result)
+    }
+
+    // Each provider ({ providerId, rows: [{ label, isPrimary }] }) under the
+    // case's settings is answered by the lines the popup draws, each a shape
+    // and the labels of its one or two rows, plus the column decision.
+    static func evaluateLayout(_ input: JSONValue) throws -> JSONValue {
+        let settings = try readSettings(input["settings"])
+        let usages = try (input["providers"]?.arrayValue ?? []).map { provider -> ProviderUsage in
+            guard let id = provider["providerId"]?.stringValue else { throw Failure(description: "provider needs providerId") }
+            let rows = try (provider["rows"]?.arrayValue ?? []).map { row -> UsageRow in
+                guard let label = row["label"]?.stringValue, let isPrimary = row["isPrimary"]?.boolValue else {
+                    throw Failure(description: "row needs label and isPrimary")
+                }
+                return UsageRow(label: label, window: nil, isPrimary: isPrimary)
+            }
+            return ProviderUsage(providerId: id, displayName: id, rows: rows, overallUsedPercent: 0, statusText: "", state: .ok)
+        }
+        let sections = RowLayout.sections(settings, usages)
+        let twoColumn = RowLayout.usesTwoColumns(settings, sections)
+        return .object(JSONObject([
+            ("twoColumn", .bool(twoColumn)),
+            ("sections", .array(sections.map { section in
+                .object(JSONObject([
+                    ("providerId", .string(section.usage.providerId)),
+                    ("lines", .array(RowLayout.lines(settings, section.usage.providerId, section.rows, twoColumn: twoColumn).map { line in
+                        .object(JSONObject([
+                            ("shape", .string(line.shape)),
+                            ("rows", .array([line.left, line.right].compactMap { $0 }.map { .string($0.label) })),
+                        ]))
+                    })),
+                ]))
+            })),
+        ]))
+    }
+
+    // Each reset time against the case's "now" (null: no reset known) in both
+    // display modes and both languages. Now's UTC offset is the local zone.
+    static func evaluateResetText(_ input: JSONValue) throws -> JSONValue {
+        guard let now = optional(input, "now")?.stringValue.flatMap(Timestamp.parseISO8601WithOffset) else {
+            throw Failure(description: "resettext needs a \"now\"")
+        }
+        let results = (input["resetsAt"]?.arrayValue ?? []).map { item -> JSONValue in
+            let reset = item.stringValue.flatMap(Timestamp.parseISO8601)
+            func text(_ loc: Loc, _ remaining: Bool) -> JSONValue {
+                .string(loc.resetText(reset, now: now.timestamp, utcOffsetSeconds: now.offsetSeconds, remaining: remaining))
+            }
+            return .object(JSONObject([
+                ("clock", .object(JSONObject([("en", text(.english, false)), ("ko", text(.korean, false))]))),
+                ("remaining", .object(JSONObject([("en", text(.english, true)), ("ko", text(.korean, true))]))),
+            ]))
+        }
+        return .object(JSONObject([("results", .array(results))]))
     }
 
     // One full read plus the rolling updates merged into it, in order.
@@ -147,6 +201,8 @@ public enum Fixtures {
                 }
             })
         }
+        // "language": "Korean" compares the notification in Korean.
+        let loc = Loc(isKorean: optional(input, "language")?.stringValue.map { Loc(setting: $0, systemLanguageCode: "en").isKorean } ?? false)
         if let steps = optional(input, "steps")?.arrayValue {
             var settings = try readSettings(input["settings"])
             let tracker = UsageAlertTracker(silentFirstSight: optional(input, "silentFirstSight")?.boolValue ?? false)
@@ -156,7 +212,7 @@ public enum Fixtures {
                 let alerts = tracker.evaluate(settings, usages)
                 var notification = JSONValue.null
                 if !alerts.isEmpty {
-                    let built = UsageAlerts.buildNotification(alerts, .english)
+                    let built = UsageAlerts.buildNotification(alerts, loc)
                     notification = .object(JSONObject([("title", .string(built.title)), ("body", .string(built.body))]))
                 }
                 return .object(JSONObject([

@@ -1,0 +1,14 @@
+{
+  "description": "Reset times against 13:47 in Seoul (+09:00), in both display modes and both languages. Same-day resets show only the time; other days add the date. Remaining time shows days and hours from a day up, hours and minutes from an hour up, otherwise minutes, at least 1; a reset in the past reads 'resets now'. An unknown reset reads 'reset --'.",
+  "now": "2026-10-17T13:47:00+09:00",
+  "resetsAt": [
+    "2026-10-17T07:00:00Z",
+    "2026-10-21T13:00:00Z",
+    "2026-10-17T04:47:30Z",
+    "2026-10-17T04:00:00Z",
+    "2026-10-17T15:05:00Z",
+    "2026-10-18T04:47:00Z",
+    "2026-10-17T05:46:59Z",
+    null
+  ]
+}

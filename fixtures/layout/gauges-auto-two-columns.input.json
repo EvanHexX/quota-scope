@@ -1,0 +1,42 @@
+{
+  "description": "Gauges: a section with two or more gauges makes Auto use two columns, and consecutive gauges pair up; an odd one out gets a line of its own.",
+  "settings": {
+    "ShapeTheme": "BentoCircles"
+  },
+  "providers": [
+    {
+      "providerId": "codex",
+      "rows": [
+        {
+          "label": "5h",
+          "isPrimary": true
+        },
+        {
+          "label": "7d",
+          "isPrimary": true
+        },
+        {
+          "label": "Spark 5h",
+          "isPrimary": false
+        }
+      ]
+    },
+    {
+      "providerId": "claude",
+      "rows": [
+        {
+          "label": "5h",
+          "isPrimary": true
+        },
+        {
+          "label": "7d",
+          "isPrimary": true
+        },
+        {
+          "label": "7d Fable",
+          "isPrimary": true
+        }
+      ]
+    }
+  ]
+}

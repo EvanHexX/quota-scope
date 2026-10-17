@@ -137,8 +137,8 @@ internal static partial class UsageAlerts
     }
 
     // Samples live in fixtures/alerts (docs/MACOS_BUILD.md, section 5).
-    // Notifications are compared in English; Loc.RunSelfTest sets its own
-    // language after this.
+    // Notifications are compared in English unless a case asks for Korean;
+    // Loc.RunSelfTest sets its own language after this.
     public static bool RunSelfTest()
     {
         Loc.SetLanguage("English");
@@ -150,7 +150,22 @@ internal static partial class UsageAlerts
     // order, each with the usage it sees, answered by the alerts it raises and
     // the notification they make (null when there are none). A step's
     // "settings" apply from that step on; the case's own apply before it.
+    // "language": "Korean" compares the notification in Korean; English
+    // otherwise, and English again afterwards.
     private static JsonNode EvaluateFixture(JsonElement input)
+    {
+        Loc.SetLanguage(UsageFixtures.Optional(input, "language")?.GetString() ?? "English");
+        try
+        {
+            return EvaluateFixtureCore(input);
+        }
+        finally
+        {
+            Loc.SetLanguage("English");
+        }
+    }
+
+    private static JsonNode EvaluateFixtureCore(JsonElement input)
     {
         var result = new JsonObject();
         if (UsageFixtures.Optional(input, "parse") is { } texts)

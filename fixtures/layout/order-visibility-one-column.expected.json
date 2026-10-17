@@ -1,0 +1,33 @@
+{
+  "twoColumn": false,
+  "sections": [
+    {
+      "providerId": "codex",
+      "lines": [
+        {
+          "shape": "Circle",
+          "rows": [
+            "7d"
+          ]
+        }
+      ]
+    },
+    {
+      "providerId": "claude",
+      "lines": [
+        {
+          "shape": "Circle",
+          "rows": [
+            "7d Fable"
+          ]
+        },
+        {
+          "shape": "Circle",
+          "rows": [
+            "7d"
+          ]
+        }
+      ]
+    }
+  ]
+}

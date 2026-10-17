@@ -1,6 +1,9 @@
 using System;
 using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using QuotaScope.Providers;
 
 namespace QuotaScope.WinUI;
 
@@ -75,12 +78,22 @@ internal static partial class Loc
         });
     }
 
+    // A row's reset time as the popup shows it: the clock time of the reset,
+    // or how long until it, by the time display setting. `now` is local time,
+    // and the reset is shown in now's offset. Takes `now` so fixtures/resettext
+    // can pin the output (docs/MACOS_BUILD.md, section 5).
+    public static string ResetText(DateTimeOffset? resetsAt, DateTimeOffset now, bool remaining)
+    {
+        if (resetsAt is not { } reset) return T("reset --", "재설정 --");
+        return remaining ? ResetIn(reset - now) : ResetClock(reset.ToOffset(now.Offset), now);
+    }
+
     // Reset clock time: same-day windows show only the time, longer windows
     // (weekly) also need the date. Both spell out that it is a reset moment.
-    public static string ResetClock(DateTimeOffset localReset)
+    public static string ResetClock(DateTimeOffset localReset, DateTimeOffset localNow)
     {
         var korean = new CultureInfo("ko-KR");
-        var isToday = localReset.Date == DateTimeOffset.Now.Date;
+        var isToday = localReset.Date == localNow.Date;
         if (IsKorean)
         {
             return isToday
@@ -172,6 +185,8 @@ internal static partial class Loc
     // Leaves the language set: the self-test path exits right after.
     public static bool RunSelfTest()
     {
+        if (!UsageFixtures.Run("resettext", EvaluateResetFixture)) return false;
+
         SetLanguage("English");
         if (RowLabel("codex", "5h") != "5h" || RowLabel("codex", "7d") != "Weekly") return false;
         if (RowLabel("codex", "7d", "Pro") != "Pro · Weekly") return false;
@@ -195,6 +210,31 @@ internal static partial class Loc
 
         static bool Distinct(string providerId, params string[] labels) =>
             new HashSet<string>(labels.Select(label => RowLabel(providerId, label))).Count == labels.Length;
+    }
+
+    // Each reset time against the case's "now" (null: no reset known) is
+    // answered in both display modes and both languages.
+    private static JsonNode EvaluateResetFixture(JsonElement input)
+    {
+        var now = UsageFixtures.ReadTimestamp(UsageFixtures.Optional(input, "now"))
+            ?? throw new InvalidOperationException("resettext needs a \"now\".");
+        var results = new JsonArray();
+        foreach (var item in input.GetProperty("resetsAt").EnumerateArray())
+        {
+            var reset = UsageFixtures.ReadTimestamp(item);
+            var result = new JsonObject();
+            foreach (var (key, remaining) in new[] { ("clock", false), ("remaining", true) })
+            {
+                SetLanguage("English");
+                var en = ResetText(reset, now, remaining);
+                SetLanguage("Korean");
+                var ko = ResetText(reset, now, remaining);
+                result[key] = new JsonObject { ["en"] = en, ["ko"] = ko };
+            }
+            results.Add(result);
+        }
+        SetLanguage("English");
+        return new JsonObject { ["results"] = results };
     }
 
     [GeneratedRegex(@"(\d+)([hdw])\b")]

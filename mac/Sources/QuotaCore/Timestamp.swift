@@ -43,6 +43,13 @@ public struct Timestamp: Hashable, Comparable {
     // yyyy-MM-ddTHH:mm:ss[.fraction](Z|±HH:mm). Without an offset the time is
     // read as UTC; the payloads this reads always carry one.
     public static func parseISO8601(_ text: String) -> Timestamp? {
+        parseISO8601WithOffset(text)?.timestamp
+    }
+
+    // The instant and the UTC offset it was written with, in seconds (0 for
+    // "Z" or no offset). Reset-time fixtures use the offset of "now" as the
+    // local time zone.
+    public static func parseISO8601WithOffset(_ text: String) -> (timestamp: Timestamp, offsetSeconds: Int)? {
         let chars = Array(text.utf8)
         func number(_ start: Int, _ length: Int) -> Int64? {
             guard start + length <= chars.count else { return nil }
@@ -92,7 +99,7 @@ public struct Timestamp: Hashable, Comparable {
 
         let days = days(fromCivil: year, month, day)
         let seconds = days * 86_400 + hour * 3600 + minute * 60 + second - offsetSeconds
-        return Timestamp(ticks: seconds * ticksPerSecond + fractionTicks)
+        return (Timestamp(ticks: seconds * ticksPerSecond + fractionTicks), Int(offsetSeconds))
     }
 
     // Howard Hinnant's days_from_civil / civil_from_days (proleptic Gregorian).
