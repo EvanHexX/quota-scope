@@ -169,7 +169,7 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         guard pollInFlight == nil else { return }
         let claudeUsage = usages["claude"]
         if store.settings.provider("claude").enabled,
-           claudeUsage?.state == .unauthenticated || !PreferredCredentialSource.standard().exists {
+           claudeUsage?.state == .unauthenticated {
             ClaudeLogin.openTerminal()
         }
         pollInFlight = Task { await poll(reconnect: true) }
