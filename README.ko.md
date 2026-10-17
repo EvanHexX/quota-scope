@@ -45,6 +45,8 @@ Mac용 배포 파일은 없습니다. 실행할 Mac에서 직접 빌드합니다
 
 ```sh
 xcode-select --install          # Command Line Tools가 없을 때 한 번
+git clone https://github.com/EvanHexX/quota-scope.git
+cd quota-scope
 mac/build.sh --release --install
 open ~/Applications/QuotaScope.app
 ```

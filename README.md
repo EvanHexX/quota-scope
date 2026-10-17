@@ -45,6 +45,8 @@ There is no prebuilt Mac download. Build it on the Mac that runs it (no Apple De
 
 ```sh
 xcode-select --install          # once, if the Command Line Tools are missing
+git clone https://github.com/EvanHexX/quota-scope.git
+cd quota-scope
 mac/build.sh --release --install
 open ~/Applications/QuotaScope.app
 ```
