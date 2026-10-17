@@ -561,7 +561,7 @@ The README must not claim a macOS download, installer, Homebrew cask, or auto-up
 - Refresh and Reconnect work from the menu and from the popover header.
 - Pin detaches a floating panel that stays on top and survives Space switches.
 - Switching light/dark in System Settings updates icon and popover live.
-- Claude: the Keychain prompt appears once; after "Always Allow" and a rebuild with the self-signed identity, no new prompt.
+- Claude: the Keychain prompt appears once per build; after "Always Allow", relaunching the same build or rebooting shows no new prompt (a new build asks once more, 6.1).
 - Codex: works when the app is launched from Finder and at login, not just from Terminal; finds the CLI bundled in ChatGPT.app with no `codex` on `PATH`; ignores ChatGPT Classic.app.
 - An alert notification fires at a configured point.
 - Start at login works after a reboot.
