@@ -103,14 +103,6 @@ public actor ClaudeUsageProvider: UsageProvider {
 
     private func fetchCore(force: Bool) async -> ProviderUsage {
         let now = self.now()
-        let current = credentials.read()
-        let expiresAt = current?.expiresAt
-
-        // Proactive renewal: hand the refresh back to Claude Code before the
-        // token dies. Past the expiry stamp the nudge is no longer speculative.
-        if autoRenew && ClaudeRenewalPolicy.isExpiring(expiresAt, now: now) {
-            renewer.requestRenewal(recovery: expiresAt.map { $0 <= now } ?? true)
-        }
 
         if authPaused && !force {
             // Resume only after Claude Code rewrites the credentials.
@@ -125,6 +117,18 @@ public actor ClaudeUsageProvider: UsageProvider {
         }
 
         if !force, now < nextFetchAt, let lastResult { return lastResult }
+
+        // The secret is read only for a request that is actually sent. On
+        // macOS every read is a Keychain data access, and until the user picks
+        // "Always Allow" each one shows the access prompt again.
+        let current = credentials.read()
+        let expiresAt = current?.expiresAt
+
+        // Proactive renewal: hand the refresh back to Claude Code before the
+        // token dies. Past the expiry stamp the nudge is no longer speculative.
+        if autoRenew && ClaudeRenewalPolicy.isExpiring(expiresAt, now: now) {
+            renewer.requestRenewal(recovery: expiresAt.map { $0 <= now } ?? true)
+        }
 
         guard let token = current?.accessToken, !token.isEmpty else { return pauseForAuth() }
 

@@ -61,6 +61,15 @@ echo "==> signing with ${identity/#-/ad-hoc (-)}"
 codesign --force --sign "$identity" "$app"
 codesign --verify --strict "$app"
 codesign -dv "$app" 2>&1 | grep -E '^(Identifier|Signature|Authority)=' || true
+if [[ "$identity" == "-" ]]; then
+  cat <<'HINT'
+Note: ad-hoc signatures change on every build, so the Keychain prompt for
+"Claude Code-credentials" comes back after each rebuild. To make "Always Allow"
+stick, create a self-signed code-signing certificate once (Keychain Access >
+Certificate Assistant > Create a Certificate..., type "Code Signing", e.g.
+"QuotaScope Local") and build with QUOTASCOPE_SIGN_IDENTITY="QuotaScope Local".
+HINT
+fi
 
 if (( install )); then
   target="$HOME/Applications/QuotaScope.app"
