@@ -571,7 +571,7 @@ The README must not claim a macOS download, installer, Homebrew cask, or auto-up
 - **Korean:** with the language set to Korean (and with macOS itself in Korean), no label, reset text, menu item, or settings label is clipped at the default popup width, in both time modes and with every row shown (Spark rows, per-model weekly rows, credits). Repeat in English. Check light and dark.
 - Quitting the app leaves no `codex` or `claude` child process behind.
 
-**Result (2026-10-17, f6ba95a, installed build, macOS 15.6.1): every item above passed.** Reported from the Mac session in two rounds:
+**Result (2026-10-17, f6ba95a, installed build, macOS 15.6.1): every item above passed, except that Spark rows in Korean could not be checked (no Spark bucket on that account).** Reported from the Mac session in two rounds:
 
 - Menu bar icon, no Dock icon, left and right click.
 - `⌃⌥U` toggles the popover, and changing a hotkey works. It is now `⇧⌘Space`, which does not clash with the input-source switch `⌃⌥Space`. The refresh-all and pin hotkeys work.
@@ -581,7 +581,8 @@ The README must not claim a macOS download, installer, Homebrew cask, or auto-up
 - Shape switching: bars, fill, and gauges in two columns.
 - Each menu bar text choice, with `--` for a missing row.
 - The time display toggle survives a relaunch, including on screen.
-- No clipping in English, in light and dark, with Spark rows shown. Korean reset text was checked when the shapes landed.
+- No clipping in English, in light and dark, with Spark rows shown.
+- No clipping in Korean at the default width, in both time modes (checked by the maintainer). Spark rows were not checked in Korean on the Mac: that account's Codex response has no Spark bucket.
 - A Finder-style launch (`open`, parent `launchd`, no shell `PATH`): it found the app-server in the ChatGPT.app bundle, and Claude refreshed without a Keychain prompt.
 - No `codex` or `claude` child process left after quitting.
 - `settings.json` byte-identical after quit and relaunch.
