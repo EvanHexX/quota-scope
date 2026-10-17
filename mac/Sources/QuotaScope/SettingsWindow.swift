@@ -9,7 +9,7 @@ import QuotaProviders
 // toolbar tabs, grouped forms, and immediate apply. Every control writes
 // settings.json through SettingsStore.update and tells the controller what
 // changed; there is no OK/Cancel. Only settings the Mac app acts on are shown:
-// row shapes, columns, and hotkeys come with their features.
+// row shapes and columns come with their features.
 
 enum SettingsChange {
     case general
@@ -33,10 +33,18 @@ final class SettingsModel: ObservableObject {
     // One message for every alert points box; only the box that raised it
     // clears it, as the Windows InfoBar.
     @Published var pointsError: (owner: String, message: String)?
+    @Published var hotkeyErrors: [HotkeyAction: String] = [:]
+    // Bindings that could not be applied at launch.
+    @Published var hotkeyWarnings: [String] = []
+    @Published private(set) var recordingHotkey: HotkeyAction?
+    private var keyMonitor: Any?
 
     var onChange: (SettingsChange) -> Void = { _ in }
     var onReconnect: () -> Void = {}
     var onOpenNotificationSettings: () -> Void = {}
+    // Registers (nil: unregisters) a binding; an error message when refused.
+    var onRegisterHotkey: (HotkeyAction, HotkeyDefinition?) -> String? = { _, _ in nil }
+    var onRecordingHotkey: (Bool) -> Void = { _ in }
 
     init(store: SettingsStore) {
         self.store = store
@@ -146,6 +154,54 @@ final class SettingsModel: ObservableObject {
         }
     }
 
+    // Registered hotkeys are let go while recording, so pressing one records
+    // it instead of running it.
+    func startRecording(_ action: HotkeyAction) {
+        stopRecording()
+        hotkeyErrors[action] = nil
+        recordingHotkey = action
+        onRecordingHotkey(true)
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.record(event)
+            return nil
+        }
+    }
+
+    func stopRecording() {
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        keyMonitor = nil
+        guard recordingHotkey != nil else { return }
+        recordingHotkey = nil
+        onRecordingHotkey(false)
+    }
+
+    private func record(_ event: NSEvent) {
+        guard let action = recordingHotkey else { return }
+        let modifiers = MacKeys.modifiers(event.modifierFlags)
+        if event.keyCode == MacKeys.escapeKeyCode && modifiers == 0 {
+            stopRecording()
+            return
+        }
+        // A binding without a modifier would take the key from every app.
+        guard modifiers != 0, let virtualKey = MacKeys.virtualKey(event.keyCode) else {
+            hotkeyErrors[action] = loc.t("Use a letter, digit, F-key, arrow, or Space with at least one of ⌃ ⌥ ⇧ ⌘.",
+                                         "문자, 숫자, F키, 화살표, Space 중 하나를 ⌃ ⌥ ⇧ ⌘ 중 하나 이상과 함께 누르세요.")
+            return
+        }
+        stopRecording()
+        setHotkey(action, HotkeyDefinition(modifiers: modifiers, virtualKey: virtualKey))
+    }
+
+    // A refused binding is not saved and the previous one stays, as on Windows.
+    func setHotkey(_ action: HotkeyAction, _ definition: HotkeyDefinition?) {
+        if let error = onRegisterHotkey(action, definition) {
+            hotkeyErrors[action] = error
+            return
+        }
+        hotkeyErrors[action] = nil
+        update(.general) { $0[keyPath: action.settingsPath] = definition?.format() ?? "" }
+    }
+
     func openSettingsFile() {
         store.ensureFileExists()
         NSWorkspace.shared.open(SettingsStore.file)
@@ -183,6 +239,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         ("Providers", "server.rack"),
         ("Appearance", "paintbrush"),
         ("Alerts", "exclamationmark.triangle"),
+        ("Hotkeys", "keyboard"),
         ("About", "info.circle"),
     ]
 
@@ -235,13 +292,17 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         case "Providers": return loc.t("Providers", "프로바이더")
         case "Appearance": return loc.t("Appearance", "모양")
         case "Alerts": return loc.t("Alerts", "경고")
+        case "Hotkeys": return loc.t("Hotkeys", "단축키")
         default: return loc.t("About", "정보")
         }
     }
 
     // Commits a number field that still has focus.
     nonisolated func windowWillClose(_ notification: Notification) {
-        Task { @MainActor in self.window?.makeFirstResponder(nil) }
+        Task { @MainActor in
+            self.window?.makeFirstResponder(nil)
+            self.model.stopRecording()
+        }
     }
 }
 
@@ -261,6 +322,7 @@ private struct SettingsPage: View {
             case "Providers": ProvidersPage()
             case "Appearance": AppearancePage()
             case "Alerts": AlertsPage()
+            case "Hotkeys": HotkeysPage()
             case "About": AboutPage()
             default: GeneralPage()
             }
@@ -784,6 +846,72 @@ private struct PointsField: View {
             if model.pointsError?.owner == owner { model.pointsError = nil }
             text = UsageAlerts.formatPoints(parsed)
             if parsed != current { apply(parsed) }
+        }
+    }
+}
+
+private struct HotkeysPage: View {
+    @EnvironmentObject var model: SettingsModel
+
+    var body: some View {
+        let loc = model.loc
+        let unbound = loc.t("Unbound by default.", "기본값은 지정 안 함입니다.")
+        Form {
+            if !model.hotkeyWarnings.isEmpty {
+                Section {
+                    ForEach(model.hotkeyWarnings, id: \.self) { warning in
+                        Text(warning).font(.caption).foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text(loc.t("Hotkey load warnings", "단축키 불러오기 경고"))
+                }
+            }
+            Section {
+                HotkeyRow(action: .togglePopup, title: loc.t("Toggle popup", "팝업 토글"),
+                          detail: loc.t("Default ⌃⌥U.", "기본값 ⌃⌥U."))
+                HotkeyRow(action: .refreshAll, title: loc.t("Refresh all", "전체 새로 고침"), detail: unbound)
+                HotkeyRow(action: .togglePin, title: loc.t("Toggle pin", "핀 토글"), detail: unbound)
+            } footer: {
+                Text(loc.t("Click a shortcut, then press the new keys with at least one of ⌃ ⌥ ⇧ ⌘. Esc cancels. The settings file keeps the Windows names (Ctrl, Alt, Shift, Win = ⌘).",
+                           "단축키를 누른 뒤 ⌃ ⌥ ⇧ ⌘ 중 하나 이상과 함께 새 키를 누르세요. Esc는 취소입니다. 설정 파일에는 Windows 이름(Ctrl, Alt, Shift, Win = ⌘)으로 저장됩니다."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+// Click to record: the next key press with a modifier becomes the binding.
+private struct HotkeyRow: View {
+    let action: HotkeyAction
+    let title: String
+    let detail: String
+    @EnvironmentObject var model: SettingsModel
+
+    var body: some View {
+        let loc = model.loc
+        let current = model.settings[keyPath: action.settingsPath]
+        let recording = model.recordingHotkey == action
+        LabeledContent {
+            VStack(alignment: .trailing, spacing: 4) {
+                HStack {
+                    Button(recording ? loc.t("Press keys...", "키를 누르세요...")
+                                     : current.isEmpty ? loc.t("Not set", "지정 안 함") : MacKeys.display(current)) {
+                        recording ? model.stopRecording() : model.startRecording(action)
+                    }
+                    .frame(minWidth: 130)
+                    Button(loc.t("Clear", "지우기")) {
+                        model.stopRecording()
+                        model.setHotkey(action, nil)
+                    }
+                    .disabled(current.isEmpty)
+                }
+                if let error = model.hotkeyErrors[action] {
+                    Text(error).font(.caption).foregroundStyle(.red)
+                }
+            }
+        } label: {
+            RowLabel(title: title, detail: detail)
         }
     }
 }

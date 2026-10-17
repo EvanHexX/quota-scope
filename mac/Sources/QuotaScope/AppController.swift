@@ -6,7 +6,7 @@ import QuotaProviders
 
 // Port of app-winui/TrayController.cs for the menu bar MVP (phase 4): owns the
 // providers, polling, the status item, the popover, and the pinned panel.
-// Hotkeys come later in phase 5.
+// Alerts, the settings window, and hotkeys came in phase 5.
 @MainActor
 final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
     private let store = SettingsStore()
@@ -25,6 +25,7 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
     private lazy var settingsWindow = SettingsWindowController(model: settingsModel)
     private let alertTracker = UsageAlertTracker()
     private let notifier = Notifier()
+    private let hotkeys = GlobalHotkeys()
 
     func start() {
         model.settings = store.settings
@@ -44,6 +45,8 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         notifier.onPermissionChange = { [weak self] in self?.settingsModel.notificationPermission = $0 }
         notifier.onActivate = { [weak self] in self?.showPopover() }
         if store.settings.notifyOnThreshold { notifier.prepare() }
+        settingsModel.onRegisterHotkey = { [weak self] in self?.rebind($0, $1) }
+        settingsModel.onRecordingHotkey = { [weak self] in self?.hotkeys.suspend($0) }
         applyTheme()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -58,6 +61,7 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         applyVisuals()
         if let warning = store.loadWarning { NSLog("QuotaScope: \(warning)") }
 
+        initializeHotkeys()
         scheduleTimer()
         refresh()
     }
@@ -66,6 +70,66 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: pollInterval(), repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
+        }
+    }
+
+    // MARK: hotkeys
+
+    private func initializeHotkeys() {
+        hotkeys.onPressed = { [weak self] action in
+            guard let self else { return }
+            switch action {
+            case .togglePopup: self.togglePopover()
+            case .refreshAll: self.refresh()
+            case .togglePin: self.togglePin()
+            }
+        }
+        var warnings: [String] = []
+        for action in HotkeyAction.allCases {
+            registerFromSettings(action, fallback: action == .togglePopup ? "Ctrl+Alt+U" : nil, &warnings)
+        }
+        settingsModel.hotkeyWarnings = warnings
+        // Load-time problems show at once, not only on the settings page.
+        if !warnings.isEmpty { notifier.show(title: "QuotaScope hotkeys", body: warnings.joined(separator: "\n")) }
+    }
+
+    private func registerFromSettings(_ action: HotkeyAction, fallback: String?, _ warnings: inout [String]) {
+        let text = store.settings[keyPath: action.settingsPath]
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard let definition = HotkeyDefinition.parse(text) else {
+            // An invalid stored string falls back to the default (or unbound).
+            if let fallback, let definition = HotkeyDefinition.parse(fallback) {
+                warnings.append("Invalid hotkey '\(text)' for \(action); using default \(fallback).")
+                store.update { $0[keyPath: action.settingsPath] = fallback }
+                if let error = hotkeys.register(action, definition) { warnings.append("\(action): \(message(error))") }
+            } else {
+                warnings.append("Invalid hotkey '\(text)' for \(action); left unbound.")
+                store.update { $0[keyPath: action.settingsPath] = "" }
+            }
+            model.settings = store.settings
+            return
+        }
+        if let error = hotkeys.register(action, definition) { warnings.append("\(action): \(message(error))") }
+    }
+
+    // From the settings window; on failure the previous binding comes back.
+    private func rebind(_ action: HotkeyAction, _ definition: HotkeyDefinition?) -> String? {
+        guard let definition else {
+            hotkeys.unregister(action)
+            return nil
+        }
+        let previous = HotkeyDefinition.parse(store.settings[keyPath: action.settingsPath])
+        guard let error = hotkeys.register(action, definition) else { return nil }
+        if let previous { _ = hotkeys.register(action, previous) }
+        return message(error)
+    }
+
+    private func message(_ error: HotkeyRegistrationError) -> String {
+        let loc = model.loc
+        switch error {
+        case .unsupportedKey: return loc.t("That key has no Mac equivalent.", "Mac에는 그 키가 없습니다.")
+        case .inUse: return loc.t("That shortcut is already in use.", "이미 쓰이는 단축키입니다.")
+        case .failed(let status): return loc.t("The shortcut could not be registered (\(status)).", "단축키를 등록하지 못했습니다(\(status)).")
         }
     }
 

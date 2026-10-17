@@ -164,6 +164,9 @@ enum SettingsFields {
         .init("NotifyOnThreshold", \.notifyOnThreshold),
         .init("TimeDisplayMode", \.timeDisplayMode),
         .init("IsPinned", \.isPinned),
+        .init("Hotkey", \.hotkey),
+        .init("HotkeyRefreshAll", \.hotkeyRefreshAll),
+        .init("HotkeyTogglePin", \.hotkeyTogglePin),
     ]
 
     static let provider: [SettingsField<ProviderSettings>] = [
