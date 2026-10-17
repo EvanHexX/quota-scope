@@ -364,7 +364,7 @@ Phase 0 results (2026-10-17, macOS 15.6.1 arm64, reported from the Agent Summit 
 | `claude_usage_last.json` diagnostic dump | next to the exe | `~/Library/Application Support/QuotaScope/` |
 
 - **Same JSON schema and key names** as `AppSettings.cs`, enforced by the `settings/` fixtures. No Windows key is renamed or dropped. macOS ignores Windows-only keys (`UiScale`, `Glassmorphism`, `GlassStrength`, `LastPopupX/Y`); keys added for macOS (`MenuBarText`) are ignored by Windows. Unknown keys are preserved on save where practical.
-- Hotkey strings keep the `Ctrl+Alt+U` grammar of `HotkeyDefinition`; the Mac UI shows `Ctrl→⌃`, `Alt→⌥`, `Shift→⇧`, and adds `Cmd→⌘`. Adding `Cmd` to the macOS parser must not change how Windows parses existing strings (the `hotkeys/` fixtures cover both).
+- Hotkey strings keep the `Ctrl+Alt+U` grammar of `HotkeyDefinition` unchanged; the Mac UI shows `Ctrl→⌃`, `Alt→⌥`, `Shift→⇧`, and **`Win→⌘`** (decided 2026-10-17, replacing an earlier idea of a new `Cmd` token). The Windows key and ⌘ sit in the same place on their keyboards, the grammar already has `Win` (`MOD_WIN`), and no new token means no parser change on either side. The recorder writes `Win+…` for a ⌘ binding, and the same string means the Windows key on Windows. The keys themselves are mapped from Windows virtual-key codes to Carbon key codes in the Mac app.
 
 ## 7. Building on the Mac without an account
 
