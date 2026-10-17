@@ -427,10 +427,25 @@ func withTimeout<T>(seconds: TimeInterval, _ operation: @escaping @MainActor () 
 // Automation permission (3.4).
 enum ClaudeLogin {
     static func openTerminal() {
-        let claude = ClaudeCommandResolver.resolve(["/login"])?.executable ?? "claude"
         let script = FileManager.default.temporaryDirectory.appendingPathComponent("quotascope-claude-login.command")
-        let quoted = "'" + claude.replacingOccurrences(of: "'", with: "'\\''") + "'"
-        let body = "#!/bin/zsh -l\n\(quoted) /login\n"
+        let body: String
+        if let claude = ClaudeCommandResolver.resolve(["/login"])?.executable {
+            let quoted = "'" + claude.replacingOccurrences(of: "'", with: "'\\''") + "'"
+            body = "#!/bin/zsh -l\n\(quoted) /login\n"
+        } else {
+            // The Claude desktop app's built-in Claude Code is not a terminal
+            // command, and its sign-in is not one QuotaScope can read.
+            body = """
+            #!/bin/zsh -l
+            echo "QuotaScope: the Claude Code command line (claude) is not installed."
+            echo "Install it, then press Sign in in QuotaScope again:"
+            echo ""
+            echo "  curl -fsSL https://claude.ai/install.sh | bash"
+            echo ""
+            exec /bin/zsh -l
+
+            """
+        }
         do {
             try body.write(to: script, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: script.path)

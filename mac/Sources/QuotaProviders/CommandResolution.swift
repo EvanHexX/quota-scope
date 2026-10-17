@@ -75,7 +75,7 @@ public struct CommandEnvironment: Sendable {
     // Directories searched before the login shell is asked.
     var knownDirectories: [String] {
         var directories = [
-            "\(home)/.local/bin", "/opt/homebrew/bin", "/usr/local/bin",
+            "\(home)/.local/bin", "\(home)/.claude/local", "/opt/homebrew/bin", "/usr/local/bin",
             "\(home)/.npm-global/bin", "\(home)/.bun/bin",
         ]
         if let nvm = newestNvmBin() { directories.append(nvm) }
