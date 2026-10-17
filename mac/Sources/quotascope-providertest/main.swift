@@ -180,12 +180,14 @@ final class FakeCredentials: ClaudeCredentialSource, @unchecked Sendable {
     let expiresAt = Box<Date?>(nil)
     let changed = Box<Date?>(Date(timeIntervalSince1970: 1_000))
     let reads = Box(0)
+    // The Keychain prompt denied (or not answered): the item exists, the read fails.
+    let denied = Box(false)
 
     var exists: Bool { changed.value != nil }
     func stamp() -> Date? { changed.value }
     func read() -> ClaudeCredentials? {
         reads.value += 1
-        guard exists else { return nil }
+        guard exists, !denied.value else { return nil }
         return ClaudeCredentials(accessToken: token.value, expiresAt: expiresAt.value)
     }
 }
@@ -303,6 +305,27 @@ func claudeTests() async {
     clock.value += 121
     check(renewer.requestRenewal(recovery: false) == true, "proactive retry after 2 minutes")
 
+    // Credentials that exist but cannot be read (Keychain prompt denied) are
+    // not a sign-out: no renewal, no auth pause, and the next poll retries.
+    credentials.denied.value = true
+    let runsBeforeDenied = runs.value
+    clock.value += 61
+    usage = try! await provider.read()
+    check(usage.state == .unavailable && usage.statusText == ClaudeUsageProvider.unreadableStatus,
+          "claude unreadable credentials: \(usage.state) \(usage.statusText)")
+    check(runs.value == runsBeforeDenied, "claude unreadable credentials do not nudge the renewer")
+    credentials.denied.value = false
+    clock.value += 61
+    transport.replies.value = [.status(200, usageBody)]
+    usage = try! await provider.read()
+    check(usage.state == .ok, "claude recovers once the Keychain allows the read: \(usage.statusText)")
+
+    // A poll answered from the cache does not read the secret: on macOS
+    // every read is a Keychain access that can prompt.
+    let readsBefore = credentials.reads.value
+    _ = try! await provider.read()
+    check(credentials.reads.value == readsBefore, "claude cached poll reads no credentials: \(credentials.reads.value - readsBefore)")
+
     // Signed out entirely: the sign-in hint without "expired".
     credentials.changed.value = nil
     usage = try! await provider.reconnect()
@@ -312,8 +335,28 @@ func claudeTests() async {
     check(renewer.requestRenewal(recovery: true) == false, "renewer stops after close")
 }
 
+// The credentials payload: Claude Code's item can hold only MCP connector
+// tokens, which is "not signed in" (an empty token), not unreadable (nil).
+func payloadTests() {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("quotascope-providertest-\(ProcessInfo.processInfo.processIdentifier)")
+    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    func parsed(_ text: String) -> ClaudeCredentials? {
+        let file = directory.appendingPathComponent("credentials.json")
+        try? Data(text.utf8).write(to: file)
+        return FileCredentialSource(path: file.path).read()
+    }
+    let signedIn = parsed(#"{"claudeAiOauth":{"accessToken":"t","expiresAt":1760000000000},"mcpOAuth":{}}"#)
+    check(signedIn?.accessToken == "t" && signedIn?.expiresAt != nil, "claude payload with claudeAiOauth")
+    let mcpOnly = parsed(#"{"mcpOAuth":{"x|1":{"accessToken":"m"}}}"#)
+    check(mcpOnly != nil && mcpOnly?.accessToken == nil, "claude payload with only mcpOAuth reads as signed out")
+    check(parsed("not json") == nil, "claude payload that is not JSON is unreadable")
+}
+
 await codexTests()
 await claudeTests()
+payloadTests()
 if failures > 0 {
     FileHandle.standardError.write(Data("\(failures) failed, \(passed) passed\n".utf8))
     exit(1)

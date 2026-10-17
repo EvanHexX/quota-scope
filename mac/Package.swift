@@ -12,7 +12,9 @@ import PackageDescription
 // else builds on Windows too, where quotascope-providertest drives it against
 // fakes (fake-codex-app-server, an in-memory transport and credentials).
 //
-// The menu bar app is a later, macOS-only target.
+// QuotaScope is the menu bar app (AppKit + SwiftUI). Its sources build only on
+// macOS; elsewhere the target is a stub so `swift build` still works on
+// Windows. mac/build.sh wraps it into QuotaScope.app.
 let package = Package(
     name: "QuotaScope",
     platforms: [.macOS(.v13)],
@@ -22,5 +24,6 @@ let package = Package(
         .executableTarget(name: "quotascope-selftest", dependencies: ["QuotaCore"]),
         .executableTarget(name: "quotascope-providertest", dependencies: ["QuotaCore", "QuotaProviders"]),
         .executableTarget(name: "fake-codex-app-server", dependencies: ["QuotaCore"]),
+        .executableTarget(name: "QuotaScope", dependencies: ["QuotaCore", "QuotaProviders"]),
     ]
 )

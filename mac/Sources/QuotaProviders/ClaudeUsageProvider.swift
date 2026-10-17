@@ -20,6 +20,7 @@ public actor ClaudeUsageProvider: UsageProvider {
     // The Keychain has no change notification, so its modification date is
     // polled; the file is polled the same way.
     static let changePollInterval: TimeInterval = 5
+    public static let unreadableStatus = "Claude credentials could not be read. Allow QuotaScope in the Keychain prompt"
 
     public nonisolated let id = ClaudeUsageMapper.providerId
     public nonisolated let displayName = ClaudeUsageMapper.providerDisplayName
@@ -103,14 +104,6 @@ public actor ClaudeUsageProvider: UsageProvider {
 
     private func fetchCore(force: Bool) async -> ProviderUsage {
         let now = self.now()
-        let current = credentials.read()
-        let expiresAt = current?.expiresAt
-
-        // Proactive renewal: hand the refresh back to Claude Code before the
-        // token dies. Past the expiry stamp the nudge is no longer speculative.
-        if autoRenew && ClaudeRenewalPolicy.isExpiring(expiresAt, now: now) {
-            renewer.requestRenewal(recovery: expiresAt.map { $0 <= now } ?? true)
-        }
 
         if authPaused && !force {
             // Resume only after Claude Code rewrites the credentials.
@@ -126,7 +119,29 @@ public actor ClaudeUsageProvider: UsageProvider {
 
         if !force, now < nextFetchAt, let lastResult { return lastResult }
 
-        guard let token = current?.accessToken, !token.isEmpty else { return pauseForAuth() }
+        // The secret is read only for a request that is actually sent. On
+        // macOS every read is a Keychain data access, and until the user picks
+        // "Always Allow" each one shows the access prompt again.
+        guard let current = credentials.read() else {
+            // Credentials that exist but cannot be read are not a signed-out
+            // session: on macOS it is the Keychain prompt, denied or still
+            // waiting. Retry on the next poll instead of pausing for a
+            // sign-in that would never come.
+            if credentials.exists {
+                nextFetchAt = now.addingTimeInterval(minPollInterval)
+                return remember(withFallback(.unavailable, Self.unreadableStatus))
+            }
+            return pauseForAuth()
+        }
+        let expiresAt = current.expiresAt
+
+        // Proactive renewal: hand the refresh back to Claude Code before the
+        // token dies. Past the expiry stamp the nudge is no longer speculative.
+        if autoRenew && ClaudeRenewalPolicy.isExpiring(expiresAt, now: now) {
+            renewer.requestRenewal(recovery: expiresAt.map { $0 <= now } ?? true)
+        }
+
+        guard let token = current.accessToken, !token.isEmpty else { return pauseForAuth() }
 
         do {
             let response = try await transport.get(Self.usageEndpoint, headers: [
