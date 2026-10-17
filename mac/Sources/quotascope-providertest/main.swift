@@ -335,6 +335,11 @@ func claudeTests() async {
     check(usage.state == .unauthenticated && usage.statusText == "Run Claude Code and sign in",
           "claude item without a sign-in: \(usage.statusText)")
     check(runs.value == runsBeforeMcpOnly, "claude item without a sign-in does not nudge the renewer")
+    // Nor do the polls while it stays paused, past any renewer cooldown.
+    clock.value += 31 * 60
+    usage = try! await provider.read()
+    check(usage.statusText == "Run Claude Code and sign in" && runs.value == runsBeforeMcpOnly,
+          "claude paused polls without a sign-in do not nudge: \(runs.value - runsBeforeMcpOnly) runs, \(usage.statusText)")
     credentials.token.value = "test-token"
 
     // Signed out entirely: the sign-in hint without "expired".

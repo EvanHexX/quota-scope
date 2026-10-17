@@ -111,7 +111,8 @@ public actor ClaudeUsageProvider: UsageProvider {
         if authPaused && !force {
             // Resume only after Claude Code rewrites the credentials.
             if await keychainStamp() == authPausedStamp {
-                if autoRenew { renewer.requestRenewal(recovery: true) }
+                // An item without a Claude Code sign-in has no session to renew.
+                if autoRenew && !signedOut { renewer.requestRenewal(recovery: true) }
                 // Re-emitted, so a renewal that started (or gave up) shows.
                 return await pauseForAuth()
             }
