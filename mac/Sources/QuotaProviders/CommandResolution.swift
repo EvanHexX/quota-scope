@@ -240,6 +240,28 @@ public enum ClaudeCommandResolver {
     // `claude` with the given arguments, or nil when it cannot be found; the
     // renewer then counts the attempt as failed.
     public static func resolve(_ arguments: [String], environment: CommandEnvironment = .current) -> CommandSpec? {
-        environment.findOnPath("claude").map { CommandSpec(executable: $0, arguments: arguments, source: .path) }
+        if let path = environment.findOnPath("claude") {
+            return CommandSpec(executable: path, arguments: arguments, source: .path)
+        }
+        return desktopBundled(environment).map { CommandSpec(executable: $0, arguments: arguments, source: .appBundle) }
+    }
+
+    // Without a terminal install, the copy the Claude desktop app downloads:
+    // <home>/Library/Application Support/Claude/claude-code/<version>/<hash>/
+    // claude.app/Contents/MacOS/claude (seen 2026-10-17 with 2.1.299). It
+    // uses the same Keychain item, so `/login` with it signs QuotaScope in.
+    // The newest version wins; the path changes when the desktop app updates.
+    static func desktopBundled(_ environment: CommandEnvironment) -> String? {
+        let root = "\(environment.home)/Library/Application Support/Claude/claude-code"
+        let files = FileManager.default
+        guard let versions = try? files.contentsOfDirectory(atPath: root) else { return nil }
+        for version in versions.sorted(by: { $0.compare($1, options: .numeric) == .orderedDescending }) {
+            guard let builds = try? files.contentsOfDirectory(atPath: "\(root)/\(version)") else { continue }
+            for build in builds.sorted() {
+                let candidate = "\(root)/\(version)/\(build)/claude.app/Contents/MacOS/claude"
+                if environment.isExecutable(candidate) { return candidate }
+            }
+        }
+        return nil
     }
 }
