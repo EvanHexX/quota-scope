@@ -18,6 +18,11 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
     private var panel: NSPanel?
     private var timer: Timer?
     private var pollInFlight: Task<Void, Never>?
+    // Bumped when providers are rebuilt, so a poll of the old ones is ignored.
+    private var generation = 0
+    private var rebuildPending: DispatchWorkItem?
+    private lazy var settingsModel = SettingsModel(store: store)
+    private lazy var settingsWindow = SettingsWindowController(model: settingsModel)
 
     func start() {
         model.settings = store.settings
@@ -26,6 +31,11 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         model.onRefresh = { [weak self] in self?.refresh() }
         model.onTogglePin = { [weak self] in self?.togglePin() }
         model.onToggleTimeMode = { [weak self] in self?.toggleTimeMode() }
+        model.onOpenSettings = { [weak self] in self?.openSettings() }
+        settingsModel.loc = model.loc
+        settingsModel.onChange = { [weak self] kind in self?.settingsChanged(kind) }
+        settingsModel.onReconnect = { [weak self] in self?.reconnect() }
+        applyTheme()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
@@ -39,10 +49,83 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         applyVisuals()
         if let warning = store.loadWarning { NSLog("QuotaScope: \(warning)") }
 
+        scheduleTimer()
+        refresh()
+    }
+
+    private func scheduleTimer() {
+        timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: pollInterval(), repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
         }
+    }
+
+    // MARK: settings window
+
+    func openSettings() {
+        popover?.performClose(nil)
+        settingsModel.loc = model.loc
+        settingsModel.rows = rowRefs()
+        settingsWindow.show()
+    }
+
+    private func settingsChanged(_ kind: SettingsChange) {
+        model.settings = store.settings
+        let loc = currentLoc()
+        if loc != model.loc {
+            model.loc = loc
+            settingsModel.loc = loc
+            settingsWindow.relocalize()
+        }
+        applyTheme()
+        applyVisuals()
+        // Providers rebuild on change, as on Windows; typing a number fires
+        // once per keystroke, so the rebuild waits for the last one.
+        if kind == .providers {
+            rebuildPending?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                MainActor.assumeIsolated { self?.rebuildProviders() }
+            }
+            rebuildPending = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
+        }
+    }
+
+    private func rebuildProviders() {
+        rebuildPending = nil
+        generation += 1
+        pollInFlight?.cancel()
+        pollInFlight = nil
+        model.refreshing = false
+        let old = providers
+        providers = []
+        usages = [:]
+        Task { for provider in old { await provider.close() } }
+        buildProviders()
+        scheduleTimer()
+        applyVisuals()
         refresh()
+    }
+
+    // System / Light / Dark (decision M4) for the popover, the pinned panel,
+    // and the settings window. The menu bar icon follows the menu bar itself.
+    private func applyTheme() {
+        let settings = store.settings
+        if settings.followSystemTheme {
+            NSApp.appearance = nil
+        } else {
+            let light = settings.themeOverride.caseInsensitiveCompare("Light") == .orderedSame
+            NSApp.appearance = NSAppearance(named: light ? .aqua : .darkAqua)
+        }
+    }
+
+    private func rowRefs() -> [UsageRowRef] {
+        currentUsages.flatMap { usage in
+            usage.rows.map {
+                UsageRowRef(providerId: usage.providerId, providerName: usage.displayName,
+                            label: $0.label, isPrimary: $0.isPrimary, scope: $0.scope)
+            }
+        }
     }
 
     // MARK: providers
@@ -91,9 +174,11 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
     }
 
     private func poll(reconnect: Bool) async {
+        let generation = generation
         model.refreshing = true
         // One provider's failure must not affect the others.
         for provider in providers {
+            guard generation == self.generation else { return }
             if reconnect {
                 update(.offline(provider.id, provider.displayName, "Connecting to \(provider.displayName)...", .unavailable))
             }
@@ -102,11 +187,14 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
                     if reconnect { return try await provider.reconnect() }
                     return try await provider.read()
                 }
+                guard generation == self.generation else { return }
                 update(usage)
             } catch is TimeoutError {
+                guard generation == self.generation else { return }
                 update(.offline(provider.id, provider.displayName,
                                 "\(provider.displayName) connection timed out. Use Reconnect.", .unavailable))
             } catch {
+                guard generation == self.generation else { return }
                 update(.offline(provider.id, provider.displayName,
                                 "\(provider.displayName) connection required: \(error)", .unavailable))
             }
@@ -117,8 +205,11 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
     }
 
     private func update(_ usage: ProviderUsage) {
+        // A disabled provider's late update must not bring its section back.
+        guard providers.contains(where: { $0.id == usage.providerId }) else { return }
         usages[usage.providerId] = usage
         applyVisuals()
+        settingsModel.rows = rowRefs()
     }
 
     // MARK: menu bar item
@@ -157,6 +248,7 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         menu.addItem(item(loc.t("Toggle popup", "팝업 토글"), #selector(menuTogglePopover)))
         menu.addItem(item(loc.t("Reconnect", "재연결"), #selector(menuReconnect)))
         menu.addItem(.separator())
+        menu.addItem(item(loc.t("Settings...", "설정..."), #selector(menuSettings), key: ","))
         menu.addItem(item(loc.t("Open settings file", "설정 파일 열기"), #selector(menuOpenSettings)))
         menu.addItem(.separator())
         menu.addItem(item(loc.t("Quit", "종료"), #selector(menuQuit), key: "q"))
@@ -177,6 +269,7 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
     @objc private func menuTogglePopover() { togglePopover() }
     @objc private func menuReconnect() { reconnect() }
     @objc private func menuQuit() { NSApp.terminate(nil) }
+    @objc private func menuSettings() { openSettings() }
 
     @objc private func menuOpenSettings() {
         store.ensureFileExists()
@@ -277,6 +370,7 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         let remaining = store.timeDisplayMode.caseInsensitiveCompare("RemainingTime") == .orderedSame
         store.timeDisplayMode = remaining ? "ClockTime" : "RemainingTime"
         model.settings = store.settings
+        settingsModel.reload()
     }
 
     private func currentLoc() -> Loc {

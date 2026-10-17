@@ -96,6 +96,7 @@ Principle: use system components and system styling, and drop Windows features w
 
 - SwiftUI `Settings` scene (opens with `⌘,`), toolbar-style tabs: General, Providers, Appearance, Alerts, Hotkeys, About. Same sections as the Windows settings window, laid out with `Form` + `.formStyle(.grouped)`.
 - Hotkey recorder: a field that captures a key combination and shows it with Mac symbols (`⌃⌥U`).
+- **Started (2026-10-17):** `mac/Sources/QuotaScope/SettingsWindow.swift`, opened from the right-click menu (Settings…, `⌘,`) and the popover's gear button. Tabs General (language, start at login, time display, menu bar text, settings file), Providers, Appearance (gauge metric, System/Light/Dark, rows to show and their order), Alerts (warning and critical levels), About. Changes save at once and write only the keys that changed. Shape theme, columns, notifications, alert points, and hotkeys join with their features.
 
 ### 3.4 Windows feature mapping
 

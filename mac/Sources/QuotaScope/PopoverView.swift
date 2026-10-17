@@ -15,6 +15,7 @@ final class UsageModel: ObservableObject {
     var onRefresh: () -> Void = {}
     var onTogglePin: () -> Void = {}
     var onToggleTimeMode: () -> Void = {}
+    var onOpenSettings: () -> Void = {}
 
     // Visible rows per provider in the user's order, as the Windows popup.
     var sections: [(usage: ProviderUsage, rows: [UsageRow])] {
@@ -68,6 +69,11 @@ struct PopoverView: View {
             }
             .buttonStyle(.borderless)
             .help(model.isPinned ? model.loc.t("Unpin", "고정 해제") : model.loc.t("Pin", "고정"))
+            Button(action: model.onOpenSettings) {
+                Image(systemName: "gearshape")
+            }
+            .buttonStyle(.borderless)
+            .help(model.loc.t("Settings", "설정"))
         }
         .padding(.bottom, 8)
     }
@@ -113,6 +119,7 @@ struct PopoverView: View {
     private var contextMenu: some View {
         Button(model.loc.t("Refresh", "새로 고침"), action: model.onRefresh)
         Button(model.isPinned ? model.loc.t("Unpin", "고정 해제") : model.loc.t("Pin", "고정"), action: model.onTogglePin)
+        Button(model.loc.t("Settings...", "설정..."), action: model.onOpenSettings)
     }
 }
 
