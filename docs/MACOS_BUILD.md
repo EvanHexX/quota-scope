@@ -296,7 +296,9 @@ Still **(verify)**, in phase 3 with the real app:
 | Run `/usr/bin/security find-generic-password -s "Claude Code-credentials" -w` | "Always Allow" adds `/usr/bin/security` to the item's ACL, which survives rebuilds | Weakens the item: **any** process can then read the token silently through `security` | Not used |
 | `SecItemCopyMatching` from the app | "Always Allow" trusts QuotaScope's code signature | Only QuotaScope gets access | **Used** |
 
-With ad-hoc signing every rebuild is a new signature, so the prompt returns after each rebuild. The fix without a developer account: create a **self-signed code-signing certificate** once (Keychain Access → Certificate Assistant → Create a Certificate…, type "Code Signing", name `QuotaScope Local`, identity type "Self Signed Root"), then open it in the login keychain and set **Trust → Code Signing → Always Trust**; without that step `security find-identity -v` lists it as untrusted and the build falls back to ad-hoc. The build script signs with a `QuotaScope Local` identity by itself (or whatever `QUOTASCOPE_SIGN_IDENTITY` names), which keeps the designated requirement stable across rebuilds so "Always Allow" sticks. **Decision M2.**
+With ad-hoc signing every rebuild is a new signature, so the prompt returns after each rebuild. The fix without a developer account: create a **self-signed code-signing certificate** once (Keychain Access → Certificate Assistant → Create a Certificate…, type "Code Signing", name `QuotaScope Local`, identity type "Self Signed Root"), then open it in the login keychain and set **Trust → Code Signing → Always Trust**; without that step `security find-identity -v` lists it as untrusted and the build falls back to ad-hoc. The build script signs with a `QuotaScope Local` identity by itself (or whatever `QUOTASCOPE_SIGN_IDENTITY` names), which keeps the designated requirement stable across rebuilds. **Decision M2.**
+
+**Checked on the Mac (2026-10-17, macOS 15.6.1): the certificate does not stop the prompt after a rebuild.** The second build signed with `QuotaScope Local` (`Authority=QuotaScope Local`, `TeamIdentifier=not set`) prompted again. The likely reason is the item's partition list: an app without a Team ID is recorded by its cdhash, which changes with every build, and only a Developer ID team (`teamid:`) is stable. So each new build asks once, the answer then holds for that build across relaunches and restarts, and a user who installs a release sees it once per update. Changing the partition list of Claude Code's item (`security set-generic-password-partition-list`) would avoid it but edits another app's item and needs the keychain password, so it is not done or suggested. The self-signed identity stays as the default: it costs nothing and gives login items and notifications a stable signer.
 
 ### 6.2 Finding `codex` and `claude` from a GUI app
 
@@ -572,7 +574,7 @@ The README must not claim a macOS download, installer, Homebrew cask, or auto-up
 | ID | Question | Recommendation |
 |---|---|---|
 | M1 | Architecture | **A**: all Swift, kept in step with C# by shared input/expected fixtures |
-| M2 | Signing | Self-signed local identity when present, ad-hoc fallback; document creating the certificate |
+| M2 | Signing | Self-signed local identity when present, ad-hoc fallback; document creating the certificate. It does not keep "Always Allow" across rebuilds (6.1, checked 2026-10-17): each build asks once |
 | M3 | Warning/critical in the menu bar | Template arc icon + small colored badge dot only at warning/critical |
 | M4 | Themes on macOS | System / Light / Dark only; drop Midnight, glass, and UI scale on macOS |
 | M5 | Minimum macOS | 13 Ventura |
