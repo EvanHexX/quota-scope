@@ -291,12 +291,14 @@ Still **(verify)**, in phase 3 with the real app:
 - **Change detection** (replaces the Windows `FileSystemWatcher`): poll the item's modification date every few seconds via an attributes-only query (`kSecReturnAttributes`, no `kSecReturnData`). **(verify that this does not trigger a Keychain prompt)**
 - Fall back to `~/.claude/.credentials.json` with a file watcher if that file exists (Claude Code uses it when the Keychain is unavailable).
 
-**Keychain prompts.** The item's ACL belongs to Claude Code, so the first read shows a "QuotaScope wants to use your confidential information…" prompt.
+**Keychain prompts.** The item's ACL belongs to Claude Code, so a direct read from the app shows a "QuotaScope wants to use your confidential information…" prompt.
 
 | Approach | Prompt behavior | Security | Verdict |
 |---|---|---|---|
-| Run `/usr/bin/security find-generic-password -s "Claude Code-credentials" -w` | "Always Allow" adds `/usr/bin/security` to the item's ACL, which survives rebuilds | Weakens the item: **any** process can then read the token silently through `security` | Not used |
-| `SecItemCopyMatching` from the app | "Always Allow" trusts QuotaScope's code signature | Only QuotaScope gets access | **Used** |
+| Run `/usr/bin/security find-generic-password -s "Claude Code-credentials" -w` | None: Claude Code writes the item through `security`, so `/usr/bin/security` is already on its ACL and its `apple-tool:` partition (checked 2026-10-17) | No change: the item already trusts `security` for any caller, whatever QuotaScope does | **Used (M15)** |
+| `SecItemCopyMatching` from the app | "Always Allow" trusts QuotaScope's build; lost on every rebuild and on every token refresh (below) | Only QuotaScope gets access | Used until M15 |
+
+**Checked on the Mac (2026-10-17, macOS 15.6.1): a token refresh brings the prompt back.** The app's `claude mcp list` nudge made Claude Code refresh the token at 19:53 (the item's `mdat` moved, `cdat` stayed), and QuotaScope's next read prompted again; Claude usage stopped for 28 minutes until the user answered. The ACL read afterwards (`security dump-keychain -a`, no secrets) showed QuotaScope still on the application list by its certificate requirement, `/usr/bin/security` on it too, and a partition list of `apple-tool:` plus only the current build's `cdhash:`. So a refresh resets the partition list to `apple-tool:`, dropping the app's earlier "Always Allow" about every 8 hours. Reading through `/usr/bin/security`, an Apple tool, falls under `apple-tool:` and asks nothing, after rebuilds and refreshes alike. The token passes from the tool to the app through a pipe and is dropped after parsing, as before. Attribute reads (the 5-second `mdat` watch, the existence check) stay on `SecItemCopyMatching`; they never prompt. **Decision M15.**
 
 With ad-hoc signing every rebuild is a new signature, so the prompt returns after each rebuild. The fix without a developer account: create a **self-signed code-signing certificate** once (Keychain Access → Certificate Assistant → Create a Certificate…, type "Code Signing", name `QuotaScope Local`, identity type "Self Signed Root"), then open it in the login keychain and set **Trust → Code Signing → Always Trust**; without that step `security find-identity -v` lists it as untrusted and the build falls back to ad-hoc. The build script signs with a `QuotaScope Local` identity by itself (or whatever `QUOTASCOPE_SIGN_IDENTITY` names), which keeps the designated requirement stable across rebuilds. **Decision M2.**
 
@@ -461,7 +463,7 @@ Where it differs from the C# code on purpose:
 - **Claude:**
   - The Keychain has no change notification, so the credentials' modification date is polled every 5 s, debounced 2 s. This replaces `FileSystemWatcher`, for the file source too.
   - The secret is read once per fetch, for both `expiresAt` and the token, instead of twice. It is read only for a request that is actually sent, after the auth-pause and cache checks (the C# code reads `expiresAt` first). On macOS every data read is a Keychain access, and until the user picks "Always Allow" each one prompts again (measured in phase 4). As a side effect, a proactive renewal now goes out only on a poll that sends a request, which is at least once per poll interval.
-  - Credentials that exist but cannot be read (the Keychain prompt denied or not answered yet) report `Unavailable` with "Claude credentials could not be read. Allow QuotaScope in the Keychain prompt". The next poll retries. This is not treated as a sign-out.
+  - Credentials that exist but cannot be read (the Keychain prompt denied or not answered yet) report `Unavailable` with "Claude credentials could not be read. Allow access in the Keychain prompt". The next poll retries. This is not treated as a sign-out.
   - An item that holds only Claude Code's MCP connector tokens (`mcpOAuth`, no `claudeAiOauth`) reads as not signed in. That is how it looks before the terminal `claude` has ever signed in (seen 2026-10-17). It shows "Run Claude Code and sign in" without "expired", and no renewal is nudged, neither on that read nor on the paused polls after it. The flag clears once a real sign-in is read.
   - Every Keychain call (the data read, the attribute lookup for the change stamp, and the existence check) runs on one serial queue, `QuotaScope.ClaudeCredentials`, off the provider actor, and its result comes back through a continuation. Measured on the Mac in phase 4: `SecItemCopyMatching` holds its thread until the user answers the access prompt. One build left the prompt open for 19 minutes, saw no calls in that time, and got all the queued calls at once when it was answered. While the prompt is up, the login keychain also holds a lock that attribute lookups wait on. So the 5-second watcher skips its tick while a read is in flight, and the status text uses the last known existence instead of a fresh lookup. A `sample` taken during the prompt (a2d79d3) found `SecItemCopyMatching` waiting in one place only, that queue, and no blocked Swift concurrency thread. Fetches stay one at a time. One remaining direct call: the renewer still reads the stamp itself, when an attempt starts (on the actor, after a fetch's read has finished) and when it ends (on a background queue). Neither can overlap a prompt from the same fetch.
   - Known gap: a payload that is not JSON also shows the Keychain-prompt message. Telling "could not read" apart from "unexpected format" needs a result type on `ClaudeCredentialSource`. Left as is, because it is rare.
@@ -514,7 +516,7 @@ Only the Mac can check these, and live runs there need the maintainer's explicit
 
 | Prompt | When | Avoidable? |
 |---|---|---|
-| Keychain access for `Claude Code-credentials` | First Claude poll | No; "Always Allow" sticks only with a stable signature (6.1) |
+| Keychain access for `Claude Code-credentials` | Not expected since M15 | Yes: the secret is read through `/usr/bin/security`, already trusted by the item (6.1) |
 | Notifications | First alert | No (system rule) |
 | Login item notice | When "Start at login" is turned on | No (system rule) |
 
@@ -561,7 +563,8 @@ The README must not claim a macOS download, installer, Homebrew cask, or auto-up
 - Refresh and Reconnect work from the menu and from the popover header.
 - Pin detaches a floating panel that stays on top and survives Space switches.
 - Switching light/dark in System Settings updates icon and popover live.
-- Claude: the Keychain prompt appears once per build; after "Always Allow", relaunching the same build or rebooting shows no new prompt (a new build asks once more, 6.1).
+- Claude: no Keychain prompt on the first read of a new build, after a reboot, or after Claude Code refreshes the token (M15, 6.1).
+- With Claude turned off in settings, nothing touches the Keychain item or starts `claude`: no prompt, no `security` or `claude` process, including when the settings window opens.
 - Codex: works when the app is launched from Finder and at login, not just from Terminal; finds the CLI bundled in ChatGPT.app with no `codex` on `PATH`; ignores ChatGPT Classic.app.
 - An alert notification fires at a configured point.
 - Start at login works after a reboot.
@@ -589,6 +592,7 @@ The README must not claim a macOS download, installer, Homebrew cask, or auto-up
 | M12 | Default gauge metric | **Decided (2026-10-17):** `Remaining` on macOS when settings.json has no `GaugeMetric`; the shared default in `AppSettings.cs` stays `Used` |
 | M13 | Hotkey modifier for ⌘ | **Decided (2026-10-17):** `Win` maps to ⌘; no new `Cmd` token, so the hotkey grammar stays the same on both platforms (6.3) |
 | M14 | EN/KO strings on macOS | **Decided (2026-10-17):** `Loc` in `QuotaCore`, as on Windows, not a String Catalog: the language switches live, and the Command Line Tools cannot compile a catalog (3.4) |
+| M15 | Reading the Claude token | Through `/usr/bin/security find-generic-password -w`, which the item already trusts, instead of `SecItemCopyMatching`: a token refresh resets the item's partition list and dropped the app's "Always Allow" about every 8 hours (6.1, measured 2026-10-17) |
 
 ## 12. Risks
 

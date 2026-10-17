@@ -2,7 +2,7 @@
 # Builds QuotaScope.app from source on this Mac (docs/MACOS_BUILD.md, 7.2).
 # Needs only the Xcode Command Line Tools. No Apple Developer account: the app
 # is signed ad-hoc, or with a local self-signed identity named in
-# QUOTASCOPE_SIGN_IDENTITY so a Keychain "Always Allow" survives rebuilds.
+# QUOTASCOPE_SIGN_IDENTITY so login items and notifications keep one signer.
 #
 #   mac/build.sh [--release] [--install]
 set -euo pipefail
@@ -66,9 +66,6 @@ echo "==> signing with ${identity/#-/ad-hoc (-)}"
 codesign --force --sign "$identity" "$app"
 codesign --verify --strict "$app"
 codesign -dv "$app" 2>&1 | grep -E '^(Identifier|Signature|Authority)=' || true
-# Each new build asks once for the Keychain item, signed either way: without
-# a Team ID the item remembers the build's cdhash (docs/MACOS_BUILD.md 6.1).
-echo "Note: the first Claude read of a new build shows the Keychain prompt once; choose Always Allow."
 
 if (( install )); then
   target="$HOME/Applications/QuotaScope.app"

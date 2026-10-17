@@ -20,7 +20,7 @@ public actor ClaudeUsageProvider: UsageProvider {
     // The Keychain has no change notification, so its modification date is
     // polled; the file is polled the same way.
     static let changePollInterval: TimeInterval = 5
-    public static let unreadableStatus = "Claude credentials could not be read. Allow QuotaScope in the Keychain prompt"
+    public static let unreadableStatus = "Claude credentials could not be read. Allow access in the Keychain prompt"
 
     public nonisolated let id = ClaudeUsageMapper.providerId
     public nonisolated let displayName = ClaudeUsageMapper.providerDisplayName
@@ -106,6 +106,9 @@ public actor ClaudeUsageProvider: UsageProvider {
     }
 
     private func fetchCore(force: Bool) async -> ProviderUsage {
+        // Claude switched off in settings closes the provider; a poll that was
+        // already queued must not touch the Keychain or start `claude` after that.
+        if closed { return withFallback(.unavailable, "Claude is off") }
         let now = self.now()
 
         if authPaused && !force {
@@ -252,8 +255,8 @@ public actor ClaudeUsageProvider: UsageProvider {
         updateHandler?(usage)
     }
 
-    // Until the user answers the Keychain prompt, SecItemCopyMatching blocks
-    // its thread, and that must not be one of the concurrency pool's threads.
+    // Until the user answers a Keychain prompt, the read (the security tool,
+    // or SecItemCopyMatching for the stamp) blocks its thread, and that must not be one of the concurrency pool's threads.
     private func readCredentials() async -> ClaudeCredentials? {
         let source = credentials
         readInFlight = true

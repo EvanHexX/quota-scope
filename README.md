@@ -102,7 +102,6 @@ macOS:
 - macOS 13 Ventura or later, with the Xcode Command Line Tools to build
 - Codex: the ChatGPT app (its bundled Codex CLI is found without `codex` on `PATH`) or a `codex` command (optional)
 - Claude: Claude Code signed in with `/login` on this Mac (optional). The copy of Claude Code that the Claude desktop app downloads is found too
-- Each new build asks once for access to Claude Code's Keychain item; choose **Always Allow**. Relaunching the same build or rebooting does not ask again
 
 ## Usage
 

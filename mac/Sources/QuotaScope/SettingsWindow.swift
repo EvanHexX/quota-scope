@@ -27,7 +27,8 @@ final class SettingsModel: ObservableObject {
     // Every row the providers report, for the row list and the menu bar text.
     @Published var rows: [UsageRowRef] = []
     @Published var codexResolved = ""
-    @Published var claudeCredentialsFound = false
+    // nil while Claude is off: then the Keychain is not touched at all.
+    @Published var claudeCredentialsFound: Bool?
     @Published var autostartEnabled = false
     @Published var autostartMessage: String?
     @Published var notificationPermission = NotificationPermission.unknown
@@ -60,12 +61,7 @@ final class SettingsModel: ObservableObject {
     func reload() {
         settings = store.settings
         menuBarText = store.menuBarText
-        // Off the main thread: a Keychain lookup waits while an access prompt
-        // is up.
-        Task.detached {
-            let found = PreferredCredentialSource.standard().exists
-            await MainActor.run { self.claudeCredentialsFound = found }
-        }
+        checkClaudeCredentials()
         refreshAutostart()
         resolveCodex()
     }
@@ -76,7 +72,23 @@ final class SettingsModel: ObservableObject {
         settings = store.settings
         guard settings != before else { return }
         onChange(kind)
-        if kind == .providers { resolveCodex() }
+        if kind == .providers {
+            resolveCodex()
+            if settings.provider("claude").enabled != before.provider("claude").enabled { checkClaudeCredentials() }
+        }
+    }
+
+    private func checkClaudeCredentials() {
+        guard settings.provider("claude").enabled else {
+            claudeCredentialsFound = nil
+            return
+        }
+        // Off the main thread: a Keychain lookup waits while an access prompt
+        // is up.
+        Task.detached {
+            let found = PreferredCredentialSource.standard().exists
+            await MainActor.run { self.claudeCredentialsFound = found }
+        }
     }
 
     func binding<Value>(_ kind: SettingsChange, _ path: WritableKeyPath<AppSettings, Value>) -> Binding<Value> {
@@ -525,7 +537,9 @@ private struct ProvidersPage: View {
                 LabeledContent {
                     Button(loc.t("Reconnect providers", "프로바이더 재연결"), action: model.onReconnect)
                 } label: {
-                    RowLabel(title: model.claudeCredentialsFound
+                    RowLabel(title: model.claudeCredentialsFound == nil
+                                ? loc.t("Claude is off; credentials are not read.", "Claude가 꺼져 있어 자격증명을 읽지 않습니다.")
+                                : model.claudeCredentialsFound == true
                                 ? loc.t("Claude Code credentials found.", "Claude Code 자격증명을 찾았습니다.")
                                 : loc.t("Not signed in. Run Claude Code and sign in.", "미로그인 상태입니다. Claude Code를 실행해 로그인하세요."),
                              detail: loc.t("Read from the login Keychain item \"Claude Code-credentials\".",
