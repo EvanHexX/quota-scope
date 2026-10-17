@@ -335,8 +335,28 @@ func claudeTests() async {
     check(renewer.requestRenewal(recovery: true) == false, "renewer stops after close")
 }
 
+// The credentials payload: Claude Code's item can hold only MCP connector
+// tokens, which is "not signed in" (an empty token), not unreadable (nil).
+func payloadTests() {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("quotascope-providertest-\(ProcessInfo.processInfo.processIdentifier)")
+    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    func parsed(_ text: String) -> ClaudeCredentials? {
+        let file = directory.appendingPathComponent("credentials.json")
+        try? Data(text.utf8).write(to: file)
+        return FileCredentialSource(path: file.path).read()
+    }
+    let signedIn = parsed(#"{"claudeAiOauth":{"accessToken":"t","expiresAt":1760000000000},"mcpOAuth":{}}"#)
+    check(signedIn?.accessToken == "t" && signedIn?.expiresAt != nil, "claude payload with claudeAiOauth")
+    let mcpOnly = parsed(#"{"mcpOAuth":{"x|1":{"accessToken":"m"}}}"#)
+    check(mcpOnly != nil && mcpOnly?.accessToken == nil, "claude payload with only mcpOAuth reads as signed out")
+    check(parsed("not json") == nil, "claude payload that is not JSON is unreadable")
+}
+
 await codexTests()
 await claudeTests()
+payloadTests()
 if failures > 0 {
     FileHandle.standardError.write(Data("\(failures) failed, \(passed) passed\n".utf8))
     exit(1)

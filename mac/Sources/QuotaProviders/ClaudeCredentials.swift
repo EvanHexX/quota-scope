@@ -30,10 +30,16 @@ public protocol ClaudeCredentialSource: AnyObject, Sendable {
 
 // The payload is the same JSON on both platforms:
 // { "claudeAiOauth": { "accessToken": "...", "expiresAt": <epoch ms> } }.
+// The same item also holds Claude Code's MCP connector tokens ("mcpOAuth"),
+// and on a Mac where the terminal `claude` never signed in that is all it
+// holds (seen 2026-10-17). That reads as "not signed in", not as unreadable.
 enum ClaudeCredentialPayload {
     static func parse(_ data: Data) -> ClaudeCredentials? {
         guard let root = try? JSONValue.parse(String(decoding: data, as: UTF8.self)),
-              case .object(let oauth)? = root["claudeAiOauth"] else { return nil }
+              root.objectValue != nil else { return nil }
+        guard case .object(let oauth)? = root["claudeAiOauth"] else {
+            return ClaudeCredentials(accessToken: nil, expiresAt: nil)
+        }
         let token = oauth["accessToken"]?.stringValue
         let expiresAt = oauth["expiresAt"]?.int64Value.map { Timestamp.fromUnixMilliseconds($0).date }
         return ClaudeCredentials(accessToken: token, expiresAt: expiresAt)
