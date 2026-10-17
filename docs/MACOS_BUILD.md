@@ -571,6 +571,27 @@ The README must not claim a macOS download, installer, Homebrew cask, or auto-up
 - **Korean:** with the language set to Korean (and with macOS itself in Korean), no label, reset text, menu item, or settings label is clipped at the default popup width, in both time modes and with every row shown (Spark rows, per-model weekly rows, credits). Repeat in English. Check light and dark.
 - Quitting the app leaves no `codex` or `claude` child process behind.
 
+**Progress (2026-10-17, f6ba95a, build 128, reported from the Mac session):**
+
+Confirmed:
+- Menu bar icon, no Dock icon, left click opens the popover, right click opens the menu.
+- `⌃⌥U` toggles the popover, and changing a hotkey works. It is now `⇧⌘Space`, which does not clash with the input-source switch `⌃⌥Space`.
+- The pin panel.
+- Notifications: point 99 showed a real banner.
+- Shape switching: bars, fill, and gauges in two columns.
+- A Finder-style launch (`open`, parent `launchd`, no shell `PATH`): it found the app-server in the ChatGPT.app bundle, and Claude refreshed without a Keychain prompt.
+- No `codex` or `claude` child process left after quitting.
+- `settings.json` byte-identical after quit and relaunch.
+- The Keychain prompt appears once per build and not again when the same build relaunches.
+
+Waiting on the maintainer:
+- Live light/dark switching.
+- The pin panel across Space switches.
+- Each menu bar text choice.
+- The time display toggle surviving a relaunch.
+- Clipping in Korean and English, light and dark.
+- Start at login after a reboot.
+
 ## 11. Open decisions
 
 | ID | Question | Recommendation |
