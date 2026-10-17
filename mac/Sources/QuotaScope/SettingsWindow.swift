@@ -9,7 +9,8 @@ import QuotaProviders
 // toolbar tabs, grouped forms, and immediate apply. Every control writes
 // settings.json through SettingsStore.update and tells the controller what
 // changed; there is no OK/Cancel. Only settings the Mac app acts on are shown:
-// row shapes and columns come with their features.
+// the Windows glass, palette, scale, and popup position have no Mac popover
+// counterpart.
 
 enum SettingsChange {
     case general
@@ -219,6 +220,14 @@ private func option(_ value: String, _ loc: Loc) -> String {
     case "System": return loc.t("System", "시스템")
     case "Light": return loc.t("Light", "라이트")
     case "Dark": return loc.t("Dark", "다크")
+    case "Bars": return loc.t("Bars", "막대")
+    case "BentoCircles": return loc.t("Gauges", "게이지")
+    case "Fill": return loc.t("Fill", "채우기")
+    case "MixMatch": return loc.t("Mix & match", "믹스 & 매치")
+    case "Circle": return loc.t("Gauge", "게이지")
+    case "Auto": return loc.t("Auto", "자동")
+    case "OneColumn": return loc.t("One column", "1열")
+    case "TwoColumns": return loc.t("Two columns", "2열")
     case MenuBarText.off: return loc.t("Off", "끔")
     case MenuBarText.highestWeekly: return loc.t("Highest weekly", "가장 높은 주간")
     case MenuBarText.highestOverall: return loc.t("Highest overall", "가장 높은 전체")
@@ -583,13 +592,32 @@ private struct AppearancePage: View {
                                            "팝업과 설정 창에 적용됩니다. 시스템은 macOS의 라이트/다크를 따릅니다."))
                 }
             }
+            Section {
+                Picker(selection: model.binding(.appearance, \.shapeTheme)) {
+                    ForEach(["Bars", "BentoCircles", "Fill", "MixMatch"], id: \.self) { Text(option($0, loc)).tag($0) }
+                } label: {
+                    RowLabel(title: loc.t("Shape theme", "게이지 모양"),
+                             detail: loc.t("Bars, gauges, fill (a two-line card whose background fills up to the percentage), or mix & match per row.",
+                                           "막대, 게이지, 채우기(카드 배경이 퍼센트만큼 차오르는 두 줄 카드), 또는 행별 믹스 & 매치."))
+                }
+                // Applies to every shape theme: it sets the popover width and
+                // pairs gauge and fill cards.
+                Picker(selection: model.binding(.appearance, \.layoutColumns)) {
+                    ForEach(["Auto", "OneColumn", "TwoColumns"], id: \.self) { Text(option($0, loc)).tag($0) }
+                } label: {
+                    RowLabel(title: loc.t("Columns", "열 수"),
+                             detail: loc.t("Sets the popup width. Auto pairs gauges only when a provider has two; in two columns, neighbouring fill cards pair up too.",
+                                           "팝업 너비를 정합니다. 자동은 한 프로바이더에 게이지가 2개 이상일 때만 2열로 배치하고, 2열에서는 이웃한 채우기 카드도 두 개씩 배치합니다."))
+                }
+            }
             RowList()
         }
     }
 }
 
-// Every row the providers report: check the ones to show and order them.
-// Ordering is per provider, and each provider keeps at least one row.
+// Every row the providers report: check the ones to show, order them, and in
+// mix & match pick a shape each. Ordering is per provider, and each provider
+// keeps at least one row.
 private struct RowList: View {
     @EnvironmentObject var model: SettingsModel
 
@@ -612,13 +640,23 @@ private struct RowList: View {
                 }
             }
         } header: {
-            Text(loc.t("Rows to show", "표시할 행"))
+            Text(mixMatch ? loc.t("Rows and shapes", "행별 표시와 모양") : loc.t("Rows to show", "표시할 행"))
         } footer: {
-            Text(loc.t("Clear a checkbox to drop that row from the popup and the menu bar tooltip. Every provider keeps at least one row, so its last checked row cannot be cleared.",
-                       "체크를 해제하면 해당 행이 팝업과 메뉴 막대 툴팁에서 빠집니다. 프로바이더마다 최소 한 행은 남아야 해서, 마지막으로 체크된 행은 해제할 수 없습니다."))
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(loc.t("Clear a checkbox to drop that row from the popup and the menu bar tooltip. Every provider keeps at least one row, so its last checked row cannot be cleared.",
+                           "체크를 해제하면 해당 행이 팝업과 메뉴 막대 툴팁에서 빠집니다. 프로바이더마다 최소 한 행은 남아야 해서, 마지막으로 체크된 행은 해제할 수 없습니다."))
+                if mixMatch {
+                    Text(loc.t("Bars take the full popup width; gauges sit two per line when they are next to each other, so reorder rows to pair the gauges you want side by side. Fill cards are two lines tall: they take the full width, or pair with a neighbouring fill card when the popup is in two columns, never with a gauge.",
+                               "막대는 팝업 전체 폭을 쓰고, 게이지는 서로 이웃할 때만 한 줄에 두 개씩 배치됩니다. 나란히 두고 싶은 게이지는 순서를 옮겨 붙여 주세요. 채우기는 두 줄 높이 카드로, 전체 폭을 쓰거나 팝업이 2열일 때 이웃한 채우기 카드와만 짝을 이루며 게이지와는 짝을 이루지 않습니다."))
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
+    }
+
+    private var mixMatch: Bool {
+        model.settings.shapeTheme.caseInsensitiveCompare("MixMatch") == .orderedSame
     }
 
     private var providerIds: [String] {
@@ -648,6 +686,14 @@ private struct RowList: View {
             .toggleStyle(.checkbox)
             .disabled(visible && shown <= 1)
             Spacer()
+            if mixMatch {
+                Picker("", selection: Binding(get: { shapeChoice(model.settings.rowShapes[key]) },
+                                              set: { value in model.update(.appearance) { $0.rowShapes[key] = value } })) {
+                    ForEach([RowShapes.circle, RowShapes.bars, RowShapes.fill], id: \.self) { Text(option($0, loc)).tag($0) }
+                }
+                .labelsHidden()
+                .frame(width: 110)
+            }
             Button { move(rows, index, -1) } label: { Image(systemName: "chevron.up") }
                 .buttonStyle(.borderless)
                 .disabled(index == 0)
@@ -657,6 +703,13 @@ private struct RowList: View {
                 .disabled(index == rows.count - 1)
                 .help(loc.t("Move down", "아래로"))
         }
+    }
+
+    // What RowShapes.resolve makes of a stored value: unknown means gauge.
+    private func shapeChoice(_ stored: String?) -> String {
+        guard let stored else { return RowShapes.circle }
+        if stored.caseInsensitiveCompare(RowShapes.bars) == .orderedSame { return RowShapes.bars }
+        return stored.caseInsensitiveCompare(RowShapes.fill) == .orderedSame ? RowShapes.fill : RowShapes.circle
     }
 
     // Persists the whole provider's order so later rows stay put.

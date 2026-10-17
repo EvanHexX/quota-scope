@@ -452,7 +452,7 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
             panel.setFrameOrigin(origin)
         } else if let buttonWindow = statusItem.button?.window {
             let frame = buttonWindow.frame
-            panel.setFrameTopLeftPoint(NSPoint(x: frame.minX - PopoverView.width / 2, y: frame.minY - 8))
+            panel.setFrameTopLeftPoint(NSPoint(x: frame.minX - model.width / 2, y: frame.minY - 8))
         }
         panel.orderFrontRegardless()
         self.panel = panel

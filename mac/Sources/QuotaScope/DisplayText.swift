@@ -68,40 +68,13 @@ enum Display {
         row.beyondFull && display == 100 ? ">100%" : "\(display)%"
     }
 
+    // The shared reset text (Loc.resetText, fixtures/resettext), in the
+    // offset the Mac is in at that moment.
     static func rowFooter(_ row: UsageRow, _ settings: AppSettings, _ loc: Loc, now: Date) -> String {
         if RowShapes.isCreditsRow(row.label) { return row.detailText ?? "" }
-        guard let reset = row.window?.resetsAt else { return loc.t("reset --", "재설정 --") }
-        return settings.timeDisplayMode.caseInsensitiveCompare("RemainingTime") == .orderedSame
-            ? resetIn(reset.date.timeIntervalSince(now), loc)
-            : resetClock(reset.date, loc, now: now)
-    }
-
-    // Same-day windows show only the time; longer windows also need the date.
-    static func resetClock(_ reset: Date, _ loc: Loc, now: Date) -> String {
-        let isToday = Calendar.current.isDate(reset, inSameDayAs: now)
-        let formatter = DateFormatter()
-        if loc.isKorean {
-            formatter.locale = Locale(identifier: "ko_KR")
-            formatter.dateFormat = isToday ? "a h:mm" : "M월 d일 a h:mm"
-            return formatter.string(from: reset) + " 초기화"
-        }
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.amSymbol = "AM"
-        formatter.pmSymbol = "PM"
-        formatter.dateFormat = isToday ? "h:mm a" : "MMM d, h:mm a"
-        return (isToday ? "resets at " : "resets ") + formatter.string(from: reset)
-    }
-
-    static func resetIn(_ remaining: TimeInterval, _ loc: Loc) -> String {
-        if remaining <= 0 { return loc.t("resets now", "곧 초기화") }
-        let totalMinutes = Int(remaining / 60)
-        let days = totalMinutes / (24 * 60)
-        let hours = (totalMinutes / 60) % 24
-        let minutes = totalMinutes % 60
-        if days >= 1 { return loc.t("resets in \(days)d \(hours)h", "\(days)일 \(hours)시간 뒤 초기화") }
-        if totalMinutes >= 60 { return loc.t("resets in \(totalMinutes / 60)h \(minutes)m", "\(totalMinutes / 60)시간 \(minutes)분 뒤 초기화") }
-        let shown = max(1, minutes)
-        return loc.t("resets in \(shown)m", "\(shown)분 뒤 초기화")
+        return loc.resetText(row.window?.resetsAt, now: Timestamp(now),
+                             utcOffsetSeconds: TimeZone.current.secondsFromGMT(for: now),
+                             remaining: settings.timeDisplayMode.caseInsensitiveCompare("RemainingTime") == .orderedSame)
     }
 
     // Hover text: same rows in the same order the popover shows, remaining
