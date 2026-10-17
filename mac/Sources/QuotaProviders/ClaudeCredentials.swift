@@ -73,9 +73,13 @@ public final class FileCredentialSource: ClaudeCredentialSource {
 // service "Claude Code-credentials" and an empty account, so it is looked up
 // by service only (verified 2026-10-17).
 //
-// The item's access list belongs to Claude Code, so the first data read asks
-// the user. "Always Allow" sticks only while QuotaScope's code signature
-// stays the same (a self-signed identity, not ad-hoc; see 6.1).
+// The secret is read through /usr/bin/security, the tool Claude Code itself
+// uses to write the item (decision M15). A token refresh resets the item's
+// partition list to apple-tool:, which dropped an "Always Allow" given to
+// QuotaScope and asked again about every 8 hours (measured 2026-10-17); the
+// tool is on the item's ACL and under apple-tool:, so reading through it asks
+// nothing. The token only passes through a pipe to this process and is
+// dropped after parsing, as before.
 public final class KeychainCredentialSource: ClaudeCredentialSource {
     public static let service = "Claude Code-credentials"
 
@@ -106,10 +110,22 @@ public final class KeychainCredentialSource: ClaudeCredentialSource {
         attributes()?[kSecAttrModificationDate] as? Date
     }
 
+    public static let securityTool = "/usr/bin/security"
+
     public func read() -> ClaudeCredentials? {
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching(query(returning: [kSecReturnData: true]) as CFDictionary, &result)
-        guard status == errSecSuccess, let data = result as? Data else { return nil }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: KeychainCredentialSource.securityTool)
+        process.arguments = ["find-generic-password", "-s", KeychainCredentialSource.service, "-w"]
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = FileHandle.nullDevice
+        process.standardInput = FileHandle.nullDevice
+        do { try process.run() } catch { return nil }
+        // Read to the end before waiting, so a large payload cannot fill the
+        // pipe and stall the tool.
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { return nil }
         return ClaudeCredentialPayload.parse(data)
     }
 }

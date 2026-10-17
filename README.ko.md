@@ -104,7 +104,6 @@ macOS:
 - macOS 13 Ventura 이상, 빌드에 Xcode Command Line Tools
 - Codex: ChatGPT 앱(번들된 Codex CLI를 `PATH`에 `codex`가 없어도 찾음) 또는 `codex` 명령 (선택)
 - Claude: 이 Mac에서 `/login`으로 로그인한 Claude Code (선택). Claude 데스크톱 앱이 내려받은 Claude Code도 찾습니다
-- 새로 빌드할 때마다 Claude Code 키체인 항목 접근을 한 번 묻습니다. **항상 허용**을 누르면 같은 빌드를 다시 실행하거나 재부팅해도 다시 묻지 않습니다
 
 ## 사용법
 
