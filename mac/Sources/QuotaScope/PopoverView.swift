@@ -16,6 +16,7 @@ final class UsageModel: ObservableObject {
     var onTogglePin: () -> Void = {}
     var onToggleTimeMode: () -> Void = {}
     var onOpenSettings: () -> Void = {}
+    var onSignIn: () -> Void = {}
 
     // Visible rows per provider in the user's order, as the Windows popup.
     var sections: [(usage: ProviderUsage, rows: [UsageRow])] {
@@ -112,6 +113,12 @@ struct PopoverView: View {
                 .truncationMode(.tail)
                 .help(usage.statusText)
                 .opacity(usage.state == .stale ? 0.75 : 1)
+            // Claude signed out: one click opens Terminal running `claude
+            // /login`, the same as Reconnect in the menu.
+            if usage.providerId == "claude", usage.state == .unauthenticated {
+                Button(model.loc.t("Sign in", "로그인"), action: model.onSignIn)
+                    .controlSize(.small)
+            }
         }
     }
 
@@ -120,6 +127,26 @@ struct PopoverView: View {
         Button(model.loc.t("Refresh", "새로 고침"), action: model.onRefresh)
         Button(model.isPinned ? model.loc.t("Unpin", "고정 해제") : model.loc.t("Pin", "고정"), action: model.onTogglePin)
         Button(model.loc.t("Settings...", "설정..."), action: model.onOpenSettings)
+    }
+}
+
+// Drawn by hand rather than with ProgressView: a system progress bar turns
+// gray whenever its window is not key, and the popover and the pinned panel
+// almost never are.
+struct UsageBar: View {
+    let percent: Int
+    let color: Color
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.primary.opacity(0.12))
+                Capsule()
+                    .fill(color)
+                    .frame(width: geometry.size.width * CGFloat(min(max(percent, 0), 100)) / 100)
+            }
+        }
+        .frame(height: 6)
     }
 }
 
@@ -147,9 +174,8 @@ struct BarRow: View {
                     .monospacedDigit()
             }
             if let window = row.window {
-                ProgressView(value: Double(Display.percent(window.usedPercent, settings)), total: 100)
-                    .progressViewStyle(.linear)
-                    .tint(accent(Display.roundedUsed(window.usedPercent)))
+                UsageBar(percent: Display.percent(window.usedPercent, settings),
+                         color: accent(Display.roundedUsed(window.usedPercent)))
             }
             footer
         }

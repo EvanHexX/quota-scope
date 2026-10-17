@@ -32,6 +32,8 @@ final class AppController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         model.onTogglePin = { [weak self] in self?.togglePin() }
         model.onToggleTimeMode = { [weak self] in self?.toggleTimeMode() }
         model.onOpenSettings = { [weak self] in self?.openSettings() }
+        // The provider notices the new credentials by itself (stamp watch).
+        model.onSignIn = { ClaudeLogin.openTerminal() }
         settingsModel.loc = model.loc
         settingsModel.onChange = { [weak self] kind in self?.settingsChanged(kind) }
         settingsModel.onReconnect = { [weak self] in self?.reconnect() }
