@@ -326,6 +326,17 @@ func claudeTests() async {
     _ = try! await provider.read()
     check(credentials.reads.value == readsBefore, "claude cached poll reads no credentials: \(credentials.reads.value - readsBefore)")
 
+    // An item with only MCP connector tokens: no Claude Code sign-in, so the
+    // hint drops "expired" and nothing is renewed.
+    credentials.token.value = nil
+    credentials.expiresAt.value = nil
+    let runsBeforeMcpOnly = runs.value
+    usage = try! await provider.reconnect()
+    check(usage.state == .unauthenticated && usage.statusText == "Run Claude Code and sign in",
+          "claude item without a sign-in: \(usage.statusText)")
+    check(runs.value == runsBeforeMcpOnly, "claude item without a sign-in does not nudge the renewer")
+    credentials.token.value = "test-token"
+
     // Signed out entirely: the sign-in hint without "expired".
     credentials.changed.value = nil
     usage = try! await provider.reconnect()
