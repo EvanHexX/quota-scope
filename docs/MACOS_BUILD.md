@@ -1,6 +1,6 @@
 # macOS Build Plan
 
-> Status as of 2026-10-17: **nothing here has been run on a Mac yet.** Phase 1 (shared fixtures, Windows side: 1a mappers, 1b renewer, hotkeys, rows, alerts) is done. Phase 2 is done too: `QuotaCore` (models, mappers, rows, alerts, settings model, hotkey grammar) is ported to Swift and passes the codex, claude, rows, alerts, and hotkeys fixtures, built and run on Windows (7.3). No UI or provider code exists yet. Items marked **(verify)** are assumptions to check on the target Mac in phase 0.
+> Status as of 2026-10-17: **the Mac has been used for checks only, so no Mac app exists yet.** On 2026-10-17 `QuotaCore` built and passed all 53 fixture cases on macOS 15.6.1 arm64 with the Command Line Tools alone, and the Codex half of phase 0 was answered (9). Phase 0 is done as far as it can be without the app (9). Phase 1 (shared fixtures, Windows side: 1a mappers, 1b renewer, hotkeys, rows, alerts) is done. Phase 2 is done too: `QuotaCore` (models, mappers, rows, alerts, settings model, hotkey grammar) is ported to Swift and passes all six fixture folders (57 cases), built and run on Windows (7.3). Phase 3 has started: `QuotaProviders` (the Codex and Claude providers, the renewer, command and credential lookup) is written and passes 42 checks against fakes on Windows. The parts only a Mac can check are listed in 7.3. No UI code exists yet. Items marked **(verify)** are assumptions to check on the target Mac in phase 0.
 
 ## 1. Goal and constraints
 
@@ -159,6 +159,7 @@ Codex:
 - JSON-RPC over stdio: `initialize`, `account/rateLimits/read`, listen for `account/rateLimits/updated`.
 - Sparse `updated` notifications are merged into the last full read, so windows and buckets an update leaves out stay visible (`e565761`).
 - Reconnect restarts the child; the child dies with the app.
+- **Never call `account/rateLimitResetCredit/consume`.** It spends a rate-limit reset credit for real. QuotaScope only reads: `initialize`, `account/rateLimits/read`, and the `account/rateLimits/updated` notification. The `rateLimitResetCredits` field of a read may be shown, but nothing acts on it. The C# client calls none of the reset-credit methods today, and the Swift client must not either.
 
 Both:
 
@@ -263,9 +264,18 @@ Moving the samples out of the C# self-tests is the only change to the Windows ap
 
 ## 6. macOS platform code
 
-### 6.1 Claude credentials live in the Keychain **(verify)**
+### 6.1 Claude credentials live in the Keychain
 
-On macOS, Claude Code stores its OAuth credentials in the login Keychain (generic password, service `Claude Code-credentials`), not in `~/.claude/.credentials.json`. The JSON payload is believed to be the same (`claudeAiOauth.accessToken`, `expiresAt`).
+On macOS, Claude Code stores its OAuth credentials in the login Keychain, not in `~/.claude/.credentials.json`. **Verified 2026-10-17 on macOS 15.6.1:**
+
+- The item is a generic password in `login.keychain-db`, with service (`svce`) `Claude Code-credentials` and an **empty** account (`acct = ""`). Query it by service only: `kSecClassGenericPassword` + `kSecAttrService`, with no `kSecAttrAccount`, because an account of `""` or the user name does not match.
+- `~/.claude/.credentials.json` does not exist on that Mac.
+- The item has the usual creation and modification dates (`cdat`, `mdat`).
+
+Still **(verify)**, in phase 3 with the real app:
+- The payload is believed to be the same JSON as the Windows file (`claudeAiOauth.accessToken`, `expiresAt`).
+- `mdat` should move when Claude Code refreshes the token.
+- An attributes-only read from the app should not prompt.
 
 - `KeychainCredentialSource` reads the item with `SecItemCopyMatching`, parses it in memory, uses the token for the one request, and drops it. Never cached, copied, or logged.
 - **Change detection** (replaces the Windows `FileSystemWatcher`): poll the item's modification date every few seconds via an attributes-only query (`kSecReturnAttributes`, no `kSecReturnData`). **(verify that this does not trigger a Keychain prompt)**
@@ -311,11 +321,27 @@ Node-based shims also need `node` on `PATH`; start children with the login shell
 
 The Settings → Providers screen shows which `codex` was found and where it came from: "ChatGPT.app (bundled)", "PATH", or "custom". That way a missing or unexpected CLI is visible without reading logs.
 
-**(verify)** in phase 0:
+Phase 0 results (2026-10-17, macOS 15.6.1 arm64, reported from the Agent Summit Mac work):
 
-- The bundle ID of `/Applications/ChatGPT.app` on the target Mac. It has not been read directly yet; `com.openai.codex` is inferred from the bundle contents and the public reports.
-- That the bundled CLI runs `codex app-server` when started from QuotaScope while ChatGPT.app is not running, and also while ChatGPT.app is running. ChatGPT.app's own codex process holds the lock files in `~/.codex`, so check that a second app-server can read rate limits next to it.
-- Whether a ChatGPT.app update replaces the CLI path while QuotaScope holds a child process on it. Reconnect must then pick up the new binary.
+- **Bundle IDs, verified:**
+  - `/Applications/ChatGPT.app` is `com.openai.codex` (version 26.1007.71326).
+  - ChatGPT Classic is `com.openai.chat`.
+  - The bundled `CodexCLI.app` is `com.openai.codex.cli` (TeamIdentifier 2DC432GLL2).
+- **CLI version:** read it from `<app>/Contents/Resources/codex-cli/codex-package.json` (`version`, e.g. `0.162.0-alpha.17.2`), not from an Info.plist. Settings → Providers shows that version next to where the CLI came from.
+- **App-server while ChatGPT.app is running, verified:** the bundled CLI's `codex app-server` over stdio went through `initialize` → `initialized` → `account/rateLimits/read` normally. The read carried:
+  - primary (300 min) and secondary (10080 min) windows, with `usedPercent` and `resetsAt` in Unix seconds;
+  - `credits`, `planType`, `rateLimitReachedType`;
+  - `rateLimitsByLimitId.codex` and `rateLimitResetCredits`.
+
+  Updates arrived as `account/rateLimits/updated`. This is the shape `fixtures/codex` already covers. The app-server opens the SQLite state under `~/.codex` read-write, and it worked next to ChatGPT.app's own process.
+- **Updates, verified:** Sparkle 2.9.1 replaces the whole bundle, but the CLI path stays the same, and an app-server that is already running keeps answering. QuotaScope restarts its app-server when the `version` in `codex-package.json`, or the CLI file's inode, changes. It checks this on each poll, so the next reads come from the new CLI.
+- **App-server while ChatGPT.app is not running, verified:** QuotaScope starts the bundled CLI as a child (`codex app-server`, stdio). `initialize` took 0.46 s, and `initialize` → `initialized` → `account/rateLimits/read` completed in 0.97 s in total.
+  - On the way it got notifications the client does not use: `remoteControl/status/changed` and `account/updated` (`authMode`, `planType`). The client ignores any notification it does not know.
+  - No `account/rateLimits/updated` arrived within 4 s. Polling stays the baseline.
+  - Closing stdin ended it at once with exit 0, with no stderr warnings (lock or SQLite).
+  - ChatGPT.app was not launched, no new lock was left in `~/.codex`, and the WAL/-shm files ChatGPT.app had left were checkpointed away when the app-server exited.
+  - The read also carries fields the mapper ignores today (`ordinaryUsageAllowed`, `individualLimit`, `normalModelSlug`, `accountId`, `rateLimitUpsell`). `credits.balance` is a string (`"0"`). `rateLimitResetCredits.credits[]` lists reset credits; per the rule in 4.2 they are shown at most and never consumed.
+- **Testing on the Mac needs explicit approval:** the Mac's Claude Code safety check classed starting `codex app-server` as credential exploration and blocked it. Live runs there (phase 3 onward) need the maintainer's explicit go-ahead each time.
 
 ### 6.3 Settings and data paths
 
@@ -348,7 +374,7 @@ mac/build.sh [--release] [--install]
 5. `codesign --verify --strict` and print which identity was used.
 6. With `--install`, quit a running copy and copy the app to `~/Applications/`.
 
-`--self-test` mirrors the Windows convention and works with the Command Line Tools alone. `swift test` (XCTest or Swift Testing) can run the same fixture checks during development **(verify which test framework the installed CLT provides; XCTest has historically needed full Xcode)**.
+`--self-test` mirrors the Windows convention and works with the Command Line Tools alone. `swift test` can run the same fixture checks during development. **Use Swift Testing (`import Testing`), not XCTest.** Verified 2026-10-17 on the Command Line Tools (Swift 6.1.2, SDK 15.5): XCTest is not available there (`no such module`), and Swift Testing works with the package's macOS 13 platform.
 
 ### 7.3 Developing `QuotaCore` on Windows
 
@@ -386,12 +412,75 @@ Matching .NET took deliberate code in four places:
 - **Number text:** `"0.##"` formatting takes 15 significant digits and rounds half away from zero, as .NET does. `Math.Round` is ties-to-even. Point parsing accepts what `NumberStyles.Float` accepts, and refuses Swift-only forms such as hex or `inf`.
 - **Settings:** dictionary keys compare exactly. The C# defaults are declared case-insensitive, but System.Text.Json replaces them with plain dictionaries on load.
 
-Not ported yet:
+The renewer's timing rules are now `ClaudeRenewalPolicy.swift` in QuotaCore, checked by `fixtures/renewer` (4 cases). That brings the self-test to 57 cases in 6 folders.
 
-- The session renewer (`fixtures/renewer`). It belongs to `QuotaProviders` on the Mac.
-- `Loc.ResetClock` / `ResetIn` (the reset and remaining-time text). These come with the UI. `fixtures/` has no cases for them yet, so add cases on the C# side first.
+Not ported yet: `Loc.ResetClock` / `ResetIn` (the reset and remaining-time text). These come with the UI. `fixtures/` has no cases for them yet, so add cases on the C# side first.
 
-Checked: a corrupted expected value in each of the five folders, or a missing expected file, makes the self-test exit 1.
+Checked: a corrupted expected value in each folder, or a missing expected file, makes the self-test exit 1.
+
+#### QuotaProviders (phase 3, started 2026-10-17)
+
+`mac/Sources/QuotaProviders` runs the providers. It builds on Windows too, except for the macOS-only parts behind `#if canImport`:
+
+| Swift file | Ports | Builds on Windows |
+|---|---|---|
+| `UsageProvider.swift` | `IUsageProvider.cs`; each provider is an actor | yes |
+| `CommandResolution.swift` | `CodexCommandResolver.cs` and `ClaudeCommandResolver.cs`, rewritten for 6.2: bundle ID lookup, `codex-package.json` version, CLI stamp, login-shell `PATH` | yes (the `NSWorkspace` lookup is macOS-only) |
+| `CodexAppServerClient.swift`, `CodexUsageProvider.swift` | `CodexAppServerClient.cs`, `CodexUsageProvider.cs` | yes |
+| `ClaudeCredentials.swift` | `ClaudeCredentialReader.cs`, as sources: Keychain (macOS), file, and Keychain-then-file | file only |
+| `ClaudeSessionRenewer.swift` | the process part of `ClaudeSessionRenewer.cs` | yes |
+| `ClaudeUsageProvider.swift` | `ClaudeUsageProvider.cs` | yes |
+
+Where it differs from the C# code on purpose:
+
+- **Codex:**
+  - The client restarts its app-server when the bundled CLI's stamp changes (6.2).
+  - When the process closes stdout, requests that are still waiting fail at once, instead of after the 15 s timeout.
+  - Closing stdin ends the app-server, with `terminate()` as the fallback. The C# version kills the process tree.
+- **Claude:**
+  - The Keychain has no change notification, so the credentials' modification date is polled every 5 s, debounced 2 s. This replaces `FileSystemWatcher`, for the file source too.
+  - The secret is read once per fetch, for both `expiresAt` and the token, instead of twice.
+  - The diagnostic dump goes to a directory the app passes in (6.3).
+- **Renewer:** the `claude mcp list` output goes to the null device unread. Draining and discarding it, as the C# version does, is not needed.
+
+`quotascope-providertest` drives all of this against fakes, with no real CLI, account, Keychain, or network:
+
+```powershell
+cd mac
+swift build
+swift run quotascope-providertest
+```
+
+- **Codex:** it starts `fake-codex-app-server`, a stand-in that behaves like the measured app-server: it drops requests before `initialized`, sends `remoteControl/status/changed` and `account/updated`, answers a read, and then sends one sparse update. The test checks:
+  - the read;
+  - that the rolling update is merged, not mapped alone;
+  - reconnect;
+  - that the process is gone after `close`;
+  - that a crashing app-server fails fast with its stderr line;
+  - that a missing command says so;
+  - bundle lookup with fake app bundles: Classic is skipped and the highest `com.openai.codex` app wins, the version comes from `codex-package.json`, and the stamp changes when that version does.
+- **Claude:** in-memory credentials, transport, clock, and an inline renewer. The test checks:
+  - the request headers;
+  - the 60 s poll floor;
+  - 429 backoff (1 m, then 5 m) that keeps the last rows;
+  - stale data after a network failure;
+  - the 401 pause and recovery nudge;
+  - that no request goes out while paused, and that a fresh nudge waits out its cooldown;
+  - resuming after a credentials change;
+  - the proactive nudge and the `Session expires in 12m` countdown;
+  - the 2-minute proactive retry;
+  - the signed-out hint;
+  - that the renewer stops after `close`.
+
+Result on Windows (2026-10-17): 42 checks ok. A clean build shows no warnings in `mac/Sources`, and no `fake-codex-app-server` process is left behind.
+
+Only the Mac can check these, and live runs there need the maintainer's explicit go-ahead (6.2):
+
+- `KeychainCredentialSource` against the real item: the payload format, whether an attributes-only read prompts, and whether `mdat` moves on refresh.
+- The `NSWorkspace` lookup and the login-shell `PATH`.
+- The real `claude mcp list` renewal.
+- SIGPIPE handling when the app-server dies.
+- The app-server started from a Finder-launched app.
 
 ### 7.4 Permissions the user will see
 
@@ -407,12 +496,14 @@ No Accessibility, Screen Recording, Full Disk Access, or Automation permission s
 
 ```
 fixtures/                    shared input/expected pairs (section 5); used by C# and Swift
-mac/Package.swift            SwiftPM package: QuotaCore and quotascope-selftest today; QuotaProviders and QuotaScope (macOS only) later
+mac/Package.swift            SwiftPM package: QuotaCore, QuotaProviders, quotascope-selftest, quotascope-providertest, fake-codex-app-server; QuotaScope (the app, macOS only) later
 mac/Sources/QuotaCore/…      exists: models, mappers, rows, alerts, settings model, hotkey grammar (7.3)
 mac/Sources/quotascope-selftest/…  exists: runs QuotaCore against ../fixtures
+mac/Sources/QuotaProviders/…      exists: providers, renewer, command and credential lookup (7.3)
+mac/Sources/quotascope-providertest/…, fake-codex-app-server/…  exist: provider checks against fakes
 mac/Sources/QuotaProviders/…
 mac/Sources/QuotaScope/…
-mac/Tests/…                  optional swift test targets over the same fixtures
+mac/Tests/…                  optional Swift Testing targets over the same fixtures (not XCTest; see 7.2)
 mac/Resources/…              Info.plist template, icon, Localizable.xcstrings
 mac/build.sh
 docs/MACOS_BUILD.md          this file
@@ -424,10 +515,10 @@ docs/MACOS_BUILD.md          this file
 
 | Phase | Deliverable | Verified by |
 |---|---|---|
-| **0. Spike on the Mac** | Answers to every **(verify)** item: Keychain item name and format, attributes read without prompt, `claude mcp list` refresh on macOS, ChatGPT.app bundle ID and its bundled `codex app-server` started from a Finder-launched app next to a running ChatGPT.app, `SMAppService` and notifications with ad-hoc vs self-signed, available Swift test framework | Notes added to this file |
+| **0. Spike on the Mac** | Answers to every **(verify)** item: Keychain item name and format, attributes read without prompt, `claude mcp list` refresh on macOS, ChatGPT.app bundle ID and its bundled `codex app-server` started from a Finder-launched app next to a running ChatGPT.app, `SMAppService` and notifications with ad-hoc vs self-signed, available Swift test framework. **Done (2026-10-17) as far as it can be without the app:** the test framework (Swift Testing), the bundle IDs, the app-server with and without ChatGPT.app running, update behavior, the Keychain item location (service only, empty account), and QuotaCore on macOS (53/53). Moved to phase 3, where they need the real app: the Keychain payload format, `mdat` on refresh, a prompt-free attribute read, `claude mcp list` refresh, `SMAppService` and notifications, and a Finder-launched start | Notes added to this file (6.1, 6.2, 7.2) |
 | **1. Fixtures (Windows)** | `fixtures/` extracted from the C# self-tests, embedded in both projects (5.3). 1a (mappers) and 1b (renewer, hotkeys, rows, alerts) done | Both Windows projects build; `--self-test` passes on both; case count unchanged |
 | **2. `QuotaCore` in Swift** | Models, mappers, credits gauge, row resolution, alerts, settings model, hotkey grammar. **Done (2026-10-17)** on Windows (7.3) | Swift self-test passes every `QuotaCore` fixture: 53 cases (codex 19, claude 10, rows 9, alerts 12, hotkeys 3). `renewer/` waits for phase 3 |
-| **3. `QuotaProviders` in Swift** | Codex client, Claude client, Keychain source, renewer, command resolution | Behavior checklist (4.2) reviewed item by item; unit tests with fake clock/process; live run against both providers |
+| **3. `QuotaProviders` in Swift** | Codex client, Claude client, Keychain source, renewer, command resolution. **Started (2026-10-17):** written, and 42 checks pass against fakes on Windows (7.3). The Mac-only checks and the live run are open | Behavior checklist (4.2) reviewed item by item; unit tests with fake clock/process; live run against both providers |
 | **4. Menu bar MVP** | Status item with arc icon, popover with bars, refresh, right-click menu, settings file | Manual smoke test (10) |
 | **5. Parity** | Gauges / fill / mix & match, columns, order and visibility, pin panel, time toggle, alerts + notifications, hotkeys, login item, EN/KO, settings window | Manual smoke test (10) |
 | **6. Docs** | README / README.ko "Build on macOS" section, platform badge, limitations; PROJECT_MAP entries for `mac/` and `fixtures/` | Review |

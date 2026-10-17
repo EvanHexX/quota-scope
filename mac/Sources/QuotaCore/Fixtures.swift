@@ -8,9 +8,9 @@ import Foundation
 public enum Fixtures {
     public static let tolerance = 1e-9
 
-    // The folders this port checks. renewer belongs to code that is not
-    // ported yet (the session renewer in the providers).
-    public static let folders = ["codex", "claude", "rows", "alerts", "hotkeys"]
+    // Every shared fixture folder. The renewer's timing rules live in
+    // ClaudeRenewalPolicy; the process-running part is in QuotaProviders.
+    public static let folders = ["codex", "claude", "rows", "alerts", "hotkeys", "renewer"]
 
     public struct Failure: Error, CustomStringConvertible {
         public let description: String
@@ -54,8 +54,42 @@ public enum Fixtures {
         case "rows": return try evaluateRows(input)
         case "alerts": return try evaluateAlerts(input)
         case "hotkeys": return try evaluateHotkeys(input)
+        case "renewer": return try evaluateRenewer(input)
         default: throw Failure(description: "no evaluator for fixtures/\(folder)")
         }
+    }
+
+    // Each list in the input is answered by a list in the same order: expiry
+    // times (against "now") by whether they count as expiring, failure counts
+    // by their cooldown, attempts by the delay before the next one. Delays are
+    // minutes; null means the renewer has given up.
+    static func evaluateRenewer(_ input: JSONValue) throws -> JSONValue {
+        func minutes(_ delay: TimeInterval?) -> JSONValue { delay.map { .number($0 / 60) } ?? .null }
+        func integer(_ value: JSONValue?) throws -> Int {
+            guard let number = value?.int64Value else { throw Failure(description: "renewer input needs whole numbers") }
+            return Int(number)
+        }
+        var result = JSONObject()
+        if let expiries = optional(input, "expiresAt")?.arrayValue {
+            guard let now = optional(input, "now")?.stringValue.flatMap(Timestamp.parseISO8601) else {
+                throw Failure(description: "expiresAt needs a \"now\"")
+            }
+            result["expiring"] = .array(expiries.map { expiresAt in
+                .bool(ClaudeRenewalPolicy.isExpiring(expiresAt.stringValue.flatMap(Timestamp.parseISO8601)?.date, now: now.date))
+            })
+        }
+        if let failures = optional(input, "failures")?.arrayValue {
+            result["cooldownMinutes"] = .array(try failures.map { minutes(ClaudeRenewalPolicy.cooldownAfter(try integer($0))) })
+        }
+        if let attempts = optional(input, "attempts")?.arrayValue {
+            result["delayMinutes"] = .array(try attempts.map { attempt in
+                guard let renewed = attempt["renewed"]?.boolValue, let recovery = attempt["recovery"]?.boolValue else {
+                    throw Failure(description: "attempt needs renewed and recovery")
+                }
+                return minutes(ClaudeRenewalPolicy.nextDelayAfter(renewed: renewed, recovery: recovery, failures: try integer(attempt["failures"])))
+            })
+        }
+        return .object(result)
     }
 
     // One full read plus the rolling updates merged into it, in order.

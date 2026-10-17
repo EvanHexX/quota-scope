@@ -53,6 +53,8 @@
 - Swift package (QuotaCore, Windows에서도 빌드) -> `mac/Package.swift`
 - shared logic port: models, Codex/Claude mappers, row shapes, usage alerts, settings model, hotkey grammar -> `mac/Sources/QuotaCore/`
 - fixture runner (`swift run quotascope-selftest`) -> `mac/Sources/quotascope-selftest/main.swift`, `mac/Sources/QuotaCore/Fixtures.swift`
+- providers: Codex app-server client, Claude usage poller, session renewer, command/credential lookup (Keychain는 macOS 전용) -> `mac/Sources/QuotaProviders/`
+- provider checks against fakes (`swift run quotascope-providertest`) -> `mac/Sources/quotascope-providertest/main.swift`, `mac/Sources/fake-codex-app-server/main.swift`
 
 ## Codex Rate Limits
 
