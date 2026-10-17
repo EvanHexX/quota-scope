@@ -2,16 +2,16 @@
 
 # QuotaScope
 
-![Platform](https://img.shields.io/badge/platform-Windows-0078D4?logo=windows&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-0078D4)
 ![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)
-![UI](https://img.shields.io/badge/UI-WinUI%203-0078D4)
+![UI](https://img.shields.io/badge/UI-WinUI%203%20%7C%20SwiftUI-0078D4)
 ![Providers](https://img.shields.io/badge/providers-Codex%20%7C%20Claude-111827)
 ![Privacy](https://img.shields.io/badge/privacy-local--only-10B981)
 ![Status](https://img.shields.io/badge/status-unofficial-6B7280)
 
-QuotaScope는 각 provider의 앱, CLI, 대시보드를 계속 열어두지 않아도 Codex와 Claude의 사용량/rate limit을 빠르게 확인할 수 있는 작은 Windows 트레이 유틸리티입니다.
+QuotaScope는 각 provider의 앱, CLI, 대시보드를 계속 열어두지 않아도 Codex와 Claude의 사용량/rate limit을 빠르게 확인할 수 있는 작은 Windows 트레이 / macOS 메뉴 막대 유틸리티입니다.
 
-Codex는 로컬에서 `codex app-server`를 실행해 stdio JSON-RPC로 rate limit 데이터를 읽고, Claude는 로컬 Claude Code 로그인 정보를 이용해 Anthropic 사용량 endpoint를 폴링합니다. 결과는 작은 트레이 팝업에 함께 표시됩니다.
+Codex는 로컬에서 `codex app-server`를 실행해 stdio JSON-RPC로 rate limit 데이터를 읽고, Claude는 로컬 Claude Code 로그인 정보를 이용해 Anthropic 사용량 endpoint를 폴링합니다. 결과는 작은 트레이 팝업(macOS에서는 메뉴 막대 팝오버)에 함께 표시됩니다.
 
 ## 스크린샷
 
@@ -25,6 +25,12 @@ Codex는 로컬에서 `codex app-server`를 실행해 stdio JSON-RPC로 rate lim
 
 <img src="docs/images/quota-scope-settings.png" alt="행별 모양을 지정하는 모양 설정 화면" width="640">
 
+macOS에서는 같은 행이 메뉴 막대의 기본 팝오버로 열립니다:
+
+| 메뉴 막대 팝오버 (막대) | 고정 패널 (게이지, 2열) |
+|---|---|
+| <img src="docs/images/quota-scope-mac.png" alt="Codex와 Claude 사용량을 막대로 보여 주는 macOS 메뉴 막대 팝오버" width="300"> | <img src="docs/images/quota-scope-mac-gauges.png" alt="사용량을 2열 게이지로 보여 주는 macOS 고정 패널" width="340"> |
+
 ## 설치
 
 1. [최신 릴리스](https://github.com/EvanHexX/quota-scope/releases/latest)에서 `QuotaScope-win-x64.zip`을 내려받습니다.
@@ -32,6 +38,18 @@ Codex는 로컬에서 `codex app-server`를 실행해 stdio JSON-RPC로 rate lim
 3. `QuotaScopeWinUI.exe`를 실행합니다.
 
 self-contained 빌드라 .NET이나 Windows App SDK 런타임을 따로 설치할 필요가 없습니다. Windows 11을 권장합니다 (Windows 10에서도 동작하지만 팝업 모서리가 둥글게 처리되지 않습니다).
+
+### macOS
+
+Mac용 배포 파일은 없습니다. 실행할 Mac에서 직접 빌드합니다 (Apple Developer 계정 불필요):
+
+```sh
+xcode-select --install          # Command Line Tools가 없을 때 한 번
+mac/build.sh --release --install
+open ~/Applications/QuotaScope.app
+```
+
+스크립트가 self-test를 실행하고, 앱에 서명한 뒤 `~/Applications`에 설치합니다. 선택 사항인 로컬 서명 인증서 등 자세한 내용은 [docs/MACOS_BUILD.md](docs/MACOS_BUILD.md)를 보세요.
 
 ## 주요 기능
 
@@ -50,7 +68,8 @@ self-contained 빌드라 .NET이나 Windows App SDK 런타임을 따로 설치�
 - 테마: 다크, 라이트, 미드나잇, 시스템 테마 따르기, 글래스모피즘(4단계 강도)
 - UI 크기 조절(80~150%)과 한국어/영어 인터페이스
 - 사용자 지정 전역 단축키: 팝업 토글(기본 `Ctrl+Alt+U`), 전체 새로 고침, 핀 토글
-- 독립 설정창, 팝업 고정(핀), Windows 시작 시 자동 실행
+- 독립 설정창, 팝업 고정(핀), Windows 시작 시 자동 실행 (macOS에서는 로그인 시 실행)
+- macOS: Dock 아이콘 없는 기본 메뉴 막대 앱, 시스템 라이트/다크 따르기, macOS 알림, Windows와 같은 행·모양·경고·단축키 (Windows 키는 ⌘에 대응)
 - 로컬 설정 저장, 별도 자격증명 불필요
 
 ## 동작 방식
@@ -64,7 +83,7 @@ Codex:
 
 Claude:
 
-1. 매 폴링마다 로컬 Claude Code 자격증명 파일(`%USERPROFILE%\.claude\.credentials.json`)에서 access token을 읽습니다. 토큰은 저장/복사/로깅하지 않습니다.
+1. 매 폴링마다 로컬 Claude Code 자격증명 파일(`%USERPROFILE%\.claude\.credentials.json`)에서 access token을 읽습니다. macOS에서는 로그인 키체인의 Claude Code 항목 `Claude Code-credentials`에서 읽습니다. 토큰은 저장/복사/로깅하지 않습니다.
 2. Anthropic OAuth 사용량 endpoint(Claude Code `/usage` 커맨드와 동일한 데이터)를 최소 60초 간격으로 폴링합니다.
 3. Claude Code access token의 수명은 8시간입니다. 만료 직전에 백그라운드로 `claude mcp list`를 실행해 Claude Code가 스스로 토큰을 갱신하게 합니다. 앱이 직접 refresh를 수행하거나 자격증명 파일에 쓰는 일은 없습니다. 이 명령은 read-only라 사용량을 소모하지 않습니다.
 4. 실패 시 마지막 성공 데이터를 stale 상태로 계속 표시합니다.
@@ -78,6 +97,13 @@ provider는 서로 격리되어 있어 한쪽 실패가 다른 쪽에 영향을 
 - 같은 머신에서 Claude Code 로그인 (선택, Claude 사용량 표시에만 필요)
 - 소스 빌드 시에만 .NET 10 SDK
 
+macOS:
+
+- macOS 13 Ventura 이상, 빌드에 Xcode Command Line Tools
+- Codex: ChatGPT 앱(번들된 Codex CLI를 `PATH`에 `codex`가 없어도 찾음) 또는 `codex` 명령 (선택)
+- Claude: 이 Mac에서 `/login`으로 로그인한 Claude Code (선택). Claude 데스크톱 앱이 내려받은 Claude Code도 찾습니다
+- 새로 빌드할 때마다 Claude Code 키체인 항목 접근을 한 번 묻습니다. **항상 허용**을 누르면 같은 빌드를 다시 실행하거나 재부팅해도 다시 묻지 않습니다
+
 ## 사용법
 
 - 트레이 아이콘 좌클릭으로 팝업을 열고 닫습니다.
@@ -88,12 +114,13 @@ provider는 서로 격리되어 있어 한쪽 실패가 다른 쪽에 영향을 
 - 시간 텍스트를 클릭하면 예정 시각 ↔ 남은 시간이 전환됩니다.
 - 트레이 아이콘 우클릭: 새로 고침, 재연결, 설정, 종료.
 - 팝업 우클릭에서도 같은 메뉴를 사용할 수 있습니다.
+- macOS에서는 메뉴 막대 아이콘이 트레이 아이콘 역할을 하고, 팝업 기본 단축키는 `⌃⌥U`입니다.
 
 Claude 로그인이 필요한 상태에서 `재연결`을 실행하면 Claude Code 로그인 터미널이 자동으로 열립니다. 브라우저 로그인만 완료하면 사용량 표시가 자동으로 재개됩니다.
 
 ## 설정
 
-모든 설정은 설정창(트레이 아이콘 → `설정...`)에서 즉시 적용되며, 실행 파일 옆 `settings.json`에 저장됩니다.
+모든 설정은 설정창(트레이 아이콘 → `설정...`)에서 즉시 적용되며, 실행 파일 옆 `settings.json`에 저장됩니다 (macOS에서는 `~/Library/Application Support/QuotaScope`).
 
 - **일반**: 언어, Windows 시작 시 자동 실행, 팝업 위치("마지막 위치" 포함), 시간 표시
 - **프로바이더**: provider별 사용 여부, 갱신 주기, secondary 행, credits 행, Codex 명령, Claude 자격증명 상태, Claude 세션 자동 갱신, 재연결
@@ -121,7 +148,7 @@ QuotaScope는 로컬 유틸리티로 설계되었습니다.
 
 ## 현재 제한사항
 
-- Windows 전용입니다.
+- macOS 앱은 소스 빌드만 지원하며, 서명·공증된 Mac 배포 파일은 없습니다. UI 크기, 글래스모피즘, 미드나잇 테마는 Windows 전용입니다.
 - Codex app-server의 동작과 제공되는 rate limit field에 의존합니다.
 - Claude 사용량은 미문서화 Anthropic endpoint에 의존하며, 예고 없이 변경되거나 중단될 수 있습니다.
 - Claude 사용량 표시는 같은 머신의 Claude Code 로그인이 필요합니다.
@@ -153,6 +180,14 @@ self-contained 빌드 publish:
 dotnet publish app-winui/QuotaScope.WinUI.csproj -c Release -r win-x64 --self-contained true
 ```
 
+macOS에서는 `mac/build.sh`가 앱을 빌드하면서 두 self-test(공용 fixtures, fake를 상대로 한 provider 검사)를 함께 실행합니다. 따로 실행하려면:
+
+```sh
+cd mac
+swift run quotascope-selftest
+swift run quotascope-providertest
+```
+
 ## Disclaimer
 
 > This project is not affiliated with, endorsed by, or sponsored by OpenAI or Anthropic. Codex is a product/service of OpenAI. Claude is a product/service of Anthropic.
@@ -169,5 +204,6 @@ dotnet publish app-winui/QuotaScope.WinUI.csproj -c Release -r win-x64 --self-co
 - `docs/PROJECT_MAP.md`: module과 실제 file path map
 - `docs/MODERNIZATION_PLAN.md`: .NET / WinUI modernization plan
 - `docs/WINUI3_PARITY.md`: WinUI 3 포팅 메모, parity 체크리스트, 창/백드롭 이슈 기록
+- `docs/MACOS_BUILD.md`: macOS 앱 설계, 빌드, 키체인·서명 메모, Mac 수동 점검
 - `docs/modules/codex_rate_limits.md`: Codex app-server rate limit schema와 mapping notes
 - `docs/modules/claude_rate_limits.md`: Claude 사용량 endpoint schema와 mapping notes
