@@ -289,7 +289,7 @@ Still **(verify)**, in phase 3 with the real app:
 | Run `/usr/bin/security find-generic-password -s "Claude Code-credentials" -w` | "Always Allow" adds `/usr/bin/security` to the item's ACL, which survives rebuilds | Weakens the item: **any** process can then read the token silently through `security` | Not used |
 | `SecItemCopyMatching` from the app | "Always Allow" trusts QuotaScope's code signature | Only QuotaScope gets access | **Used** |
 
-With ad-hoc signing every rebuild is a new signature, so the prompt returns after each rebuild. The fix without a developer account: create a **self-signed code-signing certificate** once (Keychain Access → Certificate Assistant → Create a Certificate…, type "Code Signing", name e.g. `QuotaScope Local`). The build script signs with it when `QUOTASCOPE_SIGN_IDENTITY` is set, which keeps the designated requirement stable across rebuilds so "Always Allow" sticks. **Decision M2.**
+With ad-hoc signing every rebuild is a new signature, so the prompt returns after each rebuild. The fix without a developer account: create a **self-signed code-signing certificate** once (Keychain Access → Certificate Assistant → Create a Certificate…, type "Code Signing", name `QuotaScope Local`, identity type "Self Signed Root"), then open it in the login keychain and set **Trust → Code Signing → Always Trust**; without that step `security find-identity -v` lists it as untrusted and the build falls back to ad-hoc. The build script signs with a `QuotaScope Local` identity by itself (or whatever `QUOTASCOPE_SIGN_IDENTITY` names), which keeps the designated requirement stable across rebuilds so "Always Allow" sticks. **Decision M2.**
 
 ### 6.2 Finding `codex` and `claude` from a GUI app
 
