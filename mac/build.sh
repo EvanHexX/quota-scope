@@ -56,7 +56,12 @@ cat > "$app/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-identity="${QUOTASCOPE_SIGN_IDENTITY:--}"
+# A local "QuotaScope Local" code-signing identity is picked up by itself.
+default_identity=-
+if security find-identity -v -p codesigning 2>/dev/null | grep -q '"QuotaScope Local"'; then
+  default_identity="QuotaScope Local"
+fi
+identity="${QUOTASCOPE_SIGN_IDENTITY:-$default_identity}"
 echo "==> signing with ${identity/#-/ad-hoc (-)}"
 codesign --force --sign "$identity" "$app"
 codesign --verify --strict "$app"
@@ -67,7 +72,7 @@ Note: ad-hoc signatures change on every build, so the Keychain prompt for
 "Claude Code-credentials" comes back after each rebuild. To make "Always Allow"
 stick, create a self-signed code-signing certificate once (Keychain Access >
 Certificate Assistant > Create a Certificate..., type "Code Signing", e.g.
-"QuotaScope Local") and build with QUOTASCOPE_SIGN_IDENTITY="QuotaScope Local".
+"QuotaScope Local"); this script then signs with it by itself.
 HINT
 fi
 
