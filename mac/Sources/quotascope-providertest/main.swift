@@ -180,12 +180,14 @@ final class FakeCredentials: ClaudeCredentialSource, @unchecked Sendable {
     let expiresAt = Box<Date?>(nil)
     let changed = Box<Date?>(Date(timeIntervalSince1970: 1_000))
     let reads = Box(0)
+    // The Keychain prompt denied (or not answered): the item exists, the read fails.
+    let denied = Box(false)
 
     var exists: Bool { changed.value != nil }
     func stamp() -> Date? { changed.value }
     func read() -> ClaudeCredentials? {
         reads.value += 1
-        guard exists else { return nil }
+        guard exists, !denied.value else { return nil }
         return ClaudeCredentials(accessToken: token.value, expiresAt: expiresAt.value)
     }
 }
@@ -302,6 +304,27 @@ func claudeTests() async {
     check(renewer.requestRenewal(recovery: false) == false, "proactive no-op waits 2 minutes")
     clock.value += 121
     check(renewer.requestRenewal(recovery: false) == true, "proactive retry after 2 minutes")
+
+    // Credentials that exist but cannot be read (Keychain prompt denied) are
+    // not a sign-out: no renewal, no auth pause, and the next poll retries.
+    credentials.denied.value = true
+    let runsBeforeDenied = runs.value
+    clock.value += 61
+    usage = try! await provider.read()
+    check(usage.state == .unavailable && usage.statusText == ClaudeUsageProvider.unreadableStatus,
+          "claude unreadable credentials: \(usage.state) \(usage.statusText)")
+    check(runs.value == runsBeforeDenied, "claude unreadable credentials do not nudge the renewer")
+    credentials.denied.value = false
+    clock.value += 61
+    transport.replies.value = [.status(200, usageBody)]
+    usage = try! await provider.read()
+    check(usage.state == .ok, "claude recovers once the Keychain allows the read: \(usage.statusText)")
+
+    // A poll answered from the cache does not read the secret: on macOS
+    // every read is a Keychain access that can prompt.
+    let readsBefore = credentials.reads.value
+    _ = try! await provider.read()
+    check(credentials.reads.value == readsBefore, "claude cached poll reads no credentials: \(credentials.reads.value - readsBefore)")
 
     // Signed out entirely: the sign-in hint without "expired".
     credentials.changed.value = nil
