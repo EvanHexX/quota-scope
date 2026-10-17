@@ -1,6 +1,6 @@
 # macOS Build Plan
 
-> Status as of 2026-10-17: **a menu bar MVP runs on the Mac** (phase 4, merged from `claude/project-thread-rz0afu` at 7ef321a). It shows Codex and Claude usage, and has a settings window and `mac/build.sh`. The Mac session built and ran it on macOS 15.6.1 with Swift 6.1.2; the maintainer's smoke test (10) is still to do. On 2026-10-17 `QuotaCore` built and passed all 53 fixture cases on macOS 15.6.1 arm64 with the Command Line Tools alone, and the Codex half of phase 0 was answered (9). Phase 0 is done as far as it can be without the app (9). Phase 1 (shared fixtures, Windows side: 1a mappers, 1b renewer, hotkeys, rows, alerts) is done. Phase 2 is done too: `QuotaCore` (models, mappers, rows, alerts, settings model, hotkey grammar) is ported to Swift and passes all six fixture folders (57 cases), built and run on Windows (7.3). Phase 3 has started: `QuotaProviders` (the Codex and Claude providers, the renewer, command and credential lookup) is written and passes 42 checks against fakes on Windows and on macOS (4b3e03c; macOS 15.6.1 arm64, Command Line Tools only, Swift 6.1.2: no warnings, 57/57 fixtures, 42/42 provider checks, no fake process left behind). Two of the four checks that touch real credentials are answered from the app (the Keychain payload and its access prompt; see 7.3); `mdat` on refresh and a real `claude mcp list` renewal are still open. Items marked **(verify)** are assumptions to check on the target Mac in phase 0.
+> Status as of 2026-10-17: **the macOS app reaches Windows parity and passed the manual smoke test** (10; f6ba95a, installed build, macOS 15.6.1). Phases 4 and 5 are done: the menu bar app with settings, notifications, global hotkeys, shapes and columns, start at login, and `mac/build.sh`. The only open Mac checks are the two in phase 3 (`mdat` on token refresh, and a real `claude mcp list` renewal), which wait for a token close to expiry and the maintainer's approval. On 2026-10-17 `QuotaCore` built and passed all 53 fixture cases on macOS 15.6.1 arm64 with the Command Line Tools alone, and the Codex half of phase 0 was answered (9). Phase 0 is done as far as it can be without the app (9). Phase 1 (shared fixtures, Windows side: 1a mappers, 1b renewer, hotkeys, rows, alerts) is done. Phase 2 is done too: `QuotaCore` (models, mappers, rows, alerts, settings model, hotkey grammar) is ported to Swift and passes all six fixture folders (57 cases), built and run on Windows (7.3). Phase 3 has started: `QuotaProviders` (the Codex and Claude providers, the renewer, command and credential lookup) is written and passes 42 checks against fakes on Windows and on macOS (4b3e03c; macOS 15.6.1 arm64, Command Line Tools only, Swift 6.1.2: no warnings, 57/57 fixtures, 42/42 provider checks, no fake process left behind). Two of the four checks that touch real credentials are answered from the app (the Keychain payload and its access prompt; see 7.3); `mdat` on refresh and a real `claude mcp list` renewal are still open. Items marked **(verify)** are assumptions to check on the target Mac in phase 0.
 
 ## 1. Goal and constraints
 
@@ -547,8 +547,8 @@ docs/MACOS_BUILD.md          this file
 | **1. Fixtures (Windows)** | `fixtures/` extracted from the C# self-tests, embedded in both projects (5.3). 1a (mappers) and 1b (renewer, hotkeys, rows, alerts) done | Both Windows projects build; `--self-test` passes on both; case count unchanged |
 | **2. `QuotaCore` in Swift** | Models, mappers, credits gauge, row resolution, alerts, settings model, hotkey grammar. **Done (2026-10-17)** on Windows (7.3) | Swift self-test passes every `QuotaCore` fixture: 53 cases (codex 19, claude 10, rows 9, alerts 12, hotkeys 3). `renewer/` waits for phase 3 |
 | **3. `QuotaProviders` in Swift** | Codex client, Claude client, Keychain source, renewer, command resolution. **Written and checked against fakes (2026-10-17):** 42/42 on Windows and on macOS (7.3). Open until the app exists: the four checks that touch real credentials (Keychain payload, attribute-read prompt, `mdat` on refresh, real `claude mcp list`), each with the maintainer's approval, and the live run | Behavior checklist (4.2) reviewed item by item; unit tests with fake clock/process; live run against both providers |
-| **4. Menu bar MVP** | Status item with arc icon, popover with bars, refresh, right-click menu, settings file. **Built (2026-10-17, merged at 7ef321a):** status item with arc and warning/critical dot, popover with bars, click-to-toggle reset time, pinned panel, right-click menu, settings window (General, Providers, Appearance, Alerts, About; only changed keys are written), and `mac/build.sh`. The Mac session reports it running with real Codex and Claude data | Manual smoke test (10), not yet run by the maintainer |
-| **5. Parity** | Gauges / fill / mix & match, columns, order and visibility, pin panel, time toggle, alerts + notifications, hotkeys, login item, EN/KO, settings window. **Split (decided 2026-10-17):** the QuotaScope thread handles shared logic and review: `RowLayout` + `fixtures/layout`, reset text + `fixtures/resettext`, Korean alert cases (all three done, 7.3), and merging the Mac branches. The Mac thread handles the app: notifications, global hotkeys (Windows virtual-key codes mapped to Mac key codes, plus the recorder), gauge, fill, and mix-and-match shapes and columns through `RowLayout`, start at login, the EN/KO String Catalog, and their settings tabs | Manual smoke test (10) |
+| **4. Menu bar MVP** | Status item with arc icon, popover with bars, refresh, right-click menu, settings file. **Built (2026-10-17, merged at 7ef321a):** status item with arc and warning/critical dot, popover with bars, click-to-toggle reset time, pinned panel, right-click menu, settings window (General, Providers, Appearance, Alerts, About; only changed keys are written), and `mac/build.sh`. The Mac session reports it running with real Codex and Claude data | Manual smoke test (10): **passed 2026-10-17** |
+| **5. Parity** | Gauges / fill / mix & match, columns, order and visibility, pin panel, time toggle, alerts + notifications, hotkeys, login item, EN/KO, settings window. **Split (decided 2026-10-17):** the QuotaScope thread handles shared logic and review: `RowLayout` + `fixtures/layout`, reset text + `fixtures/resettext`, Korean alert cases (all three done, 7.3), and merging the Mac branches. The Mac thread handles the app: notifications, global hotkeys (Windows virtual-key codes mapped to Mac key codes, plus the recorder), gauge, fill, and mix-and-match shapes and columns through `RowLayout`, start at login, and EN/KO through `Loc` (M14, instead of a String Catalog), with their settings tabs. **Done (2026-10-17, through cbe036e):** both halves merged | Manual smoke test (10): **passed 2026-10-17** |
 | **6. Docs** | README / README.ko "Build on macOS" section, platform badge, limitations; PROJECT_MAP entries for `mac/` and `fixtures/` | Review |
 
 The README must not claim a macOS download, installer, Homebrew cask, or auto-update; only "build from source on your Mac".
@@ -571,26 +571,22 @@ The README must not claim a macOS download, installer, Homebrew cask, or auto-up
 - **Korean:** with the language set to Korean (and with macOS itself in Korean), no label, reset text, menu item, or settings label is clipped at the default popup width, in both time modes and with every row shown (Spark rows, per-model weekly rows, credits). Repeat in English. Check light and dark.
 - Quitting the app leaves no `codex` or `claude` child process behind.
 
-**Progress (2026-10-17, f6ba95a, build 128, reported from the Mac session):**
+**Result (2026-10-17, f6ba95a, installed build, macOS 15.6.1): every item above passed.** Reported from the Mac session in two rounds:
 
-Confirmed:
-- Menu bar icon, no Dock icon, left click opens the popover, right click opens the menu.
-- `⌃⌥U` toggles the popover, and changing a hotkey works. It is now `⇧⌘Space`, which does not clash with the input-source switch `⌃⌥Space`.
-- The pin panel.
+- Menu bar icon, no Dock icon, left and right click.
+- `⌃⌥U` toggles the popover, and changing a hotkey works. It is now `⇧⌘Space`, which does not clash with the input-source switch `⌃⌥Space`. The refresh-all and pin hotkeys work.
+- The pin panel, including across Space switches.
+- Live light/dark switching.
 - Notifications: point 99 showed a real banner.
 - Shape switching: bars, fill, and gauges in two columns.
+- Each menu bar text choice, with `--` for a missing row.
+- The time display toggle survives a relaunch, including on screen.
+- No clipping in English, in light and dark, with Spark rows shown. Korean reset text was checked when the shapes landed.
 - A Finder-style launch (`open`, parent `launchd`, no shell `PATH`): it found the app-server in the ChatGPT.app bundle, and Claude refreshed without a Keychain prompt.
 - No `codex` or `claude` child process left after quitting.
 - `settings.json` byte-identical after quit and relaunch.
-- The Keychain prompt appears once per build and not again when the same build relaunches.
-
-Waiting on the maintainer:
-- Live light/dark switching.
-- The pin panel across Space switches.
-- Each menu bar text choice.
-- The time display toggle surviving a relaunch.
-- Clipping in Korean and English, light and dark.
-- Start at login after a reboot.
+- The Keychain prompt appears once per build, and not again when the same build relaunches.
+- **Start at login after a reboot**, with "Reopen windows when logging back in" off: QuotaScope started without anything else being opened, and showed Claude and Codex usage with no new Keychain prompt. The login item was also confirmed with `sfltool dumpbtm` (enabled, allowed). `sfltool dumpbtm` only reads, but macOS shows a warning when it runs; expect that if you use it to check.
 
 ## 11. Open decisions
 
