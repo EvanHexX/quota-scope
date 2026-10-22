@@ -10,6 +10,10 @@ namespace QuotaScope.Providers.Codex;
 internal sealed class CodexAppServerClient : IDisposable
 {
     private const string RateLimitsReadMethod = "account/rateLimits/read";
+    // Sent in the initialize handshake; the entry assembly carries the release
+    // version (the legacy app, which sets none, reports the SDK default).
+    private static readonly string ClientVersion =
+        System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? "0.0.0";
 
     private readonly ProviderSettings _settings;
     private readonly ConcurrentDictionary<int, PendingRequest> _pending = new();
@@ -104,7 +108,7 @@ internal sealed class CodexAppServerClient : IDisposable
 
         var initializeParams = new
         {
-            clientInfo = new { name = "quota-scope", title = "QuotaScope", version = "0.1.0" },
+            clientInfo = new { name = "quota-scope", title = "QuotaScope", version = ClientVersion },
             capabilities = new
             {
                 experimentalApi = true,

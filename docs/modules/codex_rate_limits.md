@@ -9,7 +9,7 @@ QuotaScope는 Codex app-server JSON-RPC를 사용해 현재 계정의 rate limit
 현재 설치된 `codex-cli 0.125.0`에서 다음 명령으로 schema를 확인했다.
 
 ```powershell
-cmd /c codex app-server generate-json-schema --experimental --out E:\Business\outputs\codex-app-server-schema
+cmd /c codex app-server generate-json-schema --experimental --out <schema-output-dir>
 ```
 
 확인된 method와 notification:

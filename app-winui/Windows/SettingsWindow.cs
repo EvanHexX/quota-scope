@@ -989,7 +989,7 @@ internal sealed class SettingsWindow
 
     private UIElement BuildAboutPage()
     {
-        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.1.0";
+        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "?";
         var repoLink = new HyperlinkButton
         {
             Content = "github.com/EvanHexX/quota-scope",
@@ -997,7 +997,7 @@ internal sealed class SettingsWindow
         };
         return Page("About",
             new TextBlock { Text = "QuotaScope", FontSize = 20, FontWeight = FontWeights.SemiBold },
-            MutedText($"Version {version} (WinUI 3 preview)"),
+            MutedText($"Version {version}"),
             MutedText("This project is not affiliated with, endorsed by, or sponsored by OpenAI or Anthropic. Codex is a product/service of OpenAI. Claude is a product/service of Anthropic."),
             repoLink);
     }
