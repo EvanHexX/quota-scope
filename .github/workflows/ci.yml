@@ -1,0 +1,57 @@
+# Builds both platforms and runs their headless self-tests. Every check is
+# deterministic (fixtures carry their own `now`), so no secrets, network
+# accounts, or GUI are needed.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build the WinUI app
+        run: dotnet build app-winui/QuotaScope.WinUI.csproj -c Release
+
+      # The legacy app compiles the shared files under app/ too.
+      - name: Build the legacy app
+        run: dotnet build app/QuotaScope.csproj -c Release
+
+      # Both are GUI-subsystem exes, so the exit code is read from the process.
+      - name: Self-test
+        shell: pwsh
+        run: |
+          $tests = @(
+            'app-winui/bin/Release/net10.0-windows10.0.19041.0/win-x64/QuotaScopeWinUI.exe',
+            'app/bin/Release/net10.0-windows/QuotaScope.exe'
+          )
+          foreach ($exe in $tests) {
+            $p = Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru -NoNewWindow
+            Write-Output "$exe --self-test exit: $($p.ExitCode)"
+            if ($p.ExitCode -ne 0) { exit 1 }
+          }
+
+  macos:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: mac
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: swift build
+      # Shared fixtures against the Swift port, then the providers against fakes.
+      - name: Fixture self-test
+        run: swift run quotascope-selftest
+      - name: Provider test
+        run: swift run quotascope-providertest
