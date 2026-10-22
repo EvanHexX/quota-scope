@@ -65,11 +65,12 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
         _trayIcon.Show();
 
         InitializeHotkeys();
+        ReportSettingsLoadWarning();
 
         _timer = _dispatcherQueue.CreateTimer();
         _timer.Interval = ComputeTimerInterval();
         _timer.IsRepeating = true;
-        _timer.Tick += async (_, _) => await RefreshAsync().ConfigureAwait(false);
+        _timer.Tick += (_, _) => RunSafely("timer-refresh", RefreshAsync);
         _timer.Start();
         _ = RefreshAsync();
 
@@ -184,9 +185,16 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
         return TimeSpan.FromSeconds(Math.Max(10, refreshSeconds));
     }
 
+    // Bumped by every rebuild. A poll works on a snapshot of the providers and
+    // tags its results with the generation it started in, so a result from a
+    // provider the rebuild already disposed cannot overwrite the new one's row.
+    private int _providerGeneration;
+    private bool _refreshAfterPoll;
+
     // Applied when provider enable/refresh settings change: tear down and recreate.
     private void RebuildProviders()
     {
+        _providerGeneration++;
         foreach (var provider in _providers)
         {
             provider.UsageUpdated -= UpdateUsage;
@@ -198,7 +206,24 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
 
         BuildProviders();
         _timer.Interval = ComputeTimerInterval();
-        _ = RefreshAsync();
+        // A poll still running belongs to the old providers; asking it would
+        // hand back that poll, so the new providers are read once it ends.
+        if (_refreshing) _refreshAfterPoll = true;
+        else _ = RefreshAsync();
+    }
+
+    // Timer ticks and menu items cannot await, so a failed poll is logged here
+    // instead of escaping as an unhandled exception from an async void.
+    private static async void RunSafely(string source, Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write(source, ex);
+        }
     }
 
     // Native tray menu model (Win32 TrackPopupMenu inside TrayIconHost).
@@ -220,9 +245,9 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
     private MenuFlyout BuildMenu()
     {
         var menu = new MenuFlyout();
-        menu.Items.Add(MakeItem(Loc.T("Refresh", "새로 고침"), async () => await RefreshAsync().ConfigureAwait(false)));
+        menu.Items.Add(MakeItem(Loc.T("Refresh", "새로 고침"), () => RunSafely("menu-refresh", RefreshAsync)));
         menu.Items.Add(MakeItem(Loc.T("Toggle popup", "팝업 토글"), TogglePopup));
-        menu.Items.Add(MakeItem(Loc.T("Reconnect", "재연결"), async () => await ReconnectAsync().ConfigureAwait(false)));
+        menu.Items.Add(MakeItem(Loc.T("Reconnect", "재연결"), () => RunSafely("menu-reconnect", ReconnectAsync)));
         menu.Items.Add(new MenuFlyoutSeparator());
         menu.Items.Add(MakeItem(Loc.T("Settings...", "설정..."), OpenSettings));
         menu.Items.Add(new MenuFlyoutSeparator());
@@ -296,6 +321,15 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
             // Surface load-time problems immediately, not only on the settings page.
             ShowNotification("QuotaScope hotkeys", string.Join("\n", _hotkeyWarnings));
         }
+    }
+
+    // An unreadable settings.json means every setting the user made is gone
+    // from this run; say so once, and keep the reason in crash.log.
+    private void ReportSettingsLoadWarning()
+    {
+        if (AppSettings.LoadWarning is not { } warning) return;
+        CrashLog.Write("settings-load", new InvalidOperationException(warning));
+        ShowNotification(Loc.T("QuotaScope settings", "QuotaScope 설정"), warning);
     }
 
     private void OnHotkeyPressed(int id)
@@ -464,21 +498,23 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
     private async Task RefreshCoreAsync()
     {
         _refreshing = true;
+        var providers = _providers.ToArray();
+        var generation = _providerGeneration;
         try
         {
             // One provider's failure must not affect the others.
-            foreach (var provider in _providers)
+            foreach (var provider in providers)
             {
                 try
                 {
                     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
                     var usage = await provider.ReadAsync(cts.Token).ConfigureAwait(false);
-                    UpdateUsage(usage);
+                    UpdateUsage(usage, generation);
                 }
                 catch (Exception ex)
                 {
                     UpdateUsage(ProviderUsage.Offline(
-                        provider.Id, provider.DisplayName, FormatConnectionError(provider, ex), ProviderState.Unavailable));
+                        provider.Id, provider.DisplayName, FormatConnectionError(provider, ex), ProviderState.Unavailable), generation);
                 }
             }
         }
@@ -486,8 +522,16 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
         {
             _refreshing = false;
             // Queued behind the provider updates above, so it sees all of them.
-            _dispatcherQueue.TryEnqueue(CheckAlerts);
+            _dispatcherQueue.TryEnqueue(AfterPoll);
         }
+    }
+
+    private void AfterPoll()
+    {
+        CheckAlerts();
+        if (!_refreshAfterPoll) return;
+        _refreshAfterPoll = false;
+        RunSafely("rebuild-refresh", RefreshAsync);
     }
 
     private Task ReconnectAsync()
@@ -516,29 +560,31 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
         }
 
         _refreshing = true;
+        var providers = _providers.ToArray();
+        var generation = _providerGeneration;
         try
         {
-            foreach (var provider in _providers)
+            foreach (var provider in providers)
             {
                 try
                 {
                     UpdateUsage(ProviderUsage.Offline(
-                        provider.Id, provider.DisplayName, $"Connecting to {provider.DisplayName}...", ProviderState.Unavailable));
+                        provider.Id, provider.DisplayName, $"Connecting to {provider.DisplayName}...", ProviderState.Unavailable), generation);
                     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                     var usage = await provider.ReconnectAsync(cts.Token).ConfigureAwait(false);
-                    UpdateUsage(usage);
+                    UpdateUsage(usage, generation);
                 }
                 catch (Exception ex)
                 {
                     UpdateUsage(ProviderUsage.Offline(
-                        provider.Id, provider.DisplayName, FormatConnectionError(provider, ex), ProviderState.Unavailable));
+                        provider.Id, provider.DisplayName, FormatConnectionError(provider, ex), ProviderState.Unavailable), generation);
                 }
             }
         }
         finally
         {
             _refreshing = false;
-            _dispatcherQueue.TryEnqueue(CheckAlerts);
+            _dispatcherQueue.TryEnqueue(AfterPoll);
         }
     }
 
@@ -549,14 +595,19 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
             : $"{provider.DisplayName} connection required: " + ex.Message;
     }
 
-    private void UpdateUsage(ProviderUsage usage)
+    // Pushed updates come from the current providers (a rebuild unsubscribes
+    // the old ones); poll results carry the generation they were read in.
+    private void UpdateUsage(ProviderUsage usage) => UpdateUsage(usage, generation: null);
+
+    private void UpdateUsage(ProviderUsage usage, int? generation)
     {
         if (!_dispatcherQueue.HasThreadAccess)
         {
-            _dispatcherQueue.TryEnqueue(() => UpdateUsage(usage));
+            _dispatcherQueue.TryEnqueue(() => UpdateUsage(usage, generation));
             return;
         }
         if (_disposed) return;
+        if (generation is { } polled && polled != _providerGeneration) return;
 
         _usages[usage.ProviderId] = usage;
         ApplyTrayVisuals(CurrentUsages());
