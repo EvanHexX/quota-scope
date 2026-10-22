@@ -15,13 +15,13 @@ Codex는 로컬에서 `codex app-server`를 실행해 stdio JSON-RPC로 rate lim
 
 ## 스크린샷
 
-<img src="docs/images/quota-scope.png" alt="QuotaScope 사용량 팝업과 설정창" width="900">
+<img src="docs/images/quota-scope.png" alt="게이지, 채우기 카드, 막대를 섞은 QuotaScope 사용량 팝업과 설정창" width="900">
 
-| UI 크기 90% 팝업 | 글래스모피즘 + UI 크기 150% |
-|---|---|
-| <img src="docs/images/quota-scope-90.png" alt="Codex와 Claude 사용량을 표시하는 QuotaScope 팝업" width="330"> | <img src="docs/images/quota-scope-150.png" alt="배경이 비치는 글래스모피즘 적용 팝업" width="330"> |
+| 라이트 테마 | 글래스모피즘 | 채우기 카드, 1열 |
+|---|---|---|
+| <img src="docs/images/quota-scope-light.png" alt="Codex와 Claude 사용량을 표시하는 라이트 테마 QuotaScope 팝업" width="280"> | <img src="docs/images/quota-scope-glass.png" alt="배경이 비치는 글래스모피즘 적용 팝업" width="280"> | <img src="docs/images/quota-scope-compact.png" alt="모든 행을 채우기 카드로 표시한 1열 컴팩트 팝업" width="160"> |
 
-레이아웃은 행 단위로 지정할 수 있습니다 — 게이지/막대, 순서, 열 수:
+레이아웃은 행 단위로 지정할 수 있습니다 — 게이지/막대/채우기, 순서, 열 수:
 
 <img src="docs/images/quota-scope-settings.png" alt="행별 모양을 지정하는 모양 설정 화면" width="640">
 
