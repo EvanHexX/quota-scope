@@ -1,0 +1,8 @@
+{
+  "description": "An explicit utilization stands on its own: a smaller reference that used_credits would overrun changes neither the percent nor the BeyondFull flag.",
+  "options": { "creditsFullAmount": 1000 },
+  "response": {
+    "five_hour": { "utilization": 10.0, "resets_at": "2026-04-11T07:00:00+00:00" },
+    "extra_usage": { "is_enabled": true, "monthly_limit": null, "used_credits": 1200, "utilization": 80 }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "description": "used_credits says 1300 left, utilization says 500. The bar follows utilization, so the footer has to as well.",
+  "response": {
+    "five_hour": { "utilization": 10.0, "resets_at": "2026-04-11T07:00:00+00:00" },
+    "extra_usage": { "is_enabled": true, "monthly_limit": null, "used_credits": 1200, "utilization": 80 }
+  }
+}

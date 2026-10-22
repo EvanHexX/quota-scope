@@ -1,0 +1,19 @@
+{
+  "description": "The weekly window in primary and the 5h window in secondary, for the main bucket and Spark alike: rows still come out 5h first.",
+  "read": {
+    "rateLimits": {
+      "limitId": "codex",
+      "planType": "plus",
+      "primary": { "usedPercent": 41, "resetsAt": 1894053600, "windowDurationMins": 10080 },
+      "secondary": { "usedPercent": 22, "resetsAt": 1893499200, "windowDurationMins": 300 }
+    },
+    "rateLimitsByLimitId": {
+      "codex_bengalfox": {
+        "limitId": "codex_bengalfox",
+        "limitName": "GPT-5.3-Codex-Spark",
+        "primary": { "usedPercent": 8, "resetsAt": 1894053600, "windowDurationMins": 10080 },
+        "secondary": { "usedPercent": 4, "resetsAt": 1893495600, "windowDurationMins": 300 }
+      }
+    }
+  }
+}

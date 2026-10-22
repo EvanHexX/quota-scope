@@ -1,0 +1,8 @@
+{
+  "description": "Against a 1000 reference the 1200 spent is past full: the gauge clamps at 100% used and the row is flagged BeyondFull so it reads >100%.",
+  "options": { "creditsFullAmount": 1000 },
+  "response": {
+    "five_hour": { "utilization": 10.0, "resets_at": "2026-04-11T07:00:00+00:00" },
+    "extra_usage": { "is_enabled": true, "monthly_limit": null, "used_credits": 1200, "utilization": null }
+  }
+}

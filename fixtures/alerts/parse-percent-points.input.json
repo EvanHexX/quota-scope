@@ -1,0 +1,14 @@
+{
+  "description": "Percent points are remaining percentages from 0 up to but not including 100, separated by commas, semicolons or spaces, a trailing % allowed. They come out distinct and highest first, rounded to the two decimals the box shows before the range check (99.999 is 100 and refused). Blank text is an empty list, which means the default points.",
+  "parse": [
+    { "text": "80, 60,40%", "credits": false },
+    { "text": "2.5 20;20", "credits": false },
+    { "text": "  ", "credits": false },
+    { "text": "40, 0", "credits": false },
+    { "text": "80, abc", "credits": false },
+    { "text": "-1", "credits": false },
+    { "text": "100", "credits": false },
+    { "text": "33.333", "credits": false },
+    { "text": "99.999", "credits": false }
+  ]
+}

@@ -52,6 +52,7 @@ internal static class Program
                 && ClaudeSessionRenewer.RunSelfTest()
                 && HotkeyDefinition.RunSelfTest()
                 && RowShapes.RunSelfTest()
+                && RowLayout.RunSelfTest()
                 && UsageAlerts.RunSelfTest()
                 && PopupPalette.RunSelfTest()
                 && GraphicsAdapters.RunSelfTest()

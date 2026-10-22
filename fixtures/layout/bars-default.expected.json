@@ -1,0 +1,45 @@
+{
+  "twoColumn": false,
+  "sections": [
+    {
+      "providerId": "codex",
+      "lines": [
+        {
+          "shape": "Bars",
+          "rows": [
+            "5h"
+          ]
+        },
+        {
+          "shape": "Bars",
+          "rows": [
+            "7d"
+          ]
+        }
+      ]
+    },
+    {
+      "providerId": "claude",
+      "lines": [
+        {
+          "shape": "Bars",
+          "rows": [
+            "5h"
+          ]
+        },
+        {
+          "shape": "Bars",
+          "rows": [
+            "7d"
+          ]
+        },
+        {
+          "shape": "Bars",
+          "rows": [
+            "7d Fable"
+          ]
+        }
+      ]
+    }
+  ]
+}

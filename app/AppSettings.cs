@@ -105,18 +105,7 @@ internal sealed class AppSettings
 
         try
         {
-            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath)) ?? new AppSettings();
-            // A hand-edited null would otherwise reach code that runs on every
-            // usage update (row order, visibility, shapes, alert checks).
-            settings.Providers ??= new(StringComparer.OrdinalIgnoreCase);
-            settings.RowShapes ??= new(StringComparer.OrdinalIgnoreCase);
-            settings.RowOrder ??= new(StringComparer.OrdinalIgnoreCase);
-            settings.RowVisibility ??= new(StringComparer.OrdinalIgnoreCase);
-            settings.AlertPoints ??= new();
-            settings.RowAlerts ??= new(StringComparer.OrdinalIgnoreCase);
-            settings.RowAlertPoints ??= new(StringComparer.OrdinalIgnoreCase);
-            settings.GetProvider("codex");
-            return settings;
+            return FromJson(File.ReadAllText(SettingsPath));
         }
         catch (Exception ex)
         {
@@ -132,6 +121,23 @@ internal sealed class AppSettings
             }
             return new AppSettings();
         }
+    }
+
+    // Load without the file; the self-test fixtures read their settings here.
+    public static AppSettings FromJson(string json)
+    {
+        var settings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+        // A hand-edited null would otherwise reach code that runs on every
+        // usage update (row order, visibility, shapes, alert checks).
+        settings.Providers ??= new(StringComparer.OrdinalIgnoreCase);
+        settings.RowShapes ??= new(StringComparer.OrdinalIgnoreCase);
+        settings.RowOrder ??= new(StringComparer.OrdinalIgnoreCase);
+        settings.RowVisibility ??= new(StringComparer.OrdinalIgnoreCase);
+        settings.AlertPoints ??= new();
+        settings.RowAlerts ??= new(StringComparer.OrdinalIgnoreCase);
+        settings.RowAlertPoints ??= new(StringComparer.OrdinalIgnoreCase);
+        settings.GetProvider("codex");
+        return settings;
     }
 
     // Written to a temporary file and moved over the old one, so a crash or

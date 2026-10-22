@@ -488,7 +488,7 @@ internal sealed class UsagePopupWindow
             return;
         }
 
-        var twoColumn = UsesTwoColumnLayout(sections);
+        var twoColumn = RowLayout.UsesTwoColumns(_settings, sections);
         for (var i = 0; i < sections.Count; i++)
         {
             var (usage, rows) = sections[i];
@@ -507,77 +507,16 @@ internal sealed class UsagePopupWindow
         }
     }
 
-    // Two columns only pay off when some section actually has a pair of gauges
-    // to place side by side; otherwise everything stacks in one column and bar
-    // rows get the single-column width. The user can force either column count.
-    private bool UsesTwoColumnLayout(List<(ProviderUsage Usage, List<UsageRow> Rows)> sections)
-    {
-        if (string.Equals(_settings.LayoutColumns, "OneColumn", StringComparison.OrdinalIgnoreCase)) return false;
-        if (string.Equals(_settings.LayoutColumns, "TwoColumns", StringComparison.OrdinalIgnoreCase)) return true;
-
-        foreach (var (usage, rows) in sections)
-        {
-            var circles = 0;
-            foreach (var row in rows)
-            {
-                if (RowShapes.Resolve(_settings, usage.ProviderId, row) == RowShapes.Circle && ++circles >= 2)
-                {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
+    // The column decision and which cards share a line live in RowLayout, so
+    // the macOS port follows the same rules (fixtures/layout).
     private void AddSectionRows(string providerId, List<UsageRow> rows, PopupPalette palette, bool twoColumn)
     {
-        // Consecutive cards of one shape pair up; a bar row always spans the
-        // full content width and flushes any pending card first. A fill card
-        // never shares a line with a gauge several times its height, so a
-        // change of shape flushes as well, leaving the pending card full width.
-        UsageRow? pending = null;
-        var pendingShape = RowShapes.Circle;
-
-        void FlushPending()
+        foreach (var line in RowLayout.Lines(_settings, providerId, rows, twoColumn))
         {
-            if (pending is null) return;
-            _sectionsPanel.Children.Add(BuildShapeRow(providerId, pendingShape, pending, null, palette));
-            pending = null;
+            _sectionsPanel.Children.Add(line.Shape == RowShapes.Bars
+                ? BuildBarRow(providerId, line.Left, palette, stackTime: !twoColumn)
+                : BuildShapeRow(providerId, line.Shape, line.Left, line.Right, palette));
         }
-
-        foreach (var row in rows)
-        {
-            var shape = RowShapes.Resolve(_settings, providerId, row);
-            if (shape == RowShapes.Bars)
-            {
-                FlushPending();
-                _sectionsPanel.Children.Add(BuildBarRow(providerId, row, palette, stackTime: !twoColumn));
-                continue;
-            }
-
-            if (!twoColumn)
-            {
-                _sectionsPanel.Children.Add(BuildShapeRow(providerId, shape, row, null, palette));
-                continue;
-            }
-
-            if (pending is not null && shape != pendingShape)
-            {
-                FlushPending();
-            }
-
-            if (pending is null)
-            {
-                pending = row;
-                pendingShape = shape;
-                continue;
-            }
-
-            _sectionsPanel.Children.Add(BuildShapeRow(providerId, shape, pending, row, palette));
-            pending = null;
-        }
-
-        FlushPending();
     }
 
     // One line of gauge or fill cards: a single card, or a pair of one shape.
@@ -616,18 +555,7 @@ internal sealed class UsagePopupWindow
         return rowGrid;
     }
 
-    private List<(ProviderUsage Usage, List<UsageRow> Rows)> BuildSections()
-    {
-        var sections = new List<(ProviderUsage, List<UsageRow>)>();
-        foreach (var usage in _usages)
-        {
-            var visible = usage.Rows.Where(row => RowShapes.IsVisible(_settings, usage.ProviderId, row));
-            // User-defined order decides which gauges end up adjacent, and
-            // therefore which ones pair into a two-column line.
-            sections.Add((usage, RowShapes.Order(_settings, usage.ProviderId, visible, row => row.Label)));
-        }
-        return sections;
-    }
+    private List<(ProviderUsage Usage, List<UsageRow> Rows)> BuildSections() => RowLayout.Sections(_settings, _usages);
 
     private Grid BuildSectionHeader(ProviderUsage usage, PopupPalette palette)
     {
@@ -1102,7 +1030,7 @@ internal sealed class UsagePopupWindow
     {
         var sections = BuildSections();
         var totalRows = sections.Sum(s => s.Rows.Count);
-        var twoColumn = UsesTwoColumnLayout(sections);
+        var twoColumn = RowLayout.UsesTwoColumns(_settings, sections);
         // A forced single column is meant to be a narrow stack: match the width
         // of one card in the two-column layout.
         var forcedOneColumn = string.Equals(_settings.LayoutColumns, "OneColumn", StringComparison.OrdinalIgnoreCase);
@@ -1243,10 +1171,10 @@ internal sealed class UsagePopupWindow
 
     private string FormatWindowTime(RateLimitWindow? window)
     {
-        if (window?.ResetsAt is null) return Loc.T("reset --", "재설정 --");
-        return string.Equals(_settings.TimeDisplayMode, "RemainingTime", StringComparison.OrdinalIgnoreCase)
-            ? Loc.ResetIn(window.ResetsAt.Value - DateTimeOffset.Now)
-            : Loc.ResetClock(window.ResetsAt.Value.ToLocalTime());
+        return Loc.ResetText(
+            window?.ResetsAt,
+            DateTimeOffset.Now,
+            string.Equals(_settings.TimeDisplayMode, "RemainingTime", StringComparison.OrdinalIgnoreCase));
     }
 
     private static SolidColorBrush Brush(Color color) => new(color);

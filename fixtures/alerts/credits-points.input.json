@@ -1,0 +1,20 @@
+{
+  "description": "A credits row compares its amount left against points in credits. It is off by default like every non-primary row; switched on without points of its own it notifies when credits run out (0, critical); with points 500 and 0 it notifies each. Amounts are compared as shown, to two decimals, so 0.003 left has passed 0. A credits row with a gauge but no amount (Claude with no ceiling to measure against) has nothing to compare and stays quiet.",
+  "steps": [
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "Credits", "isPrimary": false, "detailText": "--", "creditsLeft": 0 }] }] },
+    {
+      "settings": { "RowAlerts": { "codex|Credits": true } },
+      "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "Credits", "isPrimary": false, "detailText": "--", "creditsLeft": 600 }] }]
+    },
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "Credits", "isPrimary": false, "detailText": "--", "creditsLeft": 0 }] }] },
+    {
+      "settings": { "RowAlerts": { "codex|Credits": true }, "RowAlertPoints": { "codex|Credits": [500, 0] } },
+      "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "Credits", "isPrimary": false, "detailText": "--", "creditsLeft": 600 }] }]
+    },
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "Credits", "isPrimary": false, "detailText": "--", "creditsLeft": 450 }] }] },
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "Credits", "isPrimary": false, "detailText": "--", "creditsLeft": 0 }] }] },
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "Credits", "isPrimary": false, "detailText": "--", "creditsLeft": 600 }] }] },
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "Credits", "isPrimary": false, "detailText": "--", "creditsLeft": 0.003 }] }] },
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "Credits", "isPrimary": false, "usedPercent": 99, "windowDurationMins": 10080 }] }] }
+  ]
+}

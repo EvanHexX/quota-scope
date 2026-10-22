@@ -1,0 +1,12 @@
+{
+  "description": "An explicit per-row choice hides a row the provider defaults would show, primary or not. A row without a choice still follows the toggles.",
+  "settings": {
+    "Providers": { "codex": { "ShowSecondaryRows": true, "ShowCredits": true } },
+    "RowVisibility": { "codex|5h": false, "codex|Spark 5h": false }
+  },
+  "rows": [
+    { "providerId": "codex", "label": "5h", "isPrimary": true },
+    { "providerId": "codex", "label": "Spark 5h", "isPrimary": false },
+    { "providerId": "codex", "label": "Credits", "isPrimary": false }
+  ]
+}

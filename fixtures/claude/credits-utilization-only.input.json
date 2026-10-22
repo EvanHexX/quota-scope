@@ -1,0 +1,7 @@
+{
+  "description": "Utilization with no used_credits: the footer comes from the drawn percentage. 60% of a 2500 fallback ceiling is spent, so 1000 are left; credits alerts compare the same amount.",
+  "response": {
+    "five_hour": { "utilization": 10.0, "resets_at": "2026-04-11T07:00:00+00:00" },
+    "extra_usage": { "is_enabled": true, "monthly_limit": null, "used_credits": null, "utilization": 60 }
+  }
+}

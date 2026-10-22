@@ -1,0 +1,7 @@
+{
+  "description": "A custom point past the critical level is reported as critical. 99.5% used reads as 100, so 0% left, past the 1% point.",
+  "settings": { "AlertPoints": [1] },
+  "steps": [
+    { "usages": [{ "providerId": "codex", "displayName": "Codex", "rows": [{ "label": "5h", "isPrimary": true, "usedPercent": 99.5, "windowDurationMins": 300 }] }] }
+  ]
+}

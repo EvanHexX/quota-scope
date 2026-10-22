@@ -1,0 +1,4 @@
+{
+  "description": "The default popup toggle. Modifiers are the Win32 MOD_* flags (Alt 1, Ctrl 2, Shift 4, Win 8) and virtualKey the Windows virtual-key code.",
+  "texts": ["Ctrl+Alt+U"]
+}

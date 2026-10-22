@@ -1,0 +1,84 @@
+{
+  "results": [
+    {
+      "clock": {
+        "en": "resets at 4:00 PM",
+        "ko": "오후 4:00 초기화"
+      },
+      "remaining": {
+        "en": "resets in 2h 13m",
+        "ko": "2시간 13분 뒤 초기화"
+      }
+    },
+    {
+      "clock": {
+        "en": "resets Oct 21, 10:00 PM",
+        "ko": "10월 21일 오후 10:00 초기화"
+      },
+      "remaining": {
+        "en": "resets in 4d 8h",
+        "ko": "4일 8시간 뒤 초기화"
+      }
+    },
+    {
+      "clock": {
+        "en": "resets at 1:47 PM",
+        "ko": "오후 1:47 초기화"
+      },
+      "remaining": {
+        "en": "resets in 1m",
+        "ko": "1분 뒤 초기화"
+      }
+    },
+    {
+      "clock": {
+        "en": "resets at 1:00 PM",
+        "ko": "오후 1:00 초기화"
+      },
+      "remaining": {
+        "en": "resets now",
+        "ko": "곧 초기화"
+      }
+    },
+    {
+      "clock": {
+        "en": "resets Oct 18, 12:05 AM",
+        "ko": "10월 18일 오전 12:05 초기화"
+      },
+      "remaining": {
+        "en": "resets in 10h 18m",
+        "ko": "10시간 18분 뒤 초기화"
+      }
+    },
+    {
+      "clock": {
+        "en": "resets Oct 18, 1:47 PM",
+        "ko": "10월 18일 오후 1:47 초기화"
+      },
+      "remaining": {
+        "en": "resets in 1d 0h",
+        "ko": "1일 0시간 뒤 초기화"
+      }
+    },
+    {
+      "clock": {
+        "en": "resets at 2:46 PM",
+        "ko": "오후 2:46 초기화"
+      },
+      "remaining": {
+        "en": "resets in 59m",
+        "ko": "59분 뒤 초기화"
+      }
+    },
+    {
+      "clock": {
+        "en": "reset --",
+        "ko": "재설정 --"
+      },
+      "remaining": {
+        "en": "reset --",
+        "ko": "재설정 --"
+      }
+    }
+  ]
+}

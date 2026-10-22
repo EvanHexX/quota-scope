@@ -1,0 +1,43 @@
+{
+  "description": "Two columns forced: fill cards pair up like gauges.",
+  "settings": {
+    "ShapeTheme": "Fill",
+    "LayoutColumns": "TwoColumns"
+  },
+  "providers": [
+    {
+      "providerId": "codex",
+      "rows": [
+        {
+          "label": "5h",
+          "isPrimary": true
+        },
+        {
+          "label": "7d",
+          "isPrimary": true
+        },
+        {
+          "label": "Spark 5h",
+          "isPrimary": false
+        }
+      ]
+    },
+    {
+      "providerId": "claude",
+      "rows": [
+        {
+          "label": "5h",
+          "isPrimary": true
+        },
+        {
+          "label": "7d",
+          "isPrimary": true
+        },
+        {
+          "label": "7d Fable",
+          "isPrimary": true
+        }
+      ]
+    }
+  ]
+}

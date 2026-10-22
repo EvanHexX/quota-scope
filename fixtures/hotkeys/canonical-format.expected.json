@@ -1,0 +1,8 @@
+{
+  "results": [
+    { "ok": true, "modifiers": 6, "virtualKey": 65, "formatted": "Ctrl+Shift+A", "reparses": true },
+    { "ok": true, "modifiers": 8, "virtualKey": 32, "formatted": "Win+Space", "reparses": true },
+    { "ok": true, "modifiers": 1, "virtualKey": 123, "formatted": "Alt+F12", "reparses": true },
+    { "ok": true, "modifiers": 2, "virtualKey": 34, "formatted": "Ctrl+PageDown", "reparses": true }
+  ]
+}

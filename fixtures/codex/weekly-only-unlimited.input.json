@@ -1,0 +1,29 @@
+{
+  "description": "Unlimited credits have nothing to run out of: text-only row, no CreditsLeft.",
+  "read": {
+    "rateLimits": {
+      "limitId": "codex",
+      "limitName": null,
+      "planType": "pro",
+      "primary": { "usedPercent": 12.5, "resetsAt": 1785269431, "windowDurationMins": 10080 },
+      "secondary": null,
+      "credits": { "hasCredits": true, "unlimited": true, "balance": "146.0874125000" },
+      "spendControlReached": false,
+      "rateLimitReachedType": null
+    },
+    "rateLimitsByLimitId": {
+      "codex": {
+        "limitId": "codex",
+        "primary": { "usedPercent": 12.5, "resetsAt": 1785269431, "windowDurationMins": 10080 },
+        "secondary": null
+      },
+      "codex_bengalfox": {
+        "limitId": "codex_bengalfox",
+        "limitName": "GPT-5.3-Codex-Spark",
+        "primary": { "usedPercent": 4, "resetsAt": 1785269459, "windowDurationMins": 10080 },
+        "secondary": null
+      }
+    },
+    "rateLimitResetCredits": { "availableCount": 0, "credits": [] }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "description": "Mix and match: a change of shape ends a pending pair (a fill card never shares a line with a gauge), and a bar row flushes the pending card and spans the full width. Claude's two gauges switch Auto to two columns for every section.",
+  "settings": {
+    "ShapeTheme": "MixMatch",
+    "RowShapes": {
+      "codex|5h": "Fill",
+      "codex|Credits": "Bars",
+      "claude|7d Fable": "Fill"
+    },
+    "Providers": {
+      "codex": {
+        "ShowCredits": true
+      }
+    }
+  },
+  "providers": [
+    {
+      "providerId": "codex",
+      "rows": [
+        {
+          "label": "5h",
+          "isPrimary": true
+        },
+        {
+          "label": "7d",
+          "isPrimary": true
+        },
+        {
+          "label": "Credits",
+          "isPrimary": false
+        }
+      ]
+    },
+    {
+      "providerId": "claude",
+      "rows": [
+        {
+          "label": "5h",
+          "isPrimary": true
+        },
+        {
+          "label": "7d",
+          "isPrimary": true
+        },
+        {
+          "label": "7d Fable",
+          "isPrimary": true
+        }
+      ]
+    }
+  ]
+}

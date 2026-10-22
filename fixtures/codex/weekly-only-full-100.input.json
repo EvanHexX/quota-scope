@@ -1,0 +1,30 @@
+{
+  "description": "A balance past the full amount fills the gauge (0% used) and is flagged BeyondFull so the popup reads >100%; the footer keeps the real balance.",
+  "options": { "creditsFullAmount": 100 },
+  "read": {
+    "rateLimits": {
+      "limitId": "codex",
+      "limitName": null,
+      "planType": "pro",
+      "primary": { "usedPercent": 12.5, "resetsAt": 1785269431, "windowDurationMins": 10080 },
+      "secondary": null,
+      "credits": { "hasCredits": true, "unlimited": false, "balance": "146.0874125000" },
+      "spendControlReached": false,
+      "rateLimitReachedType": null
+    },
+    "rateLimitsByLimitId": {
+      "codex": {
+        "limitId": "codex",
+        "primary": { "usedPercent": 12.5, "resetsAt": 1785269431, "windowDurationMins": 10080 },
+        "secondary": null
+      },
+      "codex_bengalfox": {
+        "limitId": "codex_bengalfox",
+        "limitName": "GPT-5.3-Codex-Spark",
+        "primary": { "usedPercent": 4, "resetsAt": 1785269459, "windowDurationMins": 10080 },
+        "secondary": null
+      }
+    },
+    "rateLimitResetCredits": { "availableCount": 0, "credits": [] }
+  }
+}

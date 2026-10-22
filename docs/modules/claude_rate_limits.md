@@ -116,4 +116,4 @@ User-Agent: claude-code/<version>
 - `app/Providers/Claude/ClaudeCredentialReader.cs`: 자격증명 파일 읽기 (토큰 비보존, `expiresAt` 조회)
 - `app/Providers/Claude/ClaudeSessionRenewer.cs`: 세션 자동 갱신 nudge/쿨다운 + `RunSelfTest()`
 - `app/Providers/Claude/ClaudeCommandResolver.cs`: `claude` CLI 경로 해석
-- `app/Providers/Claude/ClaudeUsageMapper.cs`: 응답 → `ProviderUsage` 매핑 + `RunSelfTest()`
+- `app/Providers/Claude/ClaudeUsageMapper.cs`: 응답 → `ProviderUsage` 매핑 + `RunSelfTest()` (`fixtures/claude/`의 입력/기대 결과 쌍으로 검사, macOS 포트와 공유)
