@@ -45,13 +45,17 @@
 - credits gauge denominator/percent helpers -> `app/Providers/CreditsGauge.cs`
 - self-test fixture loader/comparer, input readers -> `app/Providers/UsageFixtures.cs`
 - shared mapper fixtures (입력/기대 결과 쌍, 두 project에 EmbeddedResource로 포함, macOS 포트와 공유) -> `fixtures/codex/`, `fixtures/claude/`
-- shared renewer/hotkey fixtures (두 project에 포함) -> `fixtures/renewer/`, `fixtures/hotkeys/`
+- shared renewer/hotkey/settings fixtures (두 project에 포함) -> `fixtures/renewer/`, `fixtures/hotkeys/`, `fixtures/settings/`
 - shared row visibility/shape, usage alert, row layout, reset-time text fixtures (WinUI project에만 포함) -> `fixtures/rows/`, `fixtures/alerts/`, `fixtures/layout/`, `fixtures/resettext/`
 
-## macOS (planned)
+## macOS (Swift, 소스에서 빌드)
 
-- build plan, shared fixture format -> `docs/MACOS_BUILD.md`
-- Swift package (QuotaCore, Windows에서도 빌드) -> `mac/Package.swift`
+macOS 메뉴 막대 app. Windows와 같은 기능을 갖추고 2026-10-17 수동 점검을 통과했다 (`docs/MACOS_BUILD.md`). 배포 파일은 없고 Mac에서 직접 빌드한다.
+
+- design, build, shared fixture format, Mac smoke test -> `docs/MACOS_BUILD.md`
+- Swift package (QuotaCore, QuotaProviders, test runners는 Windows에서도 빌드; QuotaScope app은 macOS 전용) -> `mac/Package.swift`
+- build, self-tests, sign, install script (`mac/build.sh [--release] [--install]`) -> `mac/build.sh`
+- menu bar app: status item and icon, popover and pinned panel, settings window and settings file, global hotkeys, notifications, menu bar text -> `mac/Sources/QuotaScope/` (`main.swift`, `AppController.swift`, `StatusIcon.swift`, `PopoverView.swift`, `SettingsWindow.swift`, `SettingsStore.swift`, `GlobalHotkeys.swift`, `Notifier.swift`, `DisplayText.swift`)
 - shared logic port: models, Codex/Claude mappers, row shapes and layout, usage alerts, reset-time text, settings model, hotkey grammar -> `mac/Sources/QuotaCore/`
 - fixture runner (`swift run quotascope-selftest`) -> `mac/Sources/quotascope-selftest/main.swift`, `mac/Sources/QuotaCore/Fixtures.swift`
 - providers: Codex app-server client, Claude usage poller, session renewer, command/credential lookup (Keychain는 macOS 전용) -> `mac/Sources/QuotaProviders/`
@@ -76,5 +80,9 @@
 
 ## Settings (shared)
 
-- settings model/load/save -> `app/AppSettings.cs`
+- settings model/load/save, fixture form (`Describe`) and self-test (`RunSelfTest`, `fixtures/settings/`) -> `app/AppSettings.cs`
 - user settings file -> app output `settings.json` (`AppContext.BaseDirectory`), git에서 제외
+
+## CI
+
+- Windows: 두 C# project build와 `--self-test`; macOS: `swift build`, `quotascope-selftest`, `quotascope-providertest` -> `.github/workflows/ci.yml`

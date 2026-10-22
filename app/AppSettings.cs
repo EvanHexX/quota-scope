@@ -62,7 +62,7 @@ internal sealed class AppSettings
     public bool NotifyOnThreshold { get; set; } = true;
     public double UiScale { get; set; } = 1.0;
     public bool Glassmorphism { get; set; } = false;
-    // "Subtle" | "Medium" | "Strong".
+    // "Subtle" | "Medium" | "Strong" | "VeryStrong".
     public string GlassStrength { get; set; } = "Medium";
     public string PopupGraph { get; set; } = "half-circle";
     public string PopupPosition { get; set; } = "BottomRight";
@@ -138,6 +138,17 @@ internal sealed class AppSettings
         settings.AlertPoints ??= new();
         settings.RowAlerts ??= new(StringComparer.OrdinalIgnoreCase);
         settings.RowAlertPoints ??= new(StringComparer.OrdinalIgnoreCase);
+        // A null provider entry ("claude": null) would make GetProvider return
+        // null; it loads as that provider's defaults instead.
+        var nullProviders = new List<string>();
+        foreach (var (id, provider) in settings.Providers)
+        {
+            if (provider is null) nullProviders.Add(id);
+        }
+        foreach (var id in nullProviders)
+        {
+            settings.Providers[id] = new ProviderSettings();
+        }
         settings.GetProvider("codex");
         return settings;
     }
