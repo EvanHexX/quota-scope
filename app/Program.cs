@@ -16,7 +16,8 @@ internal static class Program
             return RateLimitMapper.RunSelfTest()
                 && ClaudeUsageMapper.RunSelfTest()
                 && ClaudeSessionRenewer.RunSelfTest()
-                && HotkeyDefinition.RunSelfTest() ? 0 : 1;
+                && HotkeyDefinition.RunSelfTest()
+                && AppSettings.RunSelfTest() ? 0 : 1;
         }
 
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);

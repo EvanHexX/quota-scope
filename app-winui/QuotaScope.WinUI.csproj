@@ -44,6 +44,7 @@
     <EmbeddedResource Include="..\fixtures\claude\*.json" LogicalName="fixtures/claude/%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\fixtures\renewer\*.json" LogicalName="fixtures/renewer/%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\fixtures\hotkeys\*.json" LogicalName="fixtures/hotkeys/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\fixtures\settings\*.json" LogicalName="fixtures/settings/%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\fixtures\rows\*.json" LogicalName="fixtures/rows/%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\fixtures\alerts\*.json" LogicalName="fixtures/alerts/%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\fixtures\layout\*.json" LogicalName="fixtures/layout/%(Filename)%(Extension)" />

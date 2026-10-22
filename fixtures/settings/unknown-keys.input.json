@@ -1,0 +1,13 @@
+{
+  "description": "Keys the model does not have are ignored, at the top level and inside a provider: a key from a newer or other build (MenuBarText is macOS-only), one of any JSON type, and a known key in the wrong case (hotkey, refreshSeconds), because key names match exactly. The known keys beside them load as usual.",
+  "settings": {
+    "Hotkey": "Ctrl+Alt+Q",
+    "hotkey": "Ctrl+Alt+X",
+    "MenuBarText": "Percent",
+    "FutureOption": { "Nested": [1, 2, 3], "Flag": true },
+    "ShowSparkUsage": true,
+    "Providers": {
+      "codex": { "RefreshSeconds": 90, "refreshSeconds": 15, "Model": "synthetic-model", "Extra": null }
+    }
+  }
+}

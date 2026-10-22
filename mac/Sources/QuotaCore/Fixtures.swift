@@ -10,10 +10,29 @@ public enum Fixtures {
 
     // Every shared fixture folder. The renewer's timing rules live in
     // ClaudeRenewalPolicy; the process-running part is in QuotaProviders.
-    public static let folders = ["codex", "claude", "rows", "alerts", "hotkeys", "renewer", "layout", "resettext"]
+    public static let folders = ["codex", "claude", "rows", "alerts", "hotkeys", "renewer", "layout", "resettext", "settings"]
 
     public struct Failure: Error, CustomStringConvertible {
         public let description: String
+    }
+
+    // The folder list above must match the directories under the fixtures
+    // root both ways, so a folder added on the C# side cannot be skipped here
+    // without a word. Hidden entries (.DS_Store) and plain files are ignored.
+    public static func checkFolders(in root: URL) throws {
+        let entries = try FileManager.default.contentsOfDirectory(atPath: root.path)
+        let directories = entries.filter { name in
+            var isDirectory: ObjCBool = false
+            return !name.hasPrefix(".")
+                && FileManager.default.fileExists(atPath: root.appendingPathComponent(name).path, isDirectory: &isDirectory)
+                && isDirectory.boolValue
+        }
+        for name in directories.sorted() where !folders.contains(name) {
+            throw Failure(description: "fixtures/\(name): folder is not in Fixtures.folders, so it has no Swift evaluator")
+        }
+        for name in folders where !directories.contains(name) {
+            throw Failure(description: "fixtures/\(name): listed in Fixtures.folders but there is no such directory")
+        }
     }
 
     // Every case in the folder must match, and an empty folder fails.
@@ -57,8 +76,68 @@ public enum Fixtures {
         case "renewer": return try evaluateRenewer(input)
         case "layout": return try evaluateLayout(input)
         case "resettext": return try evaluateResetText(input)
+        case "settings": return try evaluateSettings(input)
         default: throw Failure(description: "no evaluator for fixtures/\(folder)")
         }
+    }
+
+    // The input's "settings" is a whole settings.json, answered by every key
+    // it loads to (AppSettings.Describe in C#: the shape Save writes).
+    static func evaluateSettings(_ input: JSONValue) throws -> JSONValue {
+        guard let settings = input["settings"] else { throw Failure(description: "settings input has no settings") }
+        return describe(try AppSettings.fromJSON(settings))
+    }
+
+    // Every key of the settings model, providers included, with the Windows
+    // key names. A key added on either side without the other fails a case.
+    public static func describe(_ settings: AppSettings) -> JSONValue {
+        func integer(_ value: Int) -> JSONValue { .number(Int64(value)) }
+        func strings(_ map: [String: String]) -> JSONValue { .object(JSONObject(map.map { ($0.key, .string($0.value)) })) }
+        func flags(_ map: [String: Bool]) -> JSONValue { .object(JSONObject(map.map { ($0.key, .bool($0.value)) })) }
+        func numbers(_ list: [Double]) -> JSONValue { .array(list.map { .number($0) }) }
+        return .object(JSONObject([
+            ("Hotkey", .string(settings.hotkey)),
+            ("HotkeyRefreshAll", .string(settings.hotkeyRefreshAll)),
+            ("HotkeyTogglePin", .string(settings.hotkeyTogglePin)),
+            ("WarningThresholdPercent", integer(settings.warningThresholdPercent)),
+            ("CriticalThresholdPercent", .number(settings.criticalThresholdPercent)),
+            ("AlertPoints", numbers(settings.alertPoints)),
+            ("RowAlerts", flags(settings.rowAlerts)),
+            ("RowAlertPoints", .object(JSONObject(settings.rowAlertPoints.map { ($0.key, numbers($0.value)) }))),
+            ("FollowSystemTheme", .bool(settings.followSystemTheme)),
+            ("ThemeOverride", .string(settings.themeOverride)),
+            ("Autostart", .bool(settings.autostart)),
+            ("RowShapes", strings(settings.rowShapes)),
+            ("LayoutColumns", .string(settings.layoutColumns)),
+            ("RowOrder", .object(JSONObject(settings.rowOrder.map { ($0.key, integer($0.value)) }))),
+            ("RowVisibility", flags(settings.rowVisibility)),
+            ("TrayIconStyle", .string(settings.trayIconStyle)),
+            ("GaugeMetric", .string(settings.gaugeMetric)),
+            ("Language", .string(settings.language)),
+            ("NotifyOnThreshold", .bool(settings.notifyOnThreshold)),
+            ("UiScale", .number(settings.uiScale)),
+            ("Glassmorphism", .bool(settings.glassmorphism)),
+            ("GlassStrength", .string(settings.glassStrength)),
+            ("PopupGraph", .string(settings.popupGraph)),
+            ("PopupPosition", .string(settings.popupPosition)),
+            ("LastPopupX", integer(settings.lastPopupX)),
+            ("LastPopupY", integer(settings.lastPopupY)),
+            ("ShapeTheme", .string(settings.shapeTheme)),
+            ("ColorTheme", .string(settings.colorTheme)),
+            ("TimeDisplayMode", .string(settings.timeDisplayMode)),
+            ("IsPinned", .bool(settings.isPinned)),
+            ("Providers", .object(JSONObject(settings.providers.sorted { $0.key < $1.key }.map { id, provider in
+                (id, .object(JSONObject([
+                    ("Enabled", .bool(provider.enabled)),
+                    ("RefreshSeconds", integer(provider.refreshSeconds)),
+                    ("ShowSecondaryRows", .bool(provider.showSecondaryRows)),
+                    ("ShowCredits", .bool(provider.showCredits)),
+                    ("Command", .string(provider.command)),
+                    ("AutoRenewSession", .bool(provider.autoRenewSession)),
+                    ("CreditsFullAmount", .number(provider.creditsFullAmount)),
+                ])))
+            }))),
+        ]))
     }
 
     // Each list in the input is answered by a list in the same order: expiry

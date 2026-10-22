@@ -1,0 +1,4 @@
+{
+  "description": "An empty settings.json object loads every default, and the codex provider is always added.",
+  "settings": {}
+}

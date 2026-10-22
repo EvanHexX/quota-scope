@@ -1,0 +1,13 @@
+{
+  "description": "A hand-edited null for each collection loads as empty instead of null, and a null Providers still gets the codex provider with its defaults. The other keys in the file load as usual.",
+  "settings": {
+    "WarningThresholdPercent": 15,
+    "Providers": null,
+    "RowShapes": null,
+    "RowOrder": null,
+    "RowVisibility": null,
+    "AlertPoints": null,
+    "RowAlerts": null,
+    "RowAlertPoints": null
+  }
+}

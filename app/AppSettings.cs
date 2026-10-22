@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using QuotaScope.Providers;
 
 namespace QuotaScope;
 
@@ -139,6 +141,16 @@ internal sealed class AppSettings
         settings.GetProvider("codex");
         return settings;
     }
+
+    // Samples live in fixtures/settings (docs/MACOS_BUILD.md, section 5): each
+    // input's "settings" is a whole settings.json, loaded through FromJson.
+    public static bool RunSelfTest() =>
+        UsageFixtures.Run("settings", input => Describe(FromJson(input.GetProperty("settings").GetRawText())));
+
+    // The fixture form of loaded settings: every key with its value, providers
+    // included, in the shape Save writes. It is built from the properties, so
+    // a key added here without its expected value fails the fixtures.
+    public static JsonNode Describe(AppSettings settings) => JsonSerializer.SerializeToNode(settings)!;
 
     // Written to a temporary file and moved over the old one, so a crash or
     // power loss mid-write cannot leave a truncated settings.json behind.
