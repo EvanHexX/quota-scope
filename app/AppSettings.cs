@@ -90,8 +90,14 @@ internal sealed class AppSettings
 
     public static string SettingsPath => Path.Combine(AppContext.BaseDirectory, "settings.json");
 
+    // Set when settings.json existed but could not be read. The app then runs
+    // on defaults, and its first save would overwrite the user's file, so the
+    // unreadable file is kept next to it as settings.json.bad first.
+    public static string? LoadWarning { get; private set; }
+
     public static AppSettings Load()
     {
+        LoadWarning = null;
         if (!File.Exists(SettingsPath))
         {
             return new AppSettings();
@@ -100,23 +106,41 @@ internal sealed class AppSettings
         try
         {
             var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath)) ?? new AppSettings();
-            settings.GetProvider("codex");
-            // A hand-edited null would otherwise reach the alert checks that run
-            // on every usage update.
+            // A hand-edited null would otherwise reach code that runs on every
+            // usage update (row order, visibility, shapes, alert checks).
+            settings.Providers ??= new(StringComparer.OrdinalIgnoreCase);
+            settings.RowShapes ??= new(StringComparer.OrdinalIgnoreCase);
+            settings.RowOrder ??= new(StringComparer.OrdinalIgnoreCase);
+            settings.RowVisibility ??= new(StringComparer.OrdinalIgnoreCase);
             settings.AlertPoints ??= new();
             settings.RowAlerts ??= new(StringComparer.OrdinalIgnoreCase);
             settings.RowAlertPoints ??= new(StringComparer.OrdinalIgnoreCase);
+            settings.GetProvider("codex");
             return settings;
         }
-        catch
+        catch (Exception ex)
         {
+            var backup = SettingsPath + ".bad";
+            try
+            {
+                File.Copy(SettingsPath, backup, overwrite: true);
+                LoadWarning = $"settings.json could not be read ({ex.Message}); using defaults. The file was kept as settings.json.bad.";
+            }
+            catch
+            {
+                LoadWarning = $"settings.json could not be read ({ex.Message}); using defaults.";
+            }
             return new AppSettings();
         }
     }
 
+    // Written to a temporary file and moved over the old one, so a crash or
+    // power loss mid-write cannot leave a truncated settings.json behind.
     public void Save()
     {
         var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(SettingsPath, json);
+        var temporary = SettingsPath + ".tmp";
+        File.WriteAllText(temporary, json);
+        File.Move(temporary, SettingsPath, overwrite: true);
     }
 }
