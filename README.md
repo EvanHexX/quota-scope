@@ -118,6 +118,7 @@ QuotaScope is designed as a local utility.
 - The Claude access token is read per poll for the request only and is never stored, copied, or logged by the app.
 - It does not include telemetry, analytics, or remote logging.
 - It stores settings locally.
+- It keeps a few files next to the executable: `settings.json`, `crash.log` (errors and restarts, no usage data), and `claude_usage_last.json`, the last Claude usage response kept for diagnostics (usage numbers only, never the token).
 
 ## Current limitations
 
