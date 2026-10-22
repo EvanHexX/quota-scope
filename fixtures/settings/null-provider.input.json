@@ -1,0 +1,10 @@
+{
+  "description": "A null provider entry loads as that provider's defaults, so code that asks for the provider never gets null. A null codex entry gets the codex defaults the same way.",
+  "settings": {
+    "WarningThresholdPercent": 30,
+    "Providers": {
+      "claude": null,
+      "codex": null
+    }
+  }
+}
