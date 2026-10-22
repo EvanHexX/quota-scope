@@ -1,6 +1,13 @@
 # macOS Build Plan
 
-> Status as of 2026-10-17: **the macOS app reaches Windows parity and passed the manual smoke test** (10; f6ba95a, installed build, macOS 15.6.1). Phases 4 and 5 are done: the menu bar app with settings, notifications, global hotkeys, shapes and columns, start at login, and `mac/build.sh`. Phase 3's last two Mac checks were answered on 2026-10-17. The app's `claude mcp list` renewed the token at 19:53 KST, and the Keychain item's `mdat` moved. The refresh also brought the Keychain prompt back, so the token is now read through `/usr/bin/security` (M15, 6.1). On the Mac (build 136, 60a97ec): a new build showed Claude usage with no Keychain prompt for the first time, and turning Claude off touched nothing. Whether reads stay prompt-free after the next token refresh is checked the next morning. On 2026-10-17 `QuotaCore` built and passed all 53 fixture cases on macOS 15.6.1 arm64 with the Command Line Tools alone, and the Codex half of phase 0 was answered (9). Phase 0 is done as far as it can be without the app (9). Phase 1 (shared fixtures, Windows side: 1a mappers, 1b renewer, hotkeys, rows, alerts) is done. Phase 2 is done too: `QuotaCore` (models, mappers, rows, alerts, settings model, hotkey grammar) is ported to Swift and passes all six fixture folders (57 cases), built and run on Windows (7.3). Phase 3 has started: `QuotaProviders` (the Codex and Claude providers, the renewer, command and credential lookup) is written and passes 42 checks against fakes on Windows and on macOS (4b3e03c; macOS 15.6.1 arm64, Command Line Tools only, Swift 6.1.2: no warnings, 57/57 fixtures, 42/42 provider checks, no fake process left behind). Two of the four checks that touch real credentials are answered from the app (the Keychain payload and its access prompt; see 7.3); `mdat` on refresh and a real `claude mcp list` renewal are still open. Items marked **(verify)** are assumptions to check on the target Mac in phase 0.
+> Status as of 2026-10-22:
+>
+> - **The macOS app reaches Windows parity and passed the manual smoke test** (10; f6ba95a, installed build, macOS 15.6.1, 2026-10-17). It is built from source with `mac/build.sh`; there is no Mac download.
+> - Phases 0 to 5 are done (9). Phase 6 (docs) is done except for the item left in its row.
+> - Counts: the Swift fixture self-test passes 74 cases in 9 folders (codex 19, claude 10, rows 9, alerts 14, hotkeys 3, renewer 4, layout 6, resettext 1, settings 8), and `quotascope-providertest` passes 52 checks, on Windows and on macOS. CI (`.github/workflows/ci.yml`) runs both on macOS, and both C# `--self-test`s on Windows, on every push.
+> - Claude's token is read through `/usr/bin/security` (M15, 6.1). A new build showed Claude usage with no Keychain prompt, and turning Claude off touched nothing (build 136, 60a97ec). Still open: whether reads stay prompt-free after the next token refresh, and the reboot case since M15 (10).
+>
+> Other counts in this file (53, 57, 66 fixture cases; 42 provider checks) are dated records of the state at that time.
 
 ## 1. Goal and constraints
 
@@ -9,7 +16,7 @@ Build a macOS version of QuotaScope that:
 - is **built from source on the Mac that runs it**. No Apple Developer Program membership, no Developer ID certificate, no notarization, no App Store.
 - **looks and behaves like a native Mac menu bar utility**, not like a port of the Windows tray popup.
 - keeps the provider whitelist (Codex, Claude), the local-only privacy model, and the "token is read per poll and never stored or logged" rule.
-- leaves the released Windows app (`app-winui/`) and the legacy app (`app/`) building and behaving exactly as today. The only Windows-side change is moving self-test samples into shared fixture files (section 5).
+- leaves the released Windows app (`app-winui/`) and the legacy app (`app/`) building and behaving exactly as before. The Windows-side changes are the shared fixture files and the self-tests that read them (section 5), plus moving the row layout and reset-time text into testable shared code (7.3, phase 5).
 
 What "no developer account" means in practice:
 
@@ -51,7 +58,7 @@ The risk A creates is **drift**: the two implementations answering the same payl
 QuotaScope.app
 └─ Contents/
    ├─ MacOS/QuotaScope         one Swift binary: UI + providers + settings
-   ├─ Resources/               AppIcon.icns, Localizable.xcstrings (en, ko), fixtures/ (for --self-test)
+   ├─ Resources/               empty for now: no app icon yet, and strings come from Loc (M14)
    └─ Info.plist               LSUIElement = YES (no Dock icon)
 ```
 
@@ -111,8 +118,8 @@ Principle: use system components and system styling, and drop Windows features w
 | Glassmorphism + 4 strengths | System materials (`.regularMaterial` etc.) are already the default look | Drop the setting on macOS |
 | UI scale 80–150 % | Drop; macOS users scale with display settings | Possibly a small/regular row density toggle |
 | Global hotkeys (`Ctrl+Alt+U` default) | Carbon `RegisterEventHotKey` (no Accessibility permission needed) | Default `⌃⌥U` (same physical keys). Settings strings keep the `Ctrl+Alt+U` grammar, see 6.3 |
-| Tray notifications | `UNUserNotificationCenter` | Asks for permission on first alert **(verify that an ad-hoc signed app can request it)** |
-| Start with Windows (HKCU Run) | `SMAppService.mainApp.register()` (macOS 13+) | Shows up in System Settings → Login Items **(verify with ad-hoc signing)** |
+| Tray notifications | `UNUserNotificationCenter` | Asks for permission at launch when notifications are on, or when they are switched on (3.3). Works with a locally signed app: a real banner showed in the smoke test (10, 2026-10-17) |
+| Start with Windows (HKCU Run) | `SMAppService.mainApp.register()` (macOS 13+) | Shows up in System Settings → Login Items. Start at login after a reboot passed in the smoke test (10, 2026-10-17) |
 | EN/KO UI (`Loc.cs`) | `Loc` in `QuotaCore`, as on Windows (**decision M14**, 2026-10-17: no String Catalog) | Language setting: System / English / Korean, applied live. Every app string goes through `Loc.t` with the `Loc.cs` wording. A String Catalog would follow only the system language, change only after a relaunch, and needs Xcode's `xcstringstool` to compile, which the Command Line Tools lack. `Info.plist` declares `en` and `ko` so system-drawn text (text field menus, the permission prompts) follows the system language |
 | Reconnect opens `cmd /k claude /login` | Open Terminal.app running `claude /login` through a temporary `.command` file opened with `NSWorkspace` | Avoids the Automation permission that `osascript` would need |
 | Crash log next to exe | `~/Library/Logs/QuotaScope/` | |
@@ -133,7 +140,7 @@ Line counts are the C# logic **before** each file's self-test section.
 | `app/Providers/CreditsGauge.cs`, `UsageModels.cs` | ~100 | `QuotaCore` | Fixtures (5) |
 | `app-winui/RowShapes.cs` | ~140 | `QuotaCore` | Fixtures (5) |
 | `app-winui/UsageAlerts.cs` | ~135 | `QuotaCore` | Fixtures (5) |
-| `app/AppSettings.cs` (model only) | ~90 | `QuotaCore` (`Codable`) | Fixtures (5): same JSON in, same values out |
+| `app/AppSettings.cs` (model only) | ~90 | `QuotaCore` (a hand-written reader over the ordered JSON value, not `Codable`) | Fixtures (5): `settings/`, same JSON in, same values out |
 | `app/Hotkeys/HotkeyDefinition.cs` (grammar only) | ~100 | `QuotaCore` | Fixtures (5) |
 | `app/Providers/Codex/CodexAppServerClient.cs` | ~335 | `QuotaProviders` | Behavior checklist (4.2) |
 | `app/Providers/Claude/ClaudeUsageProvider.cs` | ~310 | `QuotaProviders` | Behavior checklist (4.2) |
@@ -148,7 +155,7 @@ The provider and renewer code encodes findings that were measured, not designed.
 
 Claude:
 
-- Only `claude mcp list` makes Claude Code refresh its token; `claude auth status` does not (measured 2026-08-13, claude 2.x). **(verify on macOS)**
+- Only `claude mcp list` makes Claude Code refresh its token; `claude auth status` does not (measured 2026-08-13, claude 2.x). On macOS the app's `claude mcp list` renewed the token too (2026-10-17, 19:53 KST; 6.1).
 - Proactive renew starts at 15 minutes before `expiresAt`. A proactive nudge that changes nothing is **not** a failure: retry after 2 minutes, never give up.
 - A recovery nudge (after expiry or a 401) that changes nothing **is** a failure: cooldown 2 m → 10 m → 30 m, stop after 5 in a row until the credentials change.
 - After a 401, pause polling until the credentials change, then resume immediately.
@@ -205,8 +212,9 @@ fixtures/
   resettext/                            done: 1 case, 8 reset times (phase 5)
     seoul-afternoon.input.json          { "description", "now": "<ISO with the local offset>", "resetsAt": [ISO | null, …] }
     seoul-afternoon.expected.json       { "results": [{ "clock": { "en", "ko" }, "remaining": { "en", "ko" } }, …] }
-  settings/                             not yet: no C# self-test to move; added with the settings model port
-    *.json + *.expected.json            settings.json files, including old ones, and the values they load to
+  settings/                             done: 8 cases
+    v1.0.0-file.input.json              { "description", "settings": <a whole settings.json> }
+    v1.0.0-file.expected.json           every key the file loads to, providers included (the shape Save writes, via AppSettings.Describe)
 ```
 
 Every folder uses the same `<case>.input.json` / `<case>.expected.json` pairs and the same comparison (below). Each input has a `description`. Settings, wherever an input carries them, are a `settings.json` fragment with the Windows key names (`"AlertPoints"`, `"RowShapes"`, `"Providers": { "codex": { "ShowCredits": … } }`); C# loads it through `AppSettings.FromJson`, the same path `settings.json` takes, so absent keys keep their defaults.
@@ -239,8 +247,11 @@ The other folders answer lists in their input with lists in the same order. A ke
 
 - `renewer/` (`ClaudeSessionRenewer`): `expiresAt` timestamps (null = unreadable) are checked against `now` and answered by `expiring`; `failures` (failed attempts in a row) by `cooldownMinutes`; `attempts` (`{ "renewed", "recovery", "failures" }`) by `delayMinutes`, the wait before the next attempt. A delay of `null` means the renewer has given up until the credentials file changes.
 - `hotkeys/` (`HotkeyDefinition`): each text (`null` allowed) gives `{ "ok": false }`, or the binding: `modifiers` as the Win32 `MOD_*` flags (Alt 1, Ctrl 2, Shift 4, Win 8), `virtualKey` as the Windows virtual-key code, the canonical `formatted` text, and `reparses`, whether that text parses back to the same binding. macOS keeps these numbers as the stored meaning and maps them to its own key codes.
-- `rows/` (`RowShapes`): each row under the case's settings gives its settings `key` (`<providerId>|<label>`), whether it is `visible`, and the `shape` it is drawn with (`Circle`, `Bars`, `Fill`). Display order (`RowOrder`) has no case yet.
+- `rows/` (`RowShapes`): each row under the case's settings gives its settings `key` (`<providerId>|<label>`), whether it is `visible`, and the `shape` it is drawn with (`Circle`, `Bars`, `Fill`). Display order (`RowOrder`) is checked by `layout/` (for example `order-visibility-one-column`).
+- `settings/` (`AppSettings.FromJson`): the cases cover an empty object (defaults), files from v0.1.0 and v1.0.0, every current key set, explicit `null` for each collection (loads as empty, `codex` still added), a `null` provider entry (loads as that provider's defaults), unknown or wrong-case keys (ignored), and unknown and differently cased provider ids (kept as written, plus `codex`). The expected form is built from the properties, so a key added to `AppSettings.cs` fails the C# self-test until its expected values exist, and the Swift `describe` must list it too. The Mac-only `GaugeMetric` default (M12) is applied in the app's `SettingsStore.swift`, outside the shared loader, so the fixtures pin the shared default `Used`.
 - `alerts/` (`UsageAlerts`, `UsageAlertTracker`): `parse` entries (`{ "text", "credits" }`) give the parsed points and how the box writes them back, or `{ "ok": false }`. `steps` run in order through one tracker (`silentFirstSight` for one created after a self-restart); each step's `usages` are `ProviderUsage` objects in the mapper expected form (only `label` is required per row; no `usedPercent` means no window). A step's own `settings` replace the case's from that step on. Each step gives its `alerts` (`providerId`, `label`, `point`, `remaining`, `critical`) and the `notification` they make, in English (`null` when there are none). The tray and row warning colors have no case yet.
+
+`quotascope-selftest` also checks that `Fixtures.folders` matches the directories under `fixtures/` both ways, so a new folder without a Swift evaluator, or a listed folder that is gone, fails it.
 
 ### 5.2 Rules
 
@@ -267,7 +278,7 @@ Moving the samples out of the C# self-tests is the only change to the Windows ap
 - Sequences that mutated one settings object between checks became either separate cases (one settings each) or steps with their own `settings`, so each expected value sits next to the settings it was computed under. Alert sequences that used fresh trackers on unrelated rows became separate cases.
 - The renewer's expiry checks take `now` from the input instead of `DateTimeOffset.Now`. The alerts self-test sets English before comparing notifications.
 - `UsageFixtures.Run` now takes any `JsonElement → JsonNode` evaluation; the mapper form is a wrapper over it. Its input readers (`ReadSettings`, `ReadUsage`, `ReadTimestamp`, `Optional`) are shared by the four tests. `AppSettings.FromJson` is `AppSettings.Load` without the file, so fixture settings load as `settings.json` does.
-- The legacy project embeds only the folders its own self-tests read: `codex/`, `claude/`, `renewer/`, `hotkeys/`. `rows/` and `alerts/` are embedded in the WinUI project only.
+- The legacy project embeds only the folders its own self-tests read: `codex/`, `claude/`, `renewer/`, `hotkeys/` (and, since 2026-10-22, `settings/`). `rows/` and `alerts/` are embedded in the WinUI project only.
 - Verified: both projects build with 0 warnings and `--self-test` exits 0 on both exes. Corrupting one expected value in each new folder makes it exit 1 (both exes for `renewer/` and `hotkeys/`, WinUI for `rows/` and `alerts/`), e.g. `fixtures/hotkeys/canonical-format: $.results[3].formatted: expected "Ctrl+PgDn", got "Ctrl+PageDown"`.
 
 **Adding a case.** Write the `.input.json`, then write the `.expected.json` by hand from what the behavior should be, and run `--self-test`. A mismatch prints the first differing path. Do not copy the current output into the expected file without reading it; a fixture written that way only proves that the code does what it already does.
@@ -287,8 +298,8 @@ Answered in phases 4 and 3 with the real app (2026-10-17):
 - **`mdat` moves** when Claude Code refreshes the token, and `cdat` stays the same.
 - **Attribute-only reads** (the `mdat` watch, the existence check) do not prompt. Data reads did, until M15 moved them to `/usr/bin/security` (below).
 
-- `KeychainCredentialSource` reads the item with `SecItemCopyMatching`, parses it in memory, uses the token for the one request, and drops it. Never cached, copied, or logged.
-- **Change detection** (replaces the Windows `FileSystemWatcher`): poll the item's modification date every few seconds via an attributes-only query (`kSecReturnAttributes`, no `kSecReturnData`). **(verify that this does not trigger a Keychain prompt)**
+- `KeychainCredentialSource` reads the secret through `/usr/bin/security find-generic-password -w` (M15, below), parses it in memory, uses the token for the one request, and drops it. Never cached, copied, or logged. Only attribute reads use `SecItemCopyMatching`.
+- **Change detection** (replaces the Windows `FileSystemWatcher`): poll the item's modification date every few seconds via an attributes-only query (`kSecReturnAttributes`, no `kSecReturnData`). This does not prompt (checked 2026-10-17, above).
 - Fall back to `~/.claude/.credentials.json` with a file watcher if that file exists (Claude Code uses it when the Keychain is unavailable).
 
 **Keychain prompts.** The item's ACL belongs to Claude Code, so a direct read from the app shows a "QuotaScope wants to use your confidential information…" prompt.
@@ -367,7 +378,7 @@ Phase 0 results (2026-10-17, macOS 15.6.1 arm64, reported from the Agent Summit 
 | Crash log | next to the exe | `~/Library/Logs/QuotaScope/` |
 | `claude_usage_last.json` diagnostic dump | next to the exe | `~/Library/Application Support/QuotaScope/` |
 
-- **Same JSON schema and key names** as `AppSettings.cs`, enforced by the `settings/` fixtures. No Windows key is renamed or dropped. macOS ignores Windows-only keys (`UiScale`, `Glassmorphism`, `GlassStrength`, `LastPopupX/Y`); keys added for macOS (`MenuBarText`) are ignored by Windows. Unknown keys are preserved on save where practical.
+- **Same JSON schema and key names** as `AppSettings.cs`, enforced by the `settings/` fixtures (8 cases: defaults, v0.1.0 and v1.0.0 files, every key, null collections, a null provider entry, unknown keys, unknown provider ids; 5.1). No Windows key is renamed or dropped. macOS ignores Windows-only keys (`UiScale`, `Glassmorphism`, `GlassStrength`, `LastPopupX/Y`); keys added for macOS (`MenuBarText`) are ignored by Windows. Unknown keys are preserved on save where practical.
 - Hotkey strings keep the `Ctrl+Alt+U` grammar of `HotkeyDefinition` unchanged; the Mac UI shows `Ctrl→⌃`, `Alt→⌥`, `Shift→⇧`, and **`Win→⌘`** (decided 2026-10-17, replacing an earlier idea of a new `Cmd` token). The Windows key and ⌘ sit in the same place on their keyboards, the grammar already has `Win` (`MOD_WIN`), and no new token means no parser change on either side. The recorder writes `Win+…` for a ⌘ binding, and the same string means the Windows key on Windows. The keys themselves are mapped from Windows virtual-key codes to Carbon key codes in the Mac app.
 
 ## 7. Building on the Mac without an account
@@ -383,14 +394,14 @@ Phase 0 results (2026-10-17, macOS 15.6.1 arm64, reported from the Agent Summit 
 mac/build.sh [--release] [--install]
 ```
 
-1. `swift build -c release` in `mac/` (Swift Package Manager, no `.xcodeproj`).
-2. Run the built binary with `--self-test` (fixtures read from `../fixtures`); stop on failure.
-3. Assemble `QuotaScope.app`: binary, `Info.plist` (bundle id `io.github.evanhexx.quotascope`, `LSUIElement`, version from the latest git tag), icon, string catalog, a copy of `fixtures/`.
+1. `swift build` in `mac/` (Swift Package Manager, no `.xcodeproj`): debug by default, `-c release` with `--release`.
+2. Run `quotascope-selftest` (the shared fixtures, read from `../fixtures`) and `quotascope-providertest` (the providers against fakes) from the build output; stop on failure. The app binary itself has no `--self-test` flag.
+3. Assemble `QuotaScope.app`: the binary and a generated `Info.plist` (bundle id `io.github.evanhexx.quotascope`, `LSUIElement`, `en` and `ko` localizations, version from the latest git tag, build number from the commit count). No app icon yet (Finder shows the generic one; the menu bar glyph is drawn in code), no string catalog (M14), and no fixtures in the bundle.
 4. Sign with `$QUOTASCOPE_SIGN_IDENTITY` or `-` (ad-hoc). Hardened runtime is not needed locally.
 5. `codesign --verify --strict` and print which identity was used.
 6. With `--install`, quit a running copy and copy the app to `~/Applications/`.
 
-`--self-test` mirrors the Windows convention and works with the Command Line Tools alone. `swift test` can run the same fixture checks during development. **Use Swift Testing (`import Testing`), not XCTest.** Verified 2026-10-17 on the Command Line Tools (Swift 6.1.2, SDK 15.5): XCTest is not available there (`no such module`), and Swift Testing works with the package's macOS 13 platform.
+Both test executables work with the Command Line Tools alone. There are no `swift test` targets yet; if some are added, **use Swift Testing (`import Testing`), not XCTest.** Verified 2026-10-17 on the Command Line Tools (Swift 6.1.2, SDK 15.5): XCTest is not available there (`no such module`), and Swift Testing works with the package's macOS 13 platform.
 
 ### 7.3 Developing `QuotaCore` on Windows
 
@@ -413,9 +424,9 @@ What exists (`mac/Sources/QuotaCore`):
 | `UsageModels.swift`, `CreditsGauge.swift` | `UsageModels.cs`, `CreditsGauge.cs` | `codex/`, `claude/` |
 | `RateLimitMapper.swift` | `RateLimitMapper.cs`, including the rolling-update merge | `codex/` (19 cases) |
 | `ClaudeUsageMapper.swift` | `ClaudeUsageMapper.cs` | `claude/` (10 cases) |
-| `AppSettings.swift` | the settings model and `FromJson` in `AppSettings.cs` (loading only; saving comes with the app) | `rows/`, `alerts/` |
+| `AppSettings.swift` | the settings model and `FromJson` in `AppSettings.cs` (loading; the app's `SettingsStore.swift` saves, rewriting only the keys it changed) | `settings/`, `rows/`, `alerts/`, `layout/` |
 | `RowShapes.swift` | `RowShapes.cs` | `rows/` (9 cases) |
-| `UsageAlerts.swift` | `UsageAlerts.cs`, including the tracker | `alerts/` (12 cases) |
+| `UsageAlerts.swift` | `UsageAlerts.cs`, including the tracker | `alerts/` (14 cases) |
 | `HotkeyDefinition.swift` | `Hotkeys/HotkeyDefinition.cs`: parse, canonical format, the named-key table. The model stays Windows `MOD_*` flags and virtual-key codes; Carbon key codes come with the app | `hotkeys/` (3 cases) |
 | `Loc.swift` | the row naming (`RowLabel`) and the reset-time text (`ResetText`, `ResetClock`, `ResetIn`) in `Loc.cs`, formatted by hand rather than with `DateFormatter`, so the text does not depend on the system's locale data | `alerts/` notification bodies (English and Korean), `resettext/` |
 | `RowLayout.swift` | `app-winui/RowLayout.cs`: visible rows in the user's order, the two-column decision, and which cards share a line | `layout/` (6 cases) |
@@ -429,7 +440,7 @@ Matching .NET took deliberate code in four places:
 - **Number text:** `"0.##"` formatting takes 15 significant digits and rounds half away from zero, as .NET does. `Math.Round` is ties-to-even. Point parsing accepts what `NumberStyles.Float` accepts, and refuses Swift-only forms such as hex or `inf`.
 - **Settings:** dictionary keys compare exactly. The C# defaults are declared case-insensitive, but System.Text.Json replaces them with plain dictionaries on load.
 
-The renewer's timing rules are now `ClaudeRenewalPolicy.swift` in QuotaCore, checked by `fixtures/renewer` (4 cases). That brings the self-test to 57 cases in 6 folders.
+The renewer's timing rules are now `ClaudeRenewalPolicy.swift` in QuotaCore, checked by `fixtures/renewer` (4 cases). That brought the self-test to 57 cases in 6 folders at the time (now 74 in 9; see the end of this list).
 
 Phase 5 shared work (2026-10-17):
 
@@ -438,6 +449,8 @@ Phase 5 shared work (2026-10-17):
 - Two Korean notification cases joined `fixtures/alerts`. An input may set `"language": "Korean"`, and English is restored after each case.
 - Both new folders (`layout`, `resettext`) are embedded in the WinUI project only, since the legacy app has neither the layout nor the reset text.
 - The Swift port passes all 8 folders (66 cases).
+
+Settings fixtures (2026-10-22): `fixtures/settings/` (8 cases, 5.1) is read by `AppSettings.RunSelfTest` in both C# projects, which embed `fixtures/settings/*.json`, and by the Swift self-test. That makes 74 cases in 9 folders.
 
 Checked: a corrupted expected value in each folder, or a missing expected file, makes the self-test exit 1.
 
@@ -501,23 +514,25 @@ swift run quotascope-providertest
 
 Results (2026-10-17):
 
-- **Windows:** 42 checks ok. A clean build shows no warnings in `mac/Sources`, and no `fake-codex-app-server` process is left behind.
+- **Windows:** 42 checks ok at the time. A clean build shows no warnings in `mac/Sources`, and no `fake-codex-app-server` process is left behind.
 - **macOS** (4b3e03c, 15.6.1 arm64, Command Line Tools only, Swift 6.1.2): `swift build` and `swift build -c release` with no warnings, 57/57 fixtures, and 42/42 provider checks. No fake process is left behind. A code review on the Mac confirmed that the test creates no `SecItemCopyMatching`, `URLSessionUsageTransport`, or real codex lookup.
+- **Now (2026-10-22):** the provider test has grown to 52 checks and the fixtures to 74 cases; both pass on Windows and in macOS CI.
 
-Only the Mac can check these, and live runs there need the maintainer's explicit go-ahead (6.2):
+Only the Mac can check these, and live runs there need the maintainer's explicit go-ahead (6.2). Answered on 2026-10-17 with the real app (6.1, 10):
 
-- `KeychainCredentialSource` against the real item: the payload format, whether an attributes-only read prompts, and whether `mdat` moves on refresh.
-- The `NSWorkspace` lookup and the login-shell `PATH`.
+- `KeychainCredentialSource` against the real item: the payload format, prompt-free attribute reads, and `mdat` moving on refresh.
+- The `NSWorkspace` lookup: a Finder-style launch with no shell `PATH` found the app-server in the ChatGPT.app bundle.
 - The real `claude mcp list` renewal.
-- SIGPIPE handling when the app-server dies.
 - The app-server started from a Finder-launched app.
+
+Not recorded in this file: SIGPIPE handling when the app-server dies, and the login-shell `PATH` lookup for a CLI outside the known locations.
 
 ### 7.4 Permissions the user will see
 
 | Prompt | When | Avoidable? |
 |---|---|---|
 | Keychain access for `Claude Code-credentials` | Not expected since M15 | Yes: the secret is read through `/usr/bin/security`, already trusted by the item (6.1) |
-| Notifications | First alert | No (system rule) |
+| Notifications | At launch when notifications are on, or when they are switched on (3.3) | No (system rule) |
 | Login item notice | When "Start at login" is turned on | No (system rule) |
 
 No Accessibility, Screen Recording, Full Disk Access, or Automation permission should be needed. If one shows up, treat it as a bug.
@@ -526,32 +541,31 @@ No Accessibility, Screen Recording, Full Disk Access, or Automation permission s
 
 ```
 fixtures/                    shared input/expected pairs (section 5); used by C# and Swift
-mac/Package.swift            SwiftPM package: QuotaCore, QuotaProviders, quotascope-selftest, quotascope-providertest, fake-codex-app-server; QuotaScope (the app, macOS only) later
-mac/Sources/QuotaCore/…      exists: models, mappers, rows, alerts, settings model, hotkey grammar (7.3)
-mac/Sources/quotascope-selftest/…  exists: runs QuotaCore against ../fixtures
-mac/Sources/QuotaProviders/…      exists: providers, renewer, command and credential lookup (7.3)
-mac/Sources/quotascope-providertest/…, fake-codex-app-server/…  exist: provider checks against fakes
-mac/Sources/QuotaProviders/…
-mac/Sources/QuotaScope/…
-mac/Tests/…                  optional Swift Testing targets over the same fixtures (not XCTest; see 7.2)
-mac/Resources/…              Info.plist template, icon, Localizable.xcstrings
-mac/build.sh
+mac/Package.swift            SwiftPM package: QuotaCore, QuotaProviders, QuotaScope (the app, macOS only), quotascope-selftest, quotascope-providertest, fake-codex-app-server
+mac/Sources/QuotaCore/…      models, mappers, rows, layout, alerts, reset text, settings model, hotkey grammar (7.3)
+mac/Sources/QuotaProviders/…  providers, renewer, command and credential lookup (7.3)
+mac/Sources/QuotaScope/…     the menu bar app: status item, popover and pinned panel, settings window and store, hotkeys, notifications
+mac/Sources/quotascope-selftest/…  runs QuotaCore against ../fixtures
+mac/Sources/quotascope-providertest/…, fake-codex-app-server/…  provider checks against fakes
+mac/build.sh                 build, self-tests, bundle, sign, install (7.2)
 docs/MACOS_BUILD.md          this file
 ```
 
-`app-winui/` and `app/` change only as described in 5.3. No namespace change, no shared-file `OperatingSystem.IsMacOS()` branches.
+There is no `mac/Tests` or `mac/Resources` directory; `build.sh` generates the `Info.plist`.
+
+`app-winui/` and `app/` change only as described in 5.3 and 7.3 (phase 5 shared work, settings fixtures). No namespace change, no shared-file `OperatingSystem.IsMacOS()` branches.
 
 ## 9. Phases
 
 | Phase | Deliverable | Verified by |
 |---|---|---|
-| **0. Spike on the Mac** | Answers to every **(verify)** item: Keychain item name and format, attributes read without prompt, `claude mcp list` refresh on macOS, ChatGPT.app bundle ID and its bundled `codex app-server` started from a Finder-launched app next to a running ChatGPT.app, `SMAppService` and notifications with ad-hoc vs self-signed, available Swift test framework. **Done (2026-10-17) as far as it can be without the app:** the test framework (Swift Testing), the bundle IDs, the app-server with and without ChatGPT.app running, update behavior, the Keychain item location (service only, empty account), and QuotaCore on macOS (53/53). Moved to phase 3, where they need the real app: the Keychain payload format, `mdat` on refresh, a prompt-free attribute read, `claude mcp list` refresh, `SMAppService` and notifications, and a Finder-launched start | Notes added to this file (6.1, 6.2, 7.2) |
+| **0. Spike on the Mac** | Answers to the open Mac questions: Keychain item name and format, attributes read without prompt, `claude mcp list` refresh on macOS, ChatGPT.app bundle ID and its bundled `codex app-server` started from a Finder-launched app next to a running ChatGPT.app, `SMAppService` and notifications with ad-hoc vs self-signed, available Swift test framework. **Done (2026-10-17) as far as it can be without the app:** the test framework (Swift Testing), the bundle IDs, the app-server with and without ChatGPT.app running, update behavior, the Keychain item location (service only, empty account), and QuotaCore on macOS (53/53). Moved to phase 3, where they need the real app: the Keychain payload format, `mdat` on refresh, a prompt-free attribute read, `claude mcp list` refresh, `SMAppService` and notifications, and a Finder-launched start | Notes added to this file (6.1, 6.2, 7.2) |
 | **1. Fixtures (Windows)** | `fixtures/` extracted from the C# self-tests, embedded in both projects (5.3). 1a (mappers) and 1b (renewer, hotkeys, rows, alerts) done | Both Windows projects build; `--self-test` passes on both; case count unchanged |
-| **2. `QuotaCore` in Swift** | Models, mappers, credits gauge, row resolution, alerts, settings model, hotkey grammar. **Done (2026-10-17)** on Windows (7.3) | Swift self-test passes every `QuotaCore` fixture: 53 cases (codex 19, claude 10, rows 9, alerts 12, hotkeys 3). `renewer/` waits for phase 3 |
+| **2. `QuotaCore` in Swift** | Models, mappers, credits gauge, row resolution, alerts, settings model, hotkey grammar. **Done (2026-10-17)** on Windows (7.3) | Swift self-test passed every `QuotaCore` fixture at the time: 53 cases (codex 19, claude 10, rows 9, alerts 12, hotkeys 3). Now 74 cases in 9 folders (7.3) |
 | **3. `QuotaProviders` in Swift** | Codex client, Claude client, Keychain source, renewer, command resolution. **Done (2026-10-17):** checked against fakes (52/52 on Windows and on macOS, 7.3), plus the four live checks, run with the maintainer's approval: the Keychain payload, prompt-free attribute reads, `mdat` moving on refresh, and a real renewal through the app's `claude mcp list` (19:53 KST). The live run found that a refresh resets the item's partition list, so the token read moved to `/usr/bin/security` (M15, c35dd31). The Mac check of M15 passed for a new build and for Claude turned off (build 136); the read after the next token refresh is still to be checked | Behavior checklist (4.2) reviewed item by item; unit tests with fake clock/process; live run against both providers |
 | **4. Menu bar MVP** | Status item with arc icon, popover with bars, refresh, right-click menu, settings file. **Built (2026-10-17, merged at 7ef321a):** status item with arc and warning/critical dot, popover with bars, click-to-toggle reset time, pinned panel, right-click menu, settings window (General, Providers, Appearance, Alerts, About; only changed keys are written), and `mac/build.sh`. The Mac session reports it running with real Codex and Claude data | Manual smoke test (10): **passed 2026-10-17** |
 | **5. Parity** | Gauges / fill / mix & match, columns, order and visibility, pin panel, time toggle, alerts + notifications, hotkeys, login item, EN/KO, settings window. **Split (decided 2026-10-17):** the QuotaScope thread handles shared logic and review: `RowLayout` + `fixtures/layout`, reset text + `fixtures/resettext`, Korean alert cases (all three done, 7.3), and merging the Mac branches. The Mac thread handles the app: notifications, global hotkeys (Windows virtual-key codes mapped to Mac key codes, plus the recorder), gauge, fill, and mix-and-match shapes and columns through `RowLayout`, start at login, and EN/KO through `Loc` (M14, instead of a String Catalog), with their settings tabs. **Done (2026-10-17, through cbe036e):** both halves merged | Manual smoke test (10): **passed 2026-10-17** |
-| **6. Docs** | README / README.ko "Build on macOS" section, platform badge, limitations; PROJECT_MAP entries for `mac/` and `fixtures/` | Review |
+| **6. Docs** | README / README.ko "Build on macOS" section, platform badge, limitations; PROJECT_MAP entries for `mac/` and `fixtures/`. **Done (2026-10-22):** both READMEs have the macOS build section, badge, and limitations; PROJECT_MAP lists `mac/`, `fixtures/`, and CI; AGENTS.md covers `mac/` and the fixture rule. Left: an app icon for the bundle (7.2) | Review |
 
 The README must not claim a macOS download, installer, Homebrew cask, or auto-update; only "build from source on your Mac".
 

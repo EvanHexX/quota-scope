@@ -1,10 +1,17 @@
 # WinUI 3 Port — Parity Checklist and Notes
 
-Branch: `feat/winui3-shell`. The WinForms app (`app/QuotaScope.csproj`) stays
-buildable and untouched until every parity item below passes. Retiring the
-WinForms app is a separate follow-up task after sign-off.
+Status: shipped. The port was built on `feat/winui3-shell` and released as
+`v1.0.0` on 2026-07-23; `app-winui/` is the released app. The WinForms project
+(`app/QuotaScope.csproj`) is not released but stays in the tree and keeps
+building, because the WinUI project compiles its shared files (see
+`AGENTS.md`). The notes below describe the app as it stands.
 
-## Parity checklist (all must pass before the WinForms app is replaced)
+## Parity checklist (historical: the gate before v1.0.0)
+
+The boxes were never ticked in this file, and the startup and memory
+comparison was not recorded (see Measurements). The list is kept as the
+record of what the port had to cover; the current manual smoke test is in
+`AGENTS.md`.
 
 - [ ] Tray icon appears and reflects usage percent
 - [ ] Tray left-click toggles the popup
@@ -16,7 +23,7 @@ WinForms app is a separate follow-up task after sign-off.
 - [ ] Codex + Claude shown together; labels/sections match the WinForms baseline
 - [ ] One provider failing leaves the other working
 - [ ] Startup time / memory compared against the WinForms version and recorded here
-- [ ] Packaging decision recorded (framework-dependent / self-contained / MSIX)
+- [x] Packaging decision recorded (framework-dependent / self-contained / MSIX): unpackaged and self-contained, see Build / deployment notes
 
 ## Dependency justifications (AGENTS.md rule: new production dependencies need documented reasons)
 
@@ -47,8 +54,9 @@ WinForms app is a separate follow-up task after sign-off.
   `app/Providers/**`) are compiled in via `<Compile Include>` file links.
   Those files are never edited from this project; `internal` visibility works
   because linked files compile into this assembly.
-- During coexistence each exe keeps its own `settings.json` next to its output
-  (both use `AppContext.BaseDirectory`). Pre-release policy: no migration.
+- Each exe keeps its own `settings.json` next to its output (both use
+  `AppContext.BaseDirectory`). Settings are not migrated between the two exes;
+  the compatibility policy in `AGENTS.md` applies to the settings keys.
 - Windows 10 fallback: the borderless popup uses
   `DWMWA_WINDOW_ROUNDED_CORNER_PREFERENCE`, which is Windows 11-only; on
   Windows 10 corners are square. Accepted.
@@ -206,7 +214,7 @@ WinForms app is a separate follow-up task after sign-off.
   are nearly clear and the row cards themselves are rendered as glass panes —
   a soft top-down sheen gradient plus a bright 1px rim — instead of a flat film
   over the backdrop.
-- `GlassStrength` (`Subtle` | `Medium` | `Strong`, picker shown while
+- `GlassStrength` (`Subtle` | `Medium` | `Strong` | `VeryStrong`, picker shown while
   glassmorphism is on) drives both layers together: surface alphas and rim
   brightness for the cards, tint/luminosity opacity for the acrylic controller.
 - Backdrops render as a flat fallback color when Windows "Transparency effects"
@@ -282,10 +290,8 @@ WinForms app is a separate follow-up task after sign-off.
   usage). Hotkey load warnings are additionally surfaced as a tray
   notification at startup, not only on the settings page.
 
-## Measurements (fill in during final verification)
+## Measurements
 
-| Metric | WinForms | WinUI 3 |
-|---|---|---|
-| Cold start to tray icon | | |
-| Private working set after 5 min | | |
-| Output folder size | | |
+Not recorded. The startup time, working set, and output size comparison
+against the WinForms app planned for the final verification was not filled in
+before `v1.0.0`.

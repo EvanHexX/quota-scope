@@ -1,6 +1,6 @@
 # QuotaScope Notes
 
-QuotaScope is a small Windows tray utility that shows Codex and Claude usage/rate limit information in a local popup.
+QuotaScope is a small Windows tray and macOS menu bar utility that shows Codex and Claude usage/rate limit information in a local popup. The macOS app (`mac/`) is built from source; its design and build notes are in `docs/MACOS_BUILD.md`, and most of these notes describe the Windows app.
 
 These are internal implementation notes. `README.md` at the repository root is the user-facing document.
 
@@ -18,7 +18,7 @@ The released app is the WinUI 3 project under `app-winui/`. `app/` holds the leg
 dotnet run --project app-winui/QuotaScope.WinUI.csproj
 ```
 
-For the built-in self-tests (Codex and Claude usage mappers, the Claude session renewer, the hotkey parser, row shape resolution, usage alerts, fill-card text contrast, and localization):
+For the built-in self-tests (Codex and Claude usage mappers, the Claude session renewer, the hotkey parser, settings loading, row shape resolution, row layout, usage alerts, fill-card text contrast, the graphics-adapter (DXGI) check, reset-time text, and localization):
 
 ```powershell
 dotnet run --project app-winui/QuotaScope.WinUI.csproj -- --self-test
@@ -26,7 +26,7 @@ dotnet run --project app-winui/QuotaScope.WinUI.csproj -- --self-test
 
 `--self-test` is handled in `app-winui/Program.cs` before any XAML initialization, so it stays headless.
 
-The mapper, Claude session renewer, hotkey, row, and usage alert self-tests read input/expected pairs from `fixtures/` (`codex/`, `claude/`, `renewer/`, `hotkeys/`, `rows/`, `alerts/`). These files are embedded into the exe, so the self-test also runs from a release build. They are meant to be shared with the planned macOS port. A failing case prints its first mismatch to stderr. The format and rules for adding cases are in `docs/MACOS_BUILD.md`, section 5.
+The mapper, Claude session renewer, hotkey, settings, row, usage alert, row layout, and reset-time text self-tests read input/expected pairs from `fixtures/` (`codex/`, `claude/`, `renewer/`, `hotkeys/`, `settings/`, `rows/`, `alerts/`, `layout/`, `resettext/`). These files are embedded into the exe, so the self-test also runs from a release build. The macOS app checks the same files with `swift run quotascope-selftest` in `mac/`. A failing case prints its first mismatch to stderr. CI (`.github/workflows/ci.yml`) builds both C# projects and runs their `--self-test` on Windows, and runs `swift build`, `quotascope-selftest`, and `quotascope-providertest` on macOS. The format and rules for adding cases are in `docs/MACOS_BUILD.md`, section 5.
 
 In PowerShell environments where the `codex.ps1` shim is blocked by execution policy, the app resolves the Codex command through `cmd.exe /c codex app-server`.
 
@@ -137,6 +137,7 @@ Notes on individual keys:
 - `README.md` / `README.ko.md`: user-facing documentation.
 - `docs/PROJECT_MAP.md`: source file map by module.
 - `docs/WINUI3_PARITY.md`: WinUI 3 platform workarounds and popup behavior notes.
+- `docs/MACOS_BUILD.md`: macOS app design, build, shared fixture format, and the Mac smoke test.
 - `docs/modules/codex_rate_limits.md`: Codex app-server rate limit schema and mapping notes.
 - `docs/modules/claude_rate_limits.md`: Claude usage endpoint schema and mapping notes.
 - `docs/MODERNIZATION_PLAN.md`, `docs/PUBLIC_RELEASE_STATUS.md`: historical records of decisions already carried out.

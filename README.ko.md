@@ -170,7 +170,7 @@ QuotaScope는 로컬 유틸리티로 설계되었습니다.
 dotnet build app-winui/QuotaScope.WinUI.csproj
 ```
 
-내장 self-test 실행 (사용량 mapper, Claude 세션 갱신, 단축키 파서, 행 모양과 배치, 사용량 경고, 초기화 시각 문구, 채우기 카드 대비, 현지화):
+내장 self-test 실행 (사용량 mapper, Claude 세션 갱신, 단축키 파서, 설정 불러오기, 행 모양과 배치, 사용량 경고, 채우기 카드 대비, 그래픽 어댑터 검사, 초기화 시각 문구와 현지화):
 
 ```powershell
 dotnet run --project app-winui/QuotaScope.WinUI.csproj -- --self-test
