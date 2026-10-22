@@ -11,6 +11,7 @@ let root = CommandLine.arguments.count > 1
 
 var total = 0
 do {
+    try Fixtures.checkFolders(in: root)
     for folder in Fixtures.folders {
         let count = try Fixtures.run(folder: folder, in: root)
         print("fixtures/\(folder): \(count) cases ok")

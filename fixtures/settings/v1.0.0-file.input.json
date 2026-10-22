@@ -1,0 +1,34 @@
+{
+  "description": "A settings.json as v1.0.0 wrote it, with only the keys that existed then. Its values load unchanged; every key added later (the critical level, alert points and per-row alerts, row visibility, the providers' AutoRenewSession and CreditsFullAmount) takes its default.",
+  "settings": {
+    "Hotkey": "Ctrl+Shift+Q",
+    "HotkeyRefreshAll": "Ctrl+Alt+R",
+    "HotkeyTogglePin": "",
+    "WarningThresholdPercent": 30,
+    "FollowSystemTheme": false,
+    "ThemeOverride": "Light",
+    "Autostart": true,
+    "RowShapes": { "codex|5h": "Fill", "claude|7d": "Circle" },
+    "LayoutColumns": "TwoColumns",
+    "RowOrder": { "codex|7d": 0, "codex|5h": 1 },
+    "TrayIconStyle": "UsageArc",
+    "GaugeMetric": "Remaining",
+    "Language": "Korean",
+    "NotifyOnThreshold": false,
+    "UiScale": 1.25,
+    "Glassmorphism": true,
+    "GlassStrength": "Strong",
+    "PopupGraph": "half-circle",
+    "PopupPosition": "LastPosition",
+    "LastPopupX": 1200,
+    "LastPopupY": 640,
+    "ShapeTheme": "MixMatch",
+    "ColorTheme": "DarkBluePurple",
+    "TimeDisplayMode": "RemainingTime",
+    "IsPinned": true,
+    "Providers": {
+      "codex": { "Enabled": true, "RefreshSeconds": 120, "ShowSecondaryRows": true, "ShowCredits": true, "Command": "codex" },
+      "claude": { "Enabled": false, "RefreshSeconds": 300, "ShowSecondaryRows": false, "ShowCredits": false, "Command": "claude" }
+    }
+  }
+}

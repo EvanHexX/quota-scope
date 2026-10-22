@@ -1,0 +1,10 @@
+{
+  "description": "A provider id the app does not know is kept as written, its missing keys at their defaults, so a save does not drop it. Every provider shares one set of defaults, so a claude entry without Command reads as codex, as the C# model has always done. A file without codex gets codex with its defaults. Provider ids match exactly: Codex in another case is a separate entry, and codex is still added beside it.",
+  "settings": {
+    "Providers": {
+      "claude": { "Enabled": false },
+      "example": { "Enabled": false, "RefreshSeconds": 45, "Command": "example-cli" },
+      "Codex": { "RefreshSeconds": 10 }
+    }
+  }
+}

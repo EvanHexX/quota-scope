@@ -1,0 +1,16 @@
+{
+  "description": "A settings.json as v0.1.0 wrote it. The keys that kept their names load. RefreshSeconds and CodexCommand moved under Providers.codex in v1.0.0 and ShowSparkUsage was removed; those top-level keys are now unknown and ignored, so the codex provider starts from its defaults.",
+  "settings": {
+    "Hotkey": "Ctrl+Alt+K",
+    "RefreshSeconds": 30,
+    "WarningThresholdPercent": 10,
+    "PopupGraph": "half-circle",
+    "CodexCommand": "codex-beta",
+    "PopupPosition": "TopRight",
+    "ShapeTheme": "BentoCircles",
+    "ColorTheme": "Light",
+    "TimeDisplayMode": "RemainingTime",
+    "IsPinned": true,
+    "ShowSparkUsage": true
+  }
+}

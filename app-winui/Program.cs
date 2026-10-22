@@ -51,6 +51,7 @@ internal static class Program
                 && ClaudeUsageMapper.RunSelfTest()
                 && ClaudeSessionRenewer.RunSelfTest()
                 && HotkeyDefinition.RunSelfTest()
+                && AppSettings.RunSelfTest()
                 && RowShapes.RunSelfTest()
                 && RowLayout.RunSelfTest()
                 && UsageAlerts.RunSelfTest()
