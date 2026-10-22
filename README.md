@@ -15,13 +15,13 @@ For Codex it starts `codex app-server` locally and reads rate limit data through
 
 ## Screenshots
 
-<img src="docs/images/quota-scope.png" alt="QuotaScope usage popup next to the settings window" width="900">
+<img src="docs/images/quota-scope.png" alt="QuotaScope usage popup over the settings window, mixing gauges, fill cards, and a bar" width="900">
 
-| Popup at 90% UI scale | Glassmorphism at 150% UI scale |
-|---|---|
-| <img src="docs/images/quota-scope-90.png" alt="QuotaScope popup showing Codex and Claude usage" width="330"> | <img src="docs/images/quota-scope-150.png" alt="QuotaScope popup with glassmorphism showing the desktop through the panes" width="330"> |
+| Light theme | Glassmorphism | Fill cards, one column |
+|---|---|---|
+| <img src="docs/images/quota-scope-light.png" alt="QuotaScope popup in the light theme showing Codex and Claude usage" width="280"> | <img src="docs/images/quota-scope-glass.png" alt="QuotaScope popup with glassmorphism showing the desktop through the panes" width="280"> | <img src="docs/images/quota-scope-compact.png" alt="Compact one-column QuotaScope popup with every row as a fill card" width="160"> |
 
-Layout is configurable per row — which rows show, gauges, bars, ordering, and column count:
+Layout is configurable per row — which rows show, gauges, bars, fill cards, ordering, and column count:
 
 <img src="docs/images/quota-scope-settings.png" alt="Appearance settings with mix and match shapes per row" width="640">
 

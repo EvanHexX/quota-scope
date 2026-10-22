@@ -214,7 +214,7 @@ internal sealed class SettingsWindow
 
     private UIElement BuildGeneralPage()
     {
-        var autostart = new ToggleSwitch { IsOn = Autostart.IsEnabled() };
+        var autostart = MakeToggle(Autostart.IsEnabled());
         autostart.Toggled += (_, _) =>
         {
             if (!Autostart.TrySet(autostart.IsOn))
@@ -305,7 +305,7 @@ internal sealed class SettingsWindow
             RefreshPlaceholders();
         };
 
-        var notify = new ToggleSwitch { IsOn = _settings.NotifyOnThreshold };
+        var notify = MakeToggle(_settings.NotifyOnThreshold);
         notify.Toggled += (_, _) =>
         {
             _settings.NotifyOnThreshold = notify.IsOn;
@@ -555,7 +555,7 @@ internal sealed class SettingsWindow
 
     private ToggleSwitch ProviderToggle(ProviderSettings provider, SettingsChange kind)
     {
-        var toggle = new ToggleSwitch { IsOn = provider.Enabled };
+        var toggle = MakeToggle(provider.Enabled);
         toggle.Toggled += (_, _) => { provider.Enabled = toggle.IsOn; Save(kind); };
         return toggle;
     }
@@ -606,7 +606,7 @@ internal sealed class SettingsWindow
     // Providers rebuild on change: the renewal schedule lives inside the provider.
     private ToggleSwitch AutoRenewToggle(ProviderSettings provider)
     {
-        var toggle = new ToggleSwitch { IsOn = provider.AutoRenewSession };
+        var toggle = MakeToggle(provider.AutoRenewSession);
         toggle.Toggled += (_, _) => { provider.AutoRenewSession = toggle.IsOn; Save(SettingsChange.Providers); };
         return toggle;
     }
@@ -630,7 +630,7 @@ internal sealed class SettingsWindow
             value => { _settings.ThemeOverride = value; ApplyTheme(); Save(SettingsChange.Appearance); });
         themeCombo.IsEnabled = !_settings.FollowSystemTheme;
 
-        var followSystem = new ToggleSwitch { IsOn = _settings.FollowSystemTheme };
+        var followSystem = MakeToggle(_settings.FollowSystemTheme);
         followSystem.Toggled += (_, _) =>
         {
             _settings.FollowSystemTheme = followSystem.IsOn;
@@ -639,7 +639,7 @@ internal sealed class SettingsWindow
             Save(SettingsChange.Appearance);
         };
 
-        var glass = new ToggleSwitch { IsOn = _settings.Glassmorphism };
+        var glass = MakeToggle(_settings.Glassmorphism);
         glass.Toggled += (_, _) =>
         {
             _settings.Glassmorphism = glass.IsOn;
@@ -1056,6 +1056,16 @@ internal sealed class SettingsWindow
         FontSize = 16,
         FontWeight = FontWeights.SemiBold,
         Margin = new Thickness(0, 12, 0, 0)
+    };
+
+    // A ToggleSwitch labels itself On/Off in the Windows display language, so
+    // an English app on a Korean Windows showed 켬/끔; the labels follow the
+    // app's language instead.
+    private static ToggleSwitch MakeToggle(bool isOn) => new()
+    {
+        IsOn = isOn,
+        OnContent = Loc.T("On", "켬"),
+        OffContent = Loc.T("Off", "끔")
     };
 
     private static TextBlock MutedText(string text) => new()
