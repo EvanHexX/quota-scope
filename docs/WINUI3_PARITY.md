@@ -94,8 +94,8 @@ record of what the port had to cover; the current manual smoke test is in
   the tray controller. Once it answers false, the change is logged to
   `crash.log`, and the app restarts itself: settings saved (a half-typed
   settings box committed, the popup's position saved by hiding it), then
-  `QuotaScopeWinUI.exe --restart-after <pid> graphics [popup]` and the normal
-  Exit path. The new process waits up to 15 s for the old one before the
+  `QuotaScopeWinUI.exe --restart-after <pid> graphics [popup]`, `Dispose`,
+  and the process ends itself (not the normal Exit path, see below). The new process waits up to 15 s for the old one before the
   single-instance mutex check, reopens the popup if it was open, and records
   alert points rows have already passed without notifying them again. A
   restart waits 10 s after a tray notification, which would otherwise vanish
@@ -105,7 +105,22 @@ record of what the port had to cover; the current manual smoke test is in
   re-enabled. To exercise the restart without one, start the app with
   `QUOTASCOPE_SIMULATE_ADAPTER_CHANGE=1`: it restarts once within 30 s, and
   the restarted instance ignores the variable. The headless `--self-test`
-  checks that the DXGI factory can be created and reports no change.
+  checks that the DXGI factory can be created, enumerates the same hardware
+  adapters twice, and reports no change.
+- False positives (maintainer, 2026-10-23): `IsCurrent()` alone restarted the
+  app all night, up to every 30 s for 20 minutes. It also turns false when
+  only the outputs change (monitors sleeping or waking) or a virtual adapter
+  comes and goes (an `IsolationSession` service start lined up with two of
+  them); no display driver event was logged at any of those times. A stale
+  factory now counts as a change only when the set of hardware adapters, by
+  LUID, differs from the one at start (software adapters and Microsoft's own,
+  vendor `0x1414`, are left out); a driver update brings the adapter back
+  under a new LUID. Otherwise a fresh factory becomes the new baseline.
+- Each of those restarts also left an APPCRASH in the Application log:
+  `Application.Exit()` faulted inside `Microsoft.UI.Xaml.dll` (0xc0000005)
+  while tearing down after the adapter change, after the new process had
+  already started. The restart now ends the old process directly once
+  settings are saved and the providers are disposed.
 
 ## Popup window chrome
 

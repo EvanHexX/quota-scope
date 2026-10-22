@@ -145,7 +145,12 @@ internal sealed class TrayController : IDisposable, IHotkeyConfigurator
             CrashLog.Write("graphics-adapters-restart", ex);
             return;
         }
-        ExitApplication();
+        // Not the normal Application.Exit: with the device gone, XAML's own
+        // teardown faulted (access violation in Microsoft.UI.Xaml.dll) on every
+        // restart. Everything is saved and the providers' child processes are
+        // stopped by Dispose, so the process is simply ended.
+        Dispose();
+        Process.GetCurrentProcess().Kill();
     }
 
     private void ShowNotification(string title, string message)
