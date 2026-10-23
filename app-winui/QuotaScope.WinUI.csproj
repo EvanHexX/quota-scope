@@ -8,7 +8,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>QuotaScopeWinUI</AssemblyName>
     <!-- Bumped with each release tag; the About page and the Codex client info read it. -->
-    <Version>1.1.0</Version>
+    <Version>1.1.1</Version>
     <RootNamespace>QuotaScope.WinUI</RootNamespace>
     <!-- WindowsAppSDK rejects AnyCPU; pin so plain `dotnet build` works. -->
     <Platforms>x64;arm64</Platforms>
