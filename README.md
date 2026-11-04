@@ -67,7 +67,7 @@ The script runs the self-tests, signs the app, and installs it to `~/Application
 - Usage alerts: warning and critical levels color the tray icon and the popup rows, and tray notifications fire at remaining-percent points you list (e.g. `80, 60, 40, 0`), for all rows or per row; credits rows take amounts of credits left instead (e.g. `500, 0`)
 - Layout: bars, gauges, fill, or mix & match with a per-row shape, and a column count that applies to every shape theme
 - Fill is the compact shape: a two-line card whose own background fills up to the percentage, so a row skips the separate bar line
-- Themes: Dark, Light, Midnight, optional system-theme following, and glassmorphism with four strength levels
+- Themes: Dark, Light, Midnight, Aurora, Neon, Sakura, optional system-theme following, and glassmorphism with four strength levels
 - UI scale (80–150%) and English / Korean interface
 - Configurable global hotkeys: toggle popup (default `Ctrl+Alt+U`), refresh all, toggle pin
 - Dedicated settings window; pinned popup mode; start with Windows (start at login on macOS)
@@ -150,7 +150,7 @@ QuotaScope is designed as a local utility.
 
 ## Current limitations
 
-- The macOS app is built from source only; there is no signed or notarized Mac download. UI scale, glassmorphism, and the Midnight theme are Windows-only.
+- The macOS app is built from source only; there is no signed or notarized Mac download. UI scale, glassmorphism, and the Midnight, Aurora, Neon, and Sakura themes are Windows-only.
 - The app depends on Codex app-server behavior and the rate limit fields it exposes.
 - Claude usage relies on an undocumented Anthropic endpoint that may change or stop working without notice.
 - Claude usage requires being signed in to Claude Code on the same machine.
