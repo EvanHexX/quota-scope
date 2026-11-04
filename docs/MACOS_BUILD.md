@@ -114,7 +114,7 @@ Principle: use system components and system styling, and drop Windows features w
 |---|---|---|
 | Tray icon + popup | `NSStatusItem` + `NSPopover` | |
 | Pinned popup | Detached floating `NSPanel` | |
-| Themes (Dark, Light, Midnight) and follow-system | Follow system appearance; keep an override (System / Light / Dark) | Midnight has no Mac counterpart. **Decision M4.** |
+| Themes (Dark, Light, Midnight, Aurora, Neon, Sakura) and follow-system | Follow system appearance; keep an override (System / Light / Dark) | Midnight, Aurora, Neon, and Sakura have no Mac counterpart. **Decision M4.** |
 | Glassmorphism + 4 strengths | System materials (`.regularMaterial` etc.) are already the default look | Drop the setting on macOS |
 | UI scale 80–150 % | Drop; macOS users scale with display settings | Possibly a small/regular row density toggle |
 | Global hotkeys (`Ctrl+Alt+U` default) | Carbon `RegisterEventHotKey` (no Accessibility permission needed) | Default `⌃⌥U` (same physical keys). Settings strings keep the `Ctrl+Alt+U` grammar, see 6.3 |
