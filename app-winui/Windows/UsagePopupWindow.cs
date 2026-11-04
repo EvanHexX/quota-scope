@@ -49,6 +49,11 @@ internal sealed class UsagePopupWindow
     // Refresh + pin. There is no title row: the pair rides on the first
     // section header (or the waiting line), and that line is the drag handle.
     private readonly StackPanel _headerButtons;
+    // The header grid that currently holds _headerButtons. Kept by hand:
+    // FrameworkElement.Parent comes back null once that grid has left the
+    // tree, so relying on it left the buttons attached to the old grid and
+    // the next Rebuild threw 0x800F1000 (element already has a parent).
+    private Panel? _headerButtonsHost;
     private const double HeaderRowHeight = 32;
     private readonly Button _refreshButton;
     private readonly FontIcon _refreshIcon;
@@ -456,8 +461,8 @@ internal sealed class UsagePopupWindow
         ToolTipService.SetToolTip(_refreshButton, Loc.T("Refresh", "새로 고침"));
         ApplyPinState(palette, isDark);
 
-        _sectionsPanel.Children.Clear();
         DetachHeaderButtons();
+        _sectionsPanel.Children.Clear();
 
         var sections = BuildSections();
         if (sections.Count == 0)
@@ -474,7 +479,7 @@ internal sealed class UsagePopupWindow
                 VerticalAlignment = VerticalAlignment.Center
             });
             Grid.SetColumn(_headerButtons, 1);
-            waiting.Children.Add(_headerButtons);
+            AttachHeaderButtons(waiting);
             _sectionsPanel.Children.Add(waiting);
             return;
         }
@@ -548,9 +553,18 @@ internal sealed class UsagePopupWindow
 
     private List<(ProviderUsage Usage, List<UsageRow> Rows)> BuildSections() => RowLayout.Sections(_settings, _usages);
 
+    private void AttachHeaderButtons(Panel host)
+    {
+        DetachHeaderButtons();
+        host.Children.Add(_headerButtons);
+        _headerButtonsHost = host;
+    }
+
     private void DetachHeaderButtons()
     {
-        if (_headerButtons.Parent is Panel parent) parent.Children.Remove(_headerButtons);
+        var host = _headerButtonsHost ?? _headerButtons.Parent as Panel;
+        host?.Children.Remove(_headerButtons);
+        _headerButtonsHost = null;
     }
 
     private Grid BuildSectionHeader(ProviderUsage usage, PopupPalette palette, bool withButtons)
@@ -589,7 +603,7 @@ internal sealed class UsagePopupWindow
         if (withButtons)
         {
             Grid.SetColumn(_headerButtons, 2);
-            header.Children.Add(_headerButtons);
+            AttachHeaderButtons(header);
         }
         return header;
     }
