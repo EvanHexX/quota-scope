@@ -63,10 +63,14 @@ internal sealed record PopupPalette(
     // RunSelfTest sees the fill take there is the most the same alpha can take
     // over glass. A stronger tint would also be the most opaque layer on a
     // clear pane and read as paint rather than glass.
-    private PopupPalette WithGlass(GlassStrength strength) => this with
+    // A dark theme's text is light, so over a white desktop a clear pane leaves
+    // light text on white. Its row cards take the strength's dark row alpha
+    // instead, which only raises the clearest step: a dark film under the text,
+    // while the window margins stay as clear as before.
+    private PopupPalette WithGlass(GlassStrength strength, bool isDark) => this with
     {
         Card = Color.FromArgb(strength.CardAlpha, Card.R, Card.G, Card.B),
-        Row = Color.FromArgb(strength.RowAlpha, Row.R, Row.G, Row.B),
+        Row = Color.FromArgb(isDark ? strength.DarkRowAlpha : strength.RowAlpha, Row.R, Row.G, Row.B),
         Track = Color.FromArgb(strength.TrackAlpha, Track.R, Track.G, Track.B)
     };
 
