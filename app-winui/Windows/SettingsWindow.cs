@@ -182,9 +182,9 @@ internal sealed class SettingsWindow
     {
         _nav.RequestedTheme = _settings.FollowSystemTheme
             ? ElementTheme.Default
-            : string.Equals(_settings.ThemeOverride, "Light", StringComparison.OrdinalIgnoreCase)
-                ? ElementTheme.Light
-                : ElementTheme.Dark;
+            : PopupPalette.IsDarkTheme(_settings.ThemeOverride)
+                ? ElementTheme.Dark
+                : ElementTheme.Light;
     }
 
     private void Save(SettingsChange kind)
@@ -625,7 +625,7 @@ internal sealed class SettingsWindow
             });
 
         var themeCombo = MakeCombo(
-            new[] { "Dark", "Light", "Midnight" },
+            new[] { "Dark", "Light", "Midnight", "Aurora", "Neon", "Sakura" },
             _settings.ThemeOverride,
             value => { _settings.ThemeOverride = value; ApplyTheme(); Save(SettingsChange.Appearance); });
         themeCombo.IsEnabled = !_settings.FollowSystemTheme;
@@ -699,7 +699,7 @@ internal sealed class SettingsWindow
         rows.AddRange(new[]
         {
             Row(Loc.T("Follow system theme", "시스템 테마 따르기"), Loc.T("Light/dark follows Windows.", "Windows의 라이트/다크를 따릅니다."), followSystem),
-            Row(Loc.T("Theme", "테마"), Loc.T("Dark, Light, or Midnight (pure black). Applies to popup and settings.", "다크, 라이트, 미드나잇(순수 검정). 팝업과 설정창에 적용됩니다."), themeCombo),
+            Row(Loc.T("Theme", "테마"), Loc.T("Dark, Light, Midnight (pure black), Aurora (deep teal), Neon (synthwave), or Sakura (soft pink). Applies to popup and settings.", "다크, 라이트, 미드나잇(순수 검정), 오로라(짙은 청록), 네온(신스웨이브), 벚꽃(연분홍). 팝업과 설정창에 적용됩니다."), themeCombo),
             Row(Loc.T("Glassmorphism", "글래스모피즘"), Loc.T("Translucent acrylic that shows the desktop behind the popup.", "팝업 뒤 배경이 비치는 아크릴 반투명 효과."), glass)
         });
         if (_settings.Glassmorphism)

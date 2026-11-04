@@ -28,18 +28,31 @@ internal sealed record PopupPalette(
     public byte FillAlpha { get; init; }
     public byte FillEdgeAlpha { get; init; }
 
-    // App theme model: Dark / Light / Midnight, with glassmorphism as an
-    // orthogonal material switch (translucent cards + acrylic backdrop).
+    // App theme model: Dark / Light / Midnight / Aurora / Neon / Sakura, with
+    // glassmorphism as an orthogonal material switch (translucent cards +
+    // acrylic backdrop).
     public static PopupPalette FromSettings(string? theme, bool glassmorphism, string? strength = null)
     {
         var palette = theme?.ToUpperInvariant() switch
         {
             "LIGHT" => Light,
             "MIDNIGHT" => Midnight,
+            "AURORA" => Aurora,
+            "NEON" => Neon,
+            "SAKURA" => Sakura,
             _ => DarkBluePurple
         };
-        return glassmorphism ? palette.WithGlass(GlassStrength.Parse(strength)) : palette;
+        return glassmorphism ? palette.WithGlass(GlassStrength.Parse(strength), IsDarkTheme(theme)) : palette;
     }
+
+    // Which XAML theme (and acrylic theme) a palette sits on: its text is light
+    // on a dark theme and dark on a light one. Unknown names fall back to Dark,
+    // as FromSettings does.
+    public static bool IsDarkTheme(string? theme) => theme?.ToUpperInvariant() switch
+    {
+        "LIGHT" or "SAKURA" => false,
+        _ => true
+    };
 
     // The acrylic backdrop provides the tinted surface, so the outer card stays
     // nearly clear and the row cards keep just enough fill to read as panes.
@@ -50,10 +63,14 @@ internal sealed record PopupPalette(
     // RunSelfTest sees the fill take there is the most the same alpha can take
     // over glass. A stronger tint would also be the most opaque layer on a
     // clear pane and read as paint rather than glass.
-    private PopupPalette WithGlass(GlassStrength strength) => this with
+    // A dark theme's text is light, so over a white desktop a clear pane leaves
+    // light text on white. Its row cards take the strength's dark row alpha
+    // instead, which only raises the clearest step: a dark film under the text,
+    // while the window margins stay as clear as before.
+    private PopupPalette WithGlass(GlassStrength strength, bool isDark) => this with
     {
         Card = Color.FromArgb(strength.CardAlpha, Card.R, Card.G, Card.B),
-        Row = Color.FromArgb(strength.RowAlpha, Row.R, Row.G, Row.B),
+        Row = Color.FromArgb(isDark ? strength.DarkRowAlpha : strength.RowAlpha, Row.R, Row.G, Row.B),
         Track = Color.FromArgb(strength.TrackAlpha, Track.R, Track.G, Track.B)
     };
 
@@ -105,11 +122,86 @@ internal sealed record PopupPalette(
         FillEdgeAlpha = 110
     };
 
+    // Aurora: deep teal night with a mint accent, cool and calm rather than
+    // the blue-purple of Dark.
+    public static PopupPalette Aurora => new(
+        Color.FromArgb(242, 8, 28, 32),
+        Color.FromArgb(255, 14, 40, 44),
+        Color.FromArgb(255, 40, 92, 92),
+        Color.FromArgb(255, 28, 66, 68),
+        Color.FromArgb(255, 230, 250, 245),
+        Color.FromArgb(255, 150, 196, 188),
+        Color.FromArgb(255, 52, 211, 163),
+        Color.FromArgb(255, 120, 140, 255))
+    {
+        FillAlpha = 60,
+        FillEdgeAlpha = 150
+    };
+
+    // Neon: synthwave violet-black with an electric cyan accent and magenta
+    // as the second hue.
+    public static PopupPalette Neon => new(
+        Color.FromArgb(242, 18, 8, 34),
+        Color.FromArgb(255, 28, 14, 50),
+        Color.FromArgb(255, 96, 44, 140),
+        Color.FromArgb(255, 60, 30, 92),
+        Color.FromArgb(255, 250, 240, 255),
+        Color.FromArgb(255, 196, 170, 224),
+        Color.FromArgb(255, 0, 214, 255),
+        Color.FromArgb(255, 236, 72, 200))
+    {
+        FillAlpha = 60,
+        FillEdgeAlpha = 150
+    };
+
+    // Sakura: a light theme in soft blossom pink with plum ink. The accent is
+    // orchid rather than pink so it stays apart from the warning and critical
+    // reds.
+    public static PopupPalette Sakura => new(
+        Color.FromArgb(242, 253, 242, 246),
+        Color.FromArgb(255, 255, 250, 252),
+        Color.FromArgb(255, 240, 200, 216),
+        Color.FromArgb(255, 248, 222, 232),
+        Color.FromArgb(255, 60, 24, 44),
+        Color.FromArgb(255, 128, 84, 104),
+        Color.FromArgb(255, 180, 72, 170),
+        Color.FromArgb(255, 226, 112, 150))
+    {
+        FillAlpha = 56,
+        FillEdgeAlpha = 150
+    };
+
     // Glass edge highlight: the bright 1px rim that makes a translucent pane
-    // read as glass instead of a flat film.
+    // read as glass instead of a flat film. The rim is a diagonal gradient, as
+    // light catches real glass: brightest along the top-left edge, nearly gone
+    // across the middle, and a faint return at the bottom-right. A uniform rim
+    // reads as a drawn outline rather than an edge.
     public Color GlassEdge(bool isDark, GlassStrength strength) => isDark
         ? Color.FromArgb(strength.EdgeAlpha, 255, 255, 255)
         : Color.FromArgb((byte)(strength.EdgeAlpha + 24), 255, 255, 255);
+
+    public (Color Lit, Color Mid, Color Shade) GlassRim(bool isDark, GlassStrength strength)
+    {
+        var edge = GlassEdge(isDark, strength);
+        return (Scale(edge, 1.9), Scale(edge, 0.3), Scale(edge, 0.75));
+    }
+
+    // The pinned header button as a glass chip: an accent-tinted pane with an
+    // accent rim, instead of a solid accent tile on otherwise clear glass.
+    public (Color Top, Color Bottom, Color RimLit, Color RimShade) GlassChip() => (
+        WithAlpha(AccentBlue, 0x70),
+        WithAlpha(AccentBlue, 0x38),
+        WithAlpha(Lerp(AccentBlue, Color.FromArgb(255, 255, 255, 255), 0.45), 0xD0),
+        WithAlpha(AccentBlue, 0x50));
+
+    private static Color Scale(Color color, double factor) =>
+        Color.FromArgb((byte)Math.Clamp(Math.Round(color.A * factor), 0, 255), color.R, color.G, color.B);
+
+    private static Color Lerp(Color from, Color to, double amount) => Color.FromArgb(
+        255,
+        (byte)Math.Round(from.R + (to.R - from.R) * amount),
+        (byte)Math.Round(from.G + (to.G - from.G) * amount),
+        (byte)Math.Round(from.B + (to.B - from.B) * amount));
 
     // Row colors follow the same two alert levels as the tray icon (used
     // percentages here; the settings hold them as remaining). The defaults are
@@ -137,7 +229,7 @@ internal sealed record PopupPalette(
     // over the edge band.
     public static bool RunSelfTest()
     {
-        foreach (var palette in new[] { DarkBluePurple, Light, Midnight })
+        foreach (var palette in new[] { DarkBluePurple, Light, Midnight, Aurora, Neon, Sakura })
         {
             if (palette.FillAlpha == 0 || palette.FillEdgeAlpha <= palette.FillAlpha) return false;
 
@@ -152,6 +244,13 @@ internal sealed record PopupPalette(
                 if (ContrastRatio(palette.Text, edge) < 3.0) return false;
             }
         }
+
+        // The glass row floor applies to the dark themes only: Light and Sakura
+        // keep the strength's own row alpha.
+        var veryStrong = GlassStrength.VeryStrong.Id;
+        if (FromSettings("Midnight", true, veryStrong).Row.A != GlassStrength.VeryStrong.DarkRowAlpha) return false;
+        if (FromSettings("Sakura", true, veryStrong).Row.A != GlassStrength.VeryStrong.RowAlpha) return false;
+        if (FromSettings("Light", true, veryStrong).Row.A != GlassStrength.VeryStrong.RowAlpha) return false;
 
         // Moved levels move the colors: warning from 40% used, critical from 90%.
         var moved = DarkBluePurple with { WarningAtUsed = 40, CriticalAtUsed = 90 };

@@ -453,14 +453,13 @@ internal sealed class UsagePopupWindow
             WarningAtUsed = UsageAlerts.WarningAtUsed(_settings),
             CriticalAtUsed = UsageAlerts.CriticalAtUsed(_settings)
         };
-        _rootBorder.RequestedTheme = string.Equals(theme, "Light", StringComparison.OrdinalIgnoreCase)
-            ? ElementTheme.Light
-            : ElementTheme.Dark;
+        var isDark = PopupPalette.IsDarkTheme(theme);
+        _rootBorder.RequestedTheme = isDark ? ElementTheme.Dark : ElementTheme.Light;
         ApplyBackdrop(palette, theme);
         _islandRoot.Background = _settings.Glassmorphism
             ? new SolidColorBrush(Colors.Transparent)
             : Brush(Color.FromArgb(255, palette.Card.R, palette.Card.G, palette.Card.B));
-        _chromeBorderColor = Color.FromArgb(255, palette.Card.R, palette.Card.G, palette.Card.B);
+        _chromeBorderColor = ChromeBorderColor(palette, isDark);
         ApplyWindowChrome();
         _titleText.Text = Loc.T("Usage", "사용량");
 
@@ -469,8 +468,7 @@ internal sealed class UsagePopupWindow
         _headerDivider.Background = Brush(Color.FromArgb(118, palette.AccentBlue.R, palette.AccentBlue.G, palette.AccentBlue.B));
         _refreshIcon.Foreground = Brush(palette.Muted);
         ToolTipService.SetToolTip(_refreshButton, Loc.T("Refresh", "새로 고침"));
-        _pinIcon.Foreground = _settings.IsPinned ? Brush(Colors.White) : Brush(palette.Muted);
-        _pinButton.Background = _settings.IsPinned ? Brush(palette.AccentBlue) : new SolidColorBrush(Colors.Transparent);
+        ApplyPinState(palette, isDark);
 
         _sectionsPanel.Children.Clear();
 
@@ -708,6 +706,74 @@ internal sealed class UsagePopupWindow
         };
     }
 
+    // Pinned is a solid accent tile on the opaque card. In glass mode that tile
+    // was the only opaque thing on the popup, so it becomes a glass chip
+    // instead: an accent-tinted pane with a lit rim, like the row cards.
+    private void ApplyPinState(PopupPalette palette, bool isDark)
+    {
+        if (!_settings.IsPinned)
+        {
+            _pinIcon.Foreground = Brush(palette.Muted);
+            _pinButton.Background = new SolidColorBrush(Colors.Transparent);
+            _pinButton.BorderBrush = new SolidColorBrush(Colors.Transparent);
+            _pinButton.BorderThickness = new Thickness(0);
+            return;
+        }
+
+        if (!_settings.Glassmorphism)
+        {
+            _pinIcon.Foreground = Brush(Colors.White);
+            _pinButton.Background = Brush(palette.AccentBlue);
+            _pinButton.BorderBrush = new SolidColorBrush(Colors.Transparent);
+            _pinButton.BorderThickness = new Thickness(0);
+            return;
+        }
+
+        var chip = palette.GlassChip();
+        _pinIcon.Foreground = isDark ? Brush(palette.Text) : Brush(palette.AccentBlue);
+        _pinButton.Background = VerticalGradient(chip.Top, chip.Bottom);
+        _pinButton.BorderBrush = DiagonalGradient(chip.RimLit, chip.RimShade, chip.RimShade);
+        _pinButton.BorderThickness = new Thickness(1);
+    }
+
+    // DWM paints a one-pixel opaque frame around the popup. On an opaque card it
+    // takes the card color so it disappears. Over dark glass that is a dark line
+    // around a clear window, so it becomes a faint light rim instead, matching
+    // the row cards' edges.
+    private Color ChromeBorderColor(PopupPalette palette, bool isDark)
+    {
+        var card = Color.FromArgb(255, palette.Card.R, palette.Card.G, palette.Card.B);
+        if (!_settings.Glassmorphism || !isDark) return card;
+        const double rimMix = 0.2;
+        return Color.FromArgb(255, Lighten(card.R, rimMix), Lighten(card.G, rimMix), Lighten(card.B, rimMix));
+    }
+
+    private static LinearGradientBrush VerticalGradient(Color top, Color bottom)
+    {
+        var gradient = new LinearGradientBrush
+        {
+            StartPoint = new global::Windows.Foundation.Point(0, 0),
+            EndPoint = new global::Windows.Foundation.Point(0, 1)
+        };
+        gradient.GradientStops.Add(new GradientStop { Offset = 0, Color = top });
+        gradient.GradientStops.Add(new GradientStop { Offset = 1, Color = bottom });
+        return gradient;
+    }
+
+    // Top-left to bottom-right, the way light falls across a glass edge.
+    private static LinearGradientBrush DiagonalGradient(Color lit, Color mid, Color shade)
+    {
+        var gradient = new LinearGradientBrush
+        {
+            StartPoint = new global::Windows.Foundation.Point(0, 0),
+            EndPoint = new global::Windows.Foundation.Point(1, 1)
+        };
+        gradient.GradientStops.Add(new GradientStop { Offset = 0, Color = lit });
+        gradient.GradientStops.Add(new GradientStop { Offset = 0.5, Color = mid });
+        gradient.GradientStops.Add(new GradientStop { Offset = 1, Color = shade });
+        return gradient;
+    }
+
     // In glass mode the panes get a soft top-down sheen plus a bright rim, so
     // the cards themselves read as glass instead of flat film over the backdrop.
     private Brush CardFill(PopupPalette palette)
@@ -744,8 +810,9 @@ internal sealed class UsagePopupWindow
     private Brush CardStroke(PopupPalette palette)
     {
         if (!_settings.Glassmorphism) return Brush(palette.Border);
-        var isDark = !string.Equals(ResolveTheme(), "Light", StringComparison.OrdinalIgnoreCase);
-        return Brush(palette.GlassEdge(isDark, GlassStrength.Parse(_settings.GlassStrength)));
+        var isDark = PopupPalette.IsDarkTheme(ResolveTheme());
+        var rim = palette.GlassRim(isDark, GlassStrength.Parse(_settings.GlassStrength));
+        return DiagonalGradient(rim.Lit, rim.Mid, rim.Shade);
     }
 
     private FrameworkElement BuildBentoCard(string providerId, UsageRow row, PopupPalette palette)
@@ -988,7 +1055,7 @@ internal sealed class UsagePopupWindow
     private void ApplyBackdrop(PopupPalette palette, string theme)
     {
         var isGlass = _settings.Glassmorphism;
-        var isDark = !string.Equals(theme, "Light", StringComparison.OrdinalIgnoreCase);
+        var isDark = PopupPalette.IsDarkTheme(theme);
         // Tint/luminosity depend on palette and strength, so re-apply on change.
         var key = $"{(isGlass ? "acrylic" : "mica")}:{theme}:{_settings.GlassStrength}";
         if (_appliedBackdropTheme == key) return;

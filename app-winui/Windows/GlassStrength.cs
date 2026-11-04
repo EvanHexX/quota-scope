@@ -6,10 +6,14 @@ namespace QuotaScope.WinUI.Windows;
 // clearer panes (lower surface alpha) and a thinner acrylic tint/luminosity.
 // SheenAlpha is the barely-there top highlight on each pane; it must stay
 // subtle or it reads as a painted gradient rather than glass.
+// DarkRowAlpha is the row alpha on a dark theme. Its light text has nothing to
+// stand on over a white desktop, so the clearest step keeps a dark film under
+// the cards (0x40) instead of 0x12; every other step matches RowAlpha.
 internal sealed record GlassStrength(
     string Id,
     byte CardAlpha,
     byte RowAlpha,
+    byte DarkRowAlpha,
     byte TrackAlpha,
     byte EdgeAlpha,
     byte SheenAlpha,
@@ -17,12 +21,12 @@ internal sealed record GlassStrength(
     float LuminosityOpacityDark,
     float LuminosityOpacityLight)
 {
-    public static readonly GlassStrength Subtle = new("Subtle", 0x2E, 0x73, 0x8C, 0x2E, 0x12, 0.32f, 0.88f, 0.92f);
-    public static readonly GlassStrength Medium = new("Medium", 0x14, 0x4D, 0x66, 0x3D, 0x0E, 0.20f, 0.70f, 0.80f);
-    public static readonly GlassStrength Strong = new("Strong", 0x00, 0x2E, 0x40, 0x52, 0x0A, 0.10f, 0.42f, 0.55f);
+    public static readonly GlassStrength Subtle = new("Subtle", 0x2E, 0x73, 0x73, 0x8C, 0x2E, 0x12, 0.32f, 0.88f, 0.92f);
+    public static readonly GlassStrength Medium = new("Medium", 0x14, 0x4D, 0x4D, 0x66, 0x3D, 0x0E, 0.20f, 0.70f, 0.80f);
+    public static readonly GlassStrength Strong = new("Strong", 0x00, 0x2E, 0x2E, 0x40, 0x52, 0x0A, 0.10f, 0.42f, 0.55f);
     // Test-oriented extreme: panes are almost pure glass and the acrylic barely
     // tints, so the desktop shows through nearly unfiltered.
-    public static readonly GlassStrength VeryStrong = new("VeryStrong", 0x00, 0x12, 0x24, 0x70, 0x08, 0.02f, 0.10f, 0.18f);
+    public static readonly GlassStrength VeryStrong = new("VeryStrong", 0x00, 0x12, 0x40, 0x24, 0x70, 0x08, 0.02f, 0.10f, 0.18f);
 
     public static GlassStrength Parse(string? value) => value?.ToUpperInvariant() switch
     {

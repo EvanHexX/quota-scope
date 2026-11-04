@@ -133,7 +133,10 @@ record of what the port had to cover; the current manual smoke test is in
   `DWMWA_VISIBLE_FRAME_BORDER_THICKNESS` and still composites top-edge pixels
   when `DWMWA_BORDER_COLOR = DWMWA_COLOR_NONE` is requested. The border color
   is therefore synchronized to the active card surface color so those pixels
-  blend into the client surface. The outer XAML card has no separate border;
+  blend into the client surface. With glassmorphism on a dark theme the color
+  is the card color pulled 20% toward white instead: a dark opaque frame around
+  a clear window reads as a hard outline, a faint light one as the glass rim.
+  The outer XAML card has no separate border;
   internal dividers and row-card borders remain unchanged.
 - The outer XAML card applies neither `CornerRadius` nor `BorderThickness`;
   DWM is the single owner of the window silhouette. A second XAML radius exposes
@@ -199,7 +202,8 @@ record of what the port had to cover; the current manual smoke test is in
   stop is a stronger edge band, recomputed from the laid-out width on
   `SizeChanged`; 0% draws no layer and 100% a solid one.
 - The tint alpha is per theme (`PopupPalette.FillAlpha`/`FillEdgeAlpha`: Dark
-  60/150, Light 56/150, Midnight 42/110) and is held by `PopupPalette.RunSelfTest`
+  60/150, Light 56/150, Midnight 42/110, Aurora 60/150, Neon 60/150, Sakura
+  56/150) and is held by `PopupPalette.RunSelfTest`
   to WCAG contrast over the opaque row color for every accent band, with the
   same floor for every theme: Text 4.5:1 and Muted 3:1 over the fill, and Text
   3:1 over the edge band. Midnight's dim Muted (3.8:1 unfilled) is what caps its
@@ -227,8 +231,16 @@ record of what the port had to cover; the current manual smoke test is in
   effect survives losing focus (pinned popups).
 - In glass mode the surfaces get out of the way: the island root and outer card
   are nearly clear and the row cards themselves are rendered as glass panes —
-  a soft top-down sheen gradient plus a bright 1px rim — instead of a flat film
-  over the backdrop.
+  a soft top-down sheen gradient plus a 1px rim — instead of a flat film
+  over the backdrop. The rim is a diagonal gradient (`PopupPalette.GlassRim`):
+  bright along the top-left, nearly clear across the middle, a faint return at
+  the bottom-right. A uniform rim read as a drawn gray outline.
+- On a dark theme the row cards take `GlassStrength.DarkRowAlpha`, which only
+  differs at `VeryStrong` (0x40 instead of 0x12): the light text otherwise sits
+  on almost nothing over a white desktop. Light and Sakura keep `RowAlpha`.
+- The pinned header button is a glass chip in glass mode (accent-tinted
+  gradient pane with an accent rim, `PopupPalette.GlassChip`) instead of the
+  opaque accent tile it is on an opaque card.
 - `GlassStrength` (`Subtle` | `Medium` | `Strong` | `VeryStrong`, picker shown while
   glassmorphism is on) drives both layers together: surface alphas and rim
   brightness for the cards, tint/luminosity opacity for the acrylic controller.
