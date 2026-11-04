@@ -46,15 +46,16 @@ internal sealed class UsagePopupWindow
     private readonly Border _rootBorder;
     private readonly Viewbox _scaleHost;
     private readonly Grid _islandRoot;
-    private readonly Grid _headerGrid;
-    private readonly TextBlock _titleText;
+    // Refresh + pin. There is no title row: the pair rides on the first
+    // section header (or the waiting line), and that line is the drag handle.
+    private readonly StackPanel _headerButtons;
+    private const double HeaderRowHeight = 32;
     private readonly Button _refreshButton;
     private readonly FontIcon _refreshIcon;
     private readonly Storyboard _refreshSpin;
     private readonly Func<Task> _refreshRequested;
     private readonly Button _pinButton;
     private readonly FontIcon _pinIcon;
-    private readonly Border _headerDivider;
     private readonly StackPanel _sectionsPanel;
     private IReadOnlyList<ProviderUsage> _usages = Array.Empty<ProviderUsage>();
     private string? _appliedBackdropTheme;
@@ -74,14 +75,6 @@ internal sealed class UsagePopupWindow
         _settings = settings;
         _refreshRequested = refreshRequested;
 
-        _titleText = new TextBlock
-        {
-            Text = "Usage",
-            FontFamily = UiFont,
-            FontSize = 17,
-            FontWeight = FontWeights.Bold,
-            VerticalAlignment = VerticalAlignment.Center
-        };
         _refreshIcon = new FontIcon
         {
             Glyph = "",
@@ -120,23 +113,19 @@ internal sealed class UsagePopupWindow
         };
         _pinButton.Click += (_, _) => TogglePin();
 
-        _headerGrid = new Grid { Height = 40, Background = new SolidColorBrush(Colors.Transparent) };
-        _headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        _headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        _headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        Grid.SetColumn(_titleText, 0);
-        Grid.SetColumn(_refreshButton, 1);
-        Grid.SetColumn(_pinButton, 2);
-        _headerGrid.Children.Add(_titleText);
-        _headerGrid.Children.Add(_refreshButton);
-        _headerGrid.Children.Add(_pinButton);
-        _headerDivider = new Border { Height = 1, Margin = new Thickness(2, 6, 2, 10) };
+        _headerButtons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 0, 0)
+        };
+        _headerButtons.Children.Add(_refreshButton);
+        _headerButtons.Children.Add(_pinButton);
 
         _sectionsPanel = new StackPanel();
 
         var layoutRoot = new StackPanel();
-        layoutRoot.Children.Add(_headerGrid);
-        layoutRoot.Children.Add(_headerDivider);
         layoutRoot.Children.Add(_sectionsPanel);
 
         _rootBorder = new Border
@@ -148,7 +137,7 @@ internal sealed class UsagePopupWindow
             // Do not draw a second outer stroke. A square XAML border clipped
             // by DWM leaves dark lines and broken pixels at rounded corners.
             BorderThickness = new Thickness(0),
-            Padding = new Thickness(20, 14, 20, 18),
+            Padding = new Thickness(20, 12, 20, 18),
             Child = layoutRoot,
             RequestedTheme = ElementTheme.Dark
         };
@@ -160,8 +149,8 @@ internal sealed class UsagePopupWindow
                 Hide();
             }
         };
-        // Include the top padding as well as the visible header in the manual
-        // drag region. The header buttons stay interactive and are excluded below.
+        // Include the top padding as well as the first header line in the
+        // manual drag region. The header buttons stay interactive and are excluded below.
         _rootBorder.PointerPressed += OnDragRegionPointerPressed;
         _rootBorder.PointerMoved += OnDragRegionPointerMoved;
         _rootBorder.PointerReleased += OnDragRegionPointerReleased;
@@ -375,7 +364,7 @@ internal sealed class UsagePopupWindow
     private void OnDragRegionPointerPressed(object sender, PointerRoutedEventArgs e)
     {
         var point = e.GetCurrentPoint(_rootBorder);
-        var dragRegionHeight = _rootBorder.Padding.Top + _headerGrid.Height;
+        var dragRegionHeight = _rootBorder.Padding.Top + 2 + HeaderRowHeight;
         if (!point.Properties.IsLeftButtonPressed || point.Position.Y > dragRegionHeight) return;
         var source = e.OriginalSource as DependencyObject;
         if (IsDescendantOf(source, _pinButton) || IsDescendantOf(source, _refreshButton)) return;
@@ -461,28 +450,32 @@ internal sealed class UsagePopupWindow
             : Brush(Color.FromArgb(255, palette.Card.R, palette.Card.G, palette.Card.B));
         _chromeBorderColor = ChromeBorderColor(palette, isDark);
         ApplyWindowChrome();
-        _titleText.Text = Loc.T("Usage", "사용량");
 
         _rootBorder.Background = Brush(palette.Card);
-        _titleText.Foreground = Brush(palette.Text);
-        _headerDivider.Background = Brush(Color.FromArgb(118, palette.AccentBlue.R, palette.AccentBlue.G, palette.AccentBlue.B));
         _refreshIcon.Foreground = Brush(palette.Muted);
         ToolTipService.SetToolTip(_refreshButton, Loc.T("Refresh", "새로 고침"));
         ApplyPinState(palette, isDark);
 
         _sectionsPanel.Children.Clear();
+        DetachHeaderButtons();
 
         var sections = BuildSections();
         if (sections.Count == 0)
         {
-            _sectionsPanel.Children.Add(new TextBlock
+            var waiting = new Grid { Height = HeaderRowHeight, Margin = new Thickness(2, 2, 2, 40) };
+            waiting.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            waiting.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            waiting.Children.Add(new TextBlock
             {
                 Text = Loc.T("Waiting for connection", "연결 대기 중"),
                 FontFamily = UiFont,
                 FontSize = 12,
                 Foreground = Brush(palette.Muted),
-                Margin = new Thickness(2, 4, 0, 40)
+                VerticalAlignment = VerticalAlignment.Center
             });
+            Grid.SetColumn(_headerButtons, 1);
+            waiting.Children.Add(_headerButtons);
+            _sectionsPanel.Children.Add(waiting);
             return;
         }
 
@@ -500,7 +493,7 @@ internal sealed class UsagePopupWindow
                 });
             }
 
-            _sectionsPanel.Children.Add(BuildSectionHeader(usage, palette));
+            _sectionsPanel.Children.Add(BuildSectionHeader(usage, palette, withButtons: i == 0));
             AddSectionRows(usage.ProviderId, rows, palette, twoColumn);
         }
     }
@@ -555,11 +548,18 @@ internal sealed class UsagePopupWindow
 
     private List<(ProviderUsage Usage, List<UsageRow> Rows)> BuildSections() => RowLayout.Sections(_settings, _usages);
 
-    private Grid BuildSectionHeader(ProviderUsage usage, PopupPalette palette)
+    private void DetachHeaderButtons()
     {
-        var header = new Grid { Margin = new Thickness(2, 2, 2, 8) };
+        if (_headerButtons.Parent is Panel parent) parent.Children.Remove(_headerButtons);
+    }
+
+    private Grid BuildSectionHeader(ProviderUsage usage, PopupPalette palette, bool withButtons)
+    {
+        var header = new Grid { Margin = withButtons ? new Thickness(2, 2, 2, 6) : new Thickness(2, 2, 2, 8) };
+        if (withButtons) header.Height = HeaderRowHeight;
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var name = new TextBlock
         {
@@ -586,21 +586,26 @@ internal sealed class UsagePopupWindow
         Grid.SetColumn(status, 1);
         header.Children.Add(name);
         header.Children.Add(status);
+        if (withButtons)
+        {
+            Grid.SetColumn(_headerButtons, 2);
+            header.Children.Add(_headerButtons);
+        }
         return header;
     }
 
-    // ProviderState-specific status line (spec: Stale shows last update, RateLimited shows wait).
+    // The status slot only speaks up when there is something to say: stale
+    // data, sign-in needed, rate limit reached, a session about to expire. The
+    // providers' routine "<Name> rate limit" caption is dropped as noise.
     private static string StatusTextFor(ProviderUsage usage)
     {
-        return usage.State switch
-        {
-            ProviderState.Stale => usage.StatusText,
-            ProviderState.RateLimited => usage.StatusText,
-            ProviderState.Unauthenticated => usage.StatusText,
-            ProviderState.Unavailable => usage.StatusText,
-            _ => usage.StatusText
-        };
+        if (usage.State == ProviderState.Ok && IsRoutineStatus(usage)) return string.Empty;
+        return usage.StatusText;
     }
+
+    private static bool IsRoutineStatus(ProviderUsage usage) =>
+        string.IsNullOrWhiteSpace(usage.StatusText)
+        || string.Equals(usage.StatusText, $"{usage.DisplayName} rate limit", StringComparison.OrdinalIgnoreCase);
 
     private FrameworkElement BuildBarRow(string providerId, UsageRow row, PopupPalette palette, bool stackTime)
     {
